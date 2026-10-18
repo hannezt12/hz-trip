@@ -17,7 +17,7 @@
     minMoveKmh: 10    // kecepatan "min" = terendah di antara titik yang masih >= ini
   };
 
-  // CSV: waktu_ms,lat,lng,kecepatan_m_per_s,akurasi_m
+  // CSV: waktu_ms,lat,lng,kecepatan_m_per_s,akurasi_m[,manual 0/1]
   function parseCsv(text) {
     var out = [];
     if (!text) return out;
@@ -29,7 +29,7 @@
       if (p.length < 5) continue;
       var t = +p[0], lat = +p[1], lng = +p[2], v = +p[3] * 3.6, acc = +p[4];
       if (!isFinite(t) || !isFinite(lat) || !isFinite(lng) || !isFinite(v)) continue;
-      out.push({ t: t, lat: lat, lng: lng, v: v, acc: isFinite(acc) ? acc : 99 });
+      out.push({ t: t, lat: lat, lng: lng, v: v, acc: isFinite(acc) ? acc : 99, m: p[5] === '1' ? 1 : 0 });
     }
     out.sort(function (a, b) { return a.t - b.t; });
     return out;
@@ -94,6 +94,8 @@
     s.endLat = pts[i1].lat; s.endLng = pts[i1].lng;
     s.i0 = i0; s.i1 = i1;
     s.open = !!open;
+    s.manual = false;
+    for (var j = i0; j <= i1; j++) { if (pts[j].m) { s.manual = true; break; } }
     return s;
   }
 
@@ -111,7 +113,7 @@
         segStart = i;
       }
     }
-    return { trips: trips, points: pts };
+    return { trips: trips, points: pts, o: o };
   }
 
   function runSegment(pts, a, b, o, trips, isLast) {
@@ -149,6 +151,94 @@
     }
   }
 
+
+  // ---- potong dan gabung (titik mentah tidak diubah) ----
+  // ed = { ops: [ {c: waktu_ms} potong | {j: id trip pertama} gabung dengan trip berikutnya ] }
+  // Operasi dijalankan berurutan sesuai urutan Han membuatnya.
+  function applyEdits(res, ed) {
+    var pts = res.points, o = res.o, trips = res.trips.slice();
+    if (!ed || !ed.ops) return trips;
+    ed.ops.forEach(function (op) {
+      var i, t;
+      if (op.j !== undefined) {
+        for (i = 0; i < trips.length - 1; i++) {
+          if (trips[i].id === op.j) {
+            var a = trips[i], b = trips[i + 1];
+            trips.splice(i, 2, makeTrip(pts, a.i0, b.i1, o, b.open));
+            break;
+          }
+        }
+      } else if (op.c !== undefined) {
+        for (i = 0; i < trips.length; i++) {
+          t = trips[i];
+          if (op.c > t.start && op.c < t.end) {
+            var k = t.i0;
+            while (k < t.i1 && pts[k + 1].t <= op.c) k++;
+            if (k > t.i0 && k + 1 < t.i1) {
+              trips.splice(i, 1, makeTrip(pts, t.i0, k, o, false), makeTrip(pts, k + 1, t.i1, o, t.open));
+            }
+            break;
+          }
+        }
+      }
+    });
+    return trips;
+  }
+
+  // ---- jadwal mingguan ----
+  // sched = { days: [7 hari, 0=Minggu] { in:'06:00', out:'17:30', brk:true, brkFrom:'11:00', brkTo:'13:30' } }
+  function minOf(hhmm) {
+    if (!hhmm) return -1;
+    var p = String(hhmm).split(':');
+    var h = +p[0], m = +p[1];
+    return (isFinite(h) && isFinite(m)) ? h * 60 + m : -1;
+  }
+  function defaultSchedule() {
+    var d = [];
+    for (var i = 0; i < 7; i++) d.push({ 'in': '', out: '', brk: true, brkFrom: '11:00', brkTo: '13:30' });
+    return { days: d };
+  }
+  function classify(sched, ts) {
+    var d = new Date(ts);
+    var day = sched && sched.days && sched.days[d.getDay()];
+    if (!day) return 'Pribadi';
+    var a = minOf(day['in']), b = minOf(day.out);
+    if (a < 0 || b <= a) return 'Pribadi';
+    var m = d.getHours() * 60 + d.getMinutes();
+    if (m < a || m >= b) return 'Pribadi';
+    if (day.brk) {
+      var f = minOf(day.brkFrom), g = minOf(day.brkTo);
+      if (f >= 0 && g > f && m >= f && m < g) return 'Pribadi';
+    }
+    return 'Kerja';
+  }
+  // label otomatis dari waktu mulai; check = true bila trip melewati batas jam kerja
+  function autoLabel(sched, trip) {
+    var a = classify(sched, trip.start), b = classify(sched, trip.end);
+    return { label: a, check: a !== b };
+  }
+  // untuk dikirim ke Android: menit sejak 00.00 (-1 = libur)
+  function nativeDays(sched) {
+    var out = [];
+    for (var i = 0; i < 7; i++) {
+      var d = sched && sched.days && sched.days[i];
+      var a = d ? minOf(d['in']) : -1, b = d ? minOf(d.out) : -1;
+      if (a < 0 || b <= a) { a = -1; b = -1; }
+      out.push({ i: a, o: b });
+    }
+    return out;
+  }
+  // jendela otomatis pada tanggal tertentu: {s,e} (ms) atau null
+  function windowOn(sched, ymdStr, marginMin) {
+    var p = ymdStr.split('-');
+    var base = new Date(+p[0], +p[1] - 1, +p[2]);
+    var day = sched && sched.days && sched.days[base.getDay()];
+    if (!day) return null;
+    var a = minOf(day['in']), b = minOf(day.out);
+    if (a < 0 || b <= a) return null;
+    return { s: base.getTime() + (a - marginMin) * 60000, e: base.getTime() + (b + marginMin) * 60000 };
+  }
+
   // ---- format ----
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
   function hm(t) { var d = new Date(t); return pad(d.getHours()) + '.' + pad(d.getMinutes()); }
@@ -171,6 +261,8 @@
 
   return {
     DEF: DEF, parseCsv: parseCsv, detectTrips: detectTrips, zoneOf: zoneOf,
+    applyEdits: applyEdits, defaultSchedule: defaultSchedule, classify: classify, autoLabel: autoLabel,
+    nativeDays: nativeDays, windowOn: windowOn, minOf: minOf,
     hm: hm, ymd: ymd, km1: km1, dateLong: dateLong, durText: durText, pad: pad
   };
 });

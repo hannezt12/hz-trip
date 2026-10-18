@@ -34,6 +34,7 @@
       <div class="legl"><span>0</span><span>60</span><span>90</span><span>120+</span></div>
       <button class="recbtn start" id="btnRec"></button>
       <div class="gps" id="gpsLine"></div>
+      <div id="modeBox"></div>
       <div id="warnBox"></div>
     </section>
 
@@ -51,6 +52,15 @@
 
     <!-- Pengaturan -->
     <section class="view" id="v-set">
+      <div class="h">JADWAL MINGGUAN</div>
+      <div class="card">
+        <label class="chk"><input type="checkbox" id="autoChk"> Rekam otomatis sesuai jadwal</label>
+        <div class="muted" style="margin:6px 0 10px">Di dalam jendela jadwal, HZ Trip siaga dan mulai merekam sendiri saat kendaraan jalan. Di luar jendela, HZ Trip tidur; rekam manual lewat tombol Mulai.</div>
+        <div class="muted" style="margin-bottom:4px">Jendela aktif dimulai sebelum masuk dan berakhir setelah pulang:</div>
+        <select id="marginSel"><option value="0">tepat jam masuk / pulang</option><option value="15">15 menit sebelum / sesudah</option><option value="30">30 menit sebelum / sesudah</option><option value="45">45 menit sebelum / sesudah</option><option value="60">1 jam sebelum / sesudah</option></select>
+      </div>
+      <div id="schedBox"></div>
+
       <div class="h">UNIT</div>
       <div class="card" id="unitBox"></div>
       <div class="row" style="margin-top:8px"><input type="text" id="unitNew" placeholder="Nomor unit baru, mis. BT.15" maxlength="20"><button class="btn pri" id="unitAdd" style="flex-shrink:0">Tambah</button></div>
@@ -63,15 +73,16 @@
 
       <div class="h">PEREKAMAN DI LATAR BELAKANG</div>
       <div class="card"><div class="muted" id="setStat"></div>
-        <button class="btn" id="btnBatt" style="margin-top:10px;width:100%">Atur penghematan baterai</button>
+        <button class="btn" id="btnBg" style="margin-top:10px;width:100%">Atur izin lokasi "Selalu"</button>
+        <button class="btn" id="btnBatt" style="margin-top:8px;width:100%">Atur penghematan baterai</button>
         <div class="muted" style="margin-top:8px">Pilih HZ Trip lalu "Tanpa pembatasan" agar perekaman tidak dimatikan sistem.</div>
       </div>
 
       <div class="h">ATURAN TETAP</div>
-      <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
+      <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Label otomatis: Kerja di dalam jam kerja (di luar istirahat), Pribadi selain itu. Bisa diubah per trip.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
 
       <div class="h">TAHAP BERIKUTNYA</div>
-      <div class="card muted">Jadwal mingguan dan label otomatis · Lintasan di peta · Cetak PDF/Excel/KML · Potong dan gabung trip.</div>
+      <div class="card muted">Lintasan di peta · Cetak PDF/Excel/KML · Penyetelan baterai lanjutan.</div>
     </section>
   </div>
 </div>
@@ -84,7 +95,7 @@
   <a class="off">Lintasan (tahap 3)</a>
   <a class="off">Cetak (tahap 3)</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.1.0 · tahap 1</div>
+  <div class="ver">Versi 0.2.0 · tahap 2</div>
 </nav>
 <div id="sheet"></div>
 <div id="toast"></div>

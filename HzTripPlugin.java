@@ -34,7 +34,8 @@ import java.util.regex.Pattern;
                         Manifest.permission.ACCESS_FINE_LOCATION,
                         Manifest.permission.ACCESS_COARSE_LOCATION
                 }),
-                @Permission(alias = "notifications", strings = {"android.permission.POST_NOTIFICATIONS"})
+                @Permission(alias = "notifications", strings = {"android.permission.POST_NOTIFICATIONS"}),
+                @Permission(alias = "background", strings = {"android.permission.ACCESS_BACKGROUND_LOCATION"})
         }
 )
 public class HzTripPlugin extends Plugin {
@@ -58,10 +59,8 @@ public class HzTripPlugin extends Plugin {
             }
 
             @Override
-            public void onState(boolean recording) {
-                JSObject o = new JSObject();
-                o.put("recording", recording);
-                notifyListeners("state", o);
+            public void onState() {
+                notifyListeners("state", statusObject());
             }
         };
     }
@@ -114,31 +113,125 @@ public class HzTripPlugin extends Plugin {
 
     @PluginMethod
     public void stop(PluginCall call) {
-        TripService s = TripService.instance;
-        if (s != null) {
-            s.stopRecording();
-        } else {
+        try {
             getContext().startService(new Intent(getContext(), TripService.class).setAction(TripService.ACTION_STOP));
+        } catch (Exception e) {
+            call.reject("Gagal mengakhiri: " + e.getMessage());
+            return;
         }
         JSObject o = new JSObject();
         o.put("recording", false);
         call.resolve(o);
     }
 
-    @PluginMethod
-    public void status(PluginCall call) {
+    private static String modeName() {
+        switch (TripService.mode) {
+            case TripService.M_SIAGA:
+                return "siaga";
+            case TripService.M_CEK:
+                return "cek";
+            case TripService.M_REKAM:
+                return "rekam";
+            default:
+                return "tidur";
+        }
+    }
+
+    private boolean hasBackground() {
+        if (android.os.Build.VERSION.SDK_INT < 29) {
+            return hasLocation();
+        }
+        return getContext().checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    private JSObject statusObject() {
         Context ctx = getContext();
+        long now = System.currentTimeMillis();
         JSObject o = new JSObject();
-        o.put("recording", TripService.recording);
+        o.put("mode", modeName());
+        o.put("recording", TripService.mode == TripService.M_REKAM);
+        o.put("manual", TripService.manual);
         o.put("lastT", TripService.lastT);
         o.put("lastV", TripService.lastSpeed);
         o.put("lastAcc", TripService.lastAcc);
         o.put("count", TripService.count);
         o.put("startedAt", TripService.startedAt);
         o.put("permission", hasLocation());
+        o.put("background", hasBackground());
+        o.put("auto", Sched.autoEnabled(ctx));
+        o.put("winEnd", Sched.windowEnd(ctx, now));
+        o.put("nextStart", Sched.nextStart(ctx, now));
+        o.put("paused", now < Sched.pausedUntil(ctx));
         PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
         o.put("batteryFree", pm != null && pm.isIgnoringBatteryOptimizations(ctx.getPackageName()));
-        call.resolve(o);
+        return o;
+    }
+
+    @PluginMethod
+    public void status(PluginCall call) {
+        call.resolve(statusObject());
+    }
+
+    @PluginMethod
+    public void setSchedule(PluginCall call) {
+        Context ctx = getContext();
+        try {
+            JSArray days = call.getArray("days");
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 7; i++) {
+                int in = -1;
+                int out = -1;
+                if (days != null && i < days.length()) {
+                    org.json.JSONObject d = days.getJSONObject(i);
+                    in = d.optInt("i", -1);
+                    out = d.optInt("o", -1);
+                }
+                if (i > 0) {
+                    sb.append(';');
+                }
+                if (in < 0 || out <= in) {
+                    sb.append("-");
+                } else {
+                    sb.append(in).append('-').append(out);
+                }
+            }
+            Boolean auto = call.getBoolean("auto", true);
+            Integer margin = call.getInt("margin", 30);
+            Sched.p(ctx).edit()
+                    .putString("sched", sb.toString())
+                    .putBoolean("auto", auto == null || auto)
+                    .putInt("margin", margin == null ? 30 : margin)
+                    .putLong("pausedUntil", 0L)
+                    .apply();
+        } catch (Exception e) {
+            call.reject("Jadwal tidak valid: " + e.getMessage());
+            return;
+        }
+        Sched.evaluate(ctx);
+        call.resolve(statusObject());
+    }
+
+    @PluginMethod
+    public void resumeAuto(PluginCall call) {
+        Context ctx = getContext();
+        Sched.p(ctx).edit().putLong("pausedUntil", 0L).apply();
+        Sched.evaluate(ctx);
+        call.resolve(statusObject());
+    }
+
+    @PluginMethod
+    public void ensureBackground(PluginCall call) {
+        if (hasBackground() || android.os.Build.VERSION.SDK_INT < 29) {
+            call.resolve(statusObject());
+            return;
+        }
+        requestPermissionForAlias("background", call, "bgResult");
+    }
+
+    @PermissionCallback
+    private void bgResult(PluginCall call) {
+        call.resolve(statusObject());
     }
 
     @PluginMethod

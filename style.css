@@ -88,3 +88,18 @@ input[type=text],input[type=date],select{height:46px;width:100%;border:1px solid
 .unit{display:flex;align-items:center;gap:8px;height:48px;border-bottom:1px solid #1E2A31;font-size:17px}
 .unit span{flex:1}
 #toast{position:fixed;left:16px;right:16px;bottom:calc(24px + env(safe-area-inset-bottom,0px));background:#EAF0F2;color:#0D1215;border-radius:12px;padding:12px 14px;font-size:15px;z-index:90;display:none}
+
+.chk{display:flex;align-items:center;gap:12px;min-height:44px;font-size:16px}
+.chk input{width:22px;height:22px;accent-color:#EAF0F2}
+.sday{padding:12px 14px}
+.sd-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.sd-h b{font-family:var(--cond);font-weight:600;font-size:22px;letter-spacing:.03em}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.r2 label{font-size:12px;color:var(--tx2);letter-spacing:.06em;font-weight:600}
+.r2 input[type=time]{margin-top:3px}
+input[type=time]{height:46px;width:100%;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--tx);font-size:16px;padding:0 12px;font-family:inherit}
+.modebox{margin-top:10px;border-radius:12px;background:var(--card);padding:12px 14px;font-size:15px;line-height:1.45;text-align:center}
+.modebox b{color:var(--tx)}
+.modebox .btn{margin-top:8px}
+.chip.m{background:#1E2A31;color:var(--tx2)}
+.chip.f{background:#3A2A12;color:#F2C98A}
