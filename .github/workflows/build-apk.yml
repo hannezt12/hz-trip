@@ -1,0 +1,214 @@
+name: Build HZ Trip APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write   # supaya bisa menghapus artifact lama
+    steps:
+      - name: Ambil kode dari repo
+        uses: actions/checkout@v4
+
+      # Hapus artifact lama PALING AWAL (sisakan 2, jadi 3 setelah upload baru)
+      - name: Hapus artifact APK lama
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const { data } = await github.rest.actions.listArtifactsForRepo({ owner, repo, per_page: 100 });
+            const milikKita = data.artifacts
+              .filter(a => a.name === 'hz-trip-apk')
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            for (const artifact of milikKita.slice(2)) {
+              console.log('Menghapus artifact lama: id ' + artifact.id);
+              await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: artifact.id });
+            }
+
+      - name: Siapkan Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Siapkan Java (JDK 21)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Buat identitas proyek (package.json)
+        run: npm init -y
+
+      - name: Izinkan konflik peer-dependency npm
+        run: echo "legacy-peer-deps=true" > .npmrc
+
+      - name: Pasang Capacitor
+        run: npm install @capacitor/core@latest-7 @capacitor/cli@latest-7 @capacitor/android@latest-7
+
+      - name: Siapkan font (dikemas di dalam aplikasi, tanpa internet)
+        run: |
+          npm install @fontsource/barlow-condensed @fontsource/barlow --no-save
+          mkdir -p fonts
+          BC=node_modules/@fontsource/barlow-condensed/files
+          B=node_modules/@fontsource/barlow/files
+          for w in 500 600 700; do cp $BC/barlow-condensed-latin-$w-normal.woff2 fonts/bc-$w.woff2; done
+          for w in 400 500 600; do cp $B/barlow-latin-$w-normal.woff2 fonts/b-$w.woff2; done
+          ls -la fonts
+
+      - name: Buat ikon aplikasi
+        run: |
+          pip install pillow --break-system-packages || pip install pillow
+          python3 make_icon.py icons_out
+
+      - name: Susun folder www/ dari file web
+        run: |
+          mkdir -p www
+          cp index.html style.css trips.js app.js www/
+          cp -r fonts www/
+
+      - name: Init Capacitor project
+        run: npx cap init "HZ Trip" "com.hz.hztrip" --web-dir=www
+
+      - name: Tulis capacitor.config.json
+        run: |
+          cat > capacitor.config.json << 'EOF'
+          {
+            "appId": "com.hz.hztrip",
+            "appName": "HZ Trip",
+            "webDir": "www",
+            "backgroundColor": "#0D1215",
+            "android": {
+              "adjustMarginsForEdgeToEdge": "auto"
+            }
+          }
+          EOF
+          cat capacitor.config.json
+
+      - name: Tambah platform Android
+        run: npx cap add android
+
+      - name: Pasang kode native (perekam GPS)
+        run: |
+          DEST=android/app/src/main/java/com/hz/hztrip
+          mkdir -p "$DEST"
+          cp MainActivity.java HzTripPlugin.java TripService.java "$DEST/"
+          ls -la "$DEST"
+
+      - name: Ganti ikon aplikasi
+        run: |
+          RES=android/app/src/main/res
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            cp icons_out/mipmap-$d/*.png $RES/mipmap-$d/
+          done
+          mkdir -p $RES/values $RES/mipmap-anydpi-v26
+          cat > $RES/values/ic_launcher_background.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_launcher_background">#0D1215</color>
+          </resources>
+          EOF
+          cat > $RES/mipmap-anydpi-v26/ic_launcher.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/ic_launcher_background"/>
+              <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+          </adaptive-icon>
+          EOF
+          cp $RES/mipmap-anydpi-v26/ic_launcher.xml $RES/mipmap-anydpi-v26/ic_launcher_round.xml
+
+      - name: Sync web assets
+        run: npx cap sync android
+
+      - name: Sinkronkan nomor versi dari index.html
+        run: |
+          VERSION=$(grep -oP 'Versi \K[0-9]+\.[0-9]+\.[0-9]+' index.html | head -1)
+          if [ -z "$VERSION" ]; then VERSION="1.0.0"; fi
+          echo "Versi: $VERSION, build ${{ github.run_number }}"
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$VERSION\"/" android/app/build.gradle
+          sed -i "s/versionCode [0-9]*/versionCode ${{ github.run_number }}/" android/app/build.gradle
+          grep "versionName\|versionCode" android/app/build.gradle
+
+      - name: Tambah izin lokasi dan service perekam ke manifest
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's#</application>#    <service android:name=".TripService" android:exported="false" android:foregroundServiceType="location" />\n    </application>#' "$MANIFEST"
+          sed -i 's#</manifest>#    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.WAKE_LOCK" />\n</manifest>#' "$MANIFEST"
+          cat "$MANIFEST"
+          grep -q 'TripService' "$MANIFEST"
+          grep -q 'FOREGROUND_SERVICE_LOCATION' "$MANIFEST"
+
+      - name: Perbaiki konflik versi Kotlin
+        run: |
+          cat >> android/build.gradle << 'EOF'
+          allprojects {
+              configurations.all {
+                  resolutionStrategy {
+                      force "org.jetbrains.kotlin:kotlin-stdlib:1.9.24"
+                      force "org.jetbrains.kotlin:kotlin-stdlib-common:1.9.24"
+                      force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24"
+                      force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.24"
+                  }
+              }
+          }
+          EOF
+
+      - name: Siapkan keystore penandatanganan
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '[:space:]' | base64 -d > android/app/release.keystore
+
+      - name: Verifikasi keystore dan password
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          keytool -list -keystore android/app/release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" \
+            && echo "Keystore valid." \
+            || (echo "GAGAL buka keystore. Periksa secrets KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS." && exit 1)
+
+      - name: Tambah konfigurasi signing ke Gradle
+        run: |
+          cat >> android/app/build.gradle << 'EOF'
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file("release.keystore")
+                      storePassword System.getenv("KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("KEY_ALIAS")
+                      keyPassword System.getenv("KEY_PASSWORD")
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          EOF
+
+      - name: Build APK (release, signed)
+        uses: nick-fields/retry@v3
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            cd android
+            chmod +x gradlew
+            ./gradlew assembleRelease
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: hz-trip-apk
+          path: android/app/build/outputs/apk/release/app-release.apk

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0D1215">
+<title>HZ Trip</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <button class="ib" id="btnMenu" aria-label="Menu"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#EAF0F2" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="ttl" id="ttl">SPIDOMETER</div>
+    <div style="width:48px"></div>
+  </div>
+  <div id="main">
+
+    <!-- A. Spidometer -->
+    <section class="view on" id="v-spido">
+      <div class="gwrap">
+        <svg viewBox="0 0 360 300" aria-hidden="true">
+          <path id="gTrack" fill="none" stroke="#1E2A31" stroke-width="22" stroke-linecap="round"/>
+          <path id="gVal" fill="none" stroke="#3FD07A" stroke-width="22" stroke-linecap="round"/>
+        </svg>
+        <div class="gnum"><b id="gNum">0</b><span>KM/JAM</span></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><small>MAKS</small><b id="sMax">–</b><i>km/j</i></div>
+        <div class="stat"><small>RATA-RATA</small><b id="sAvg">–</b><i>km/j</i></div>
+        <div class="stat"><small>JARAK</small><b id="sKm">–</b><i>km</i></div>
+      </div>
+      <div class="legend"><div></div><div></div><div></div></div>
+      <div class="legl"><span>0</span><span>60</span><span>90</span><span>120+</span></div>
+      <button class="recbtn start" id="btnRec"></button>
+      <div class="gps" id="gpsLine"></div>
+      <div id="warnBox"></div>
+    </section>
+
+    <!-- C. Riwayat -->
+    <section class="view" id="v-riwayat">
+      <div class="dnav">
+        <button class="ib" id="dPrev" aria-label="Hari sebelumnya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EAF0F2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <div class="dt" id="dLabel"></div>
+        <button class="ib" id="dNext" aria-label="Hari berikutnya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EAF0F2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+      </div>
+      <input type="date" id="dPick" style="margin-top:4px">
+      <div id="daySum"></div>
+      <div id="tripList"></div>
+    </section>
+
+    <!-- Pengaturan -->
+    <section class="view" id="v-set">
+      <div class="h">UNIT</div>
+      <div class="card" id="unitBox"></div>
+      <div class="row" style="margin-top:8px"><input type="text" id="unitNew" placeholder="Nomor unit baru, mis. BT.15" maxlength="20"><button class="btn pri" id="unitAdd" style="flex-shrink:0">Tambah</button></div>
+
+      <div class="h">BATAS PISAH TRIP</div>
+      <select id="splitSel">
+        <option value="15">15 detik</option><option value="60">1 menit</option><option value="180">3 menit</option><option value="300">5 menit</option>
+      </select>
+      <div class="muted" style="margin-top:6px">Berhenti selama ini = trip berakhir. Trip baru mulai otomatis saat kecepatan 15 km/jam atau lebih selama 10 detik.</div>
+
+      <div class="h">PEREKAMAN DI LATAR BELAKANG</div>
+      <div class="card"><div class="muted" id="setStat"></div>
+        <button class="btn" id="btnBatt" style="margin-top:10px;width:100%">Atur penghematan baterai</button>
+        <div class="muted" style="margin-top:8px">Pilih HZ Trip lalu "Tanpa pembatasan" agar perekaman tidak dimatikan sistem.</div>
+      </div>
+
+      <div class="h">ATURAN TETAP</div>
+      <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
+
+      <div class="h">TAHAP BERIKUTNYA</div>
+      <div class="card muted">Jadwal mingguan dan label otomatis · Lintasan di peta · Cetak PDF/Excel/KML · Potong dan gabung trip.</div>
+    </section>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<nav id="drawer">
+  <div class="brand">HZ TRIP</div>
+  <a data-go="spido" class="on">Spidometer</a>
+  <a data-go="riwayat">Riwayat</a>
+  <a class="off">Lintasan (tahap 3)</a>
+  <a class="off">Cetak (tahap 3)</a>
+  <a data-go="set">Pengaturan</a>
+  <div class="ver">Versi 0.1.0 · tahap 1</div>
+</nav>
+<div id="sheet"></div>
+<div id="toast"></div>
+
+<script src="trips.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
