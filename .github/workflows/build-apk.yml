@@ -61,6 +61,12 @@ jobs:
           for w in 400 500 600; do cp $B/barlow-latin-$w-normal.woff2 fonts/b-$w.woff2; done
           ls -la fonts
 
+      - name: Siapkan jembatan Capacitor untuk halaman web
+        run: |
+          mkdir -p vendor
+          cp node_modules/@capacitor/core/dist/capacitor.js vendor/capacitor-core.js
+          ls -la vendor
+
       - name: Buat ikon aplikasi
         run: |
           pip install pillow --break-system-packages || pip install pillow
@@ -71,6 +77,7 @@ jobs:
           mkdir -p www
           cp index.html style.css trips.js app.js www/
           cp -r fonts www/
+          cp -r vendor www/
 
       - name: Init Capacitor project
         run: npx cap init "HZ Trip" "com.hz.hztrip" --web-dir=www
@@ -82,10 +89,7 @@ jobs:
             "appId": "com.hz.hztrip",
             "appName": "HZ Trip",
             "webDir": "www",
-            "backgroundColor": "#0D1215",
-            "android": {
-              "adjustMarginsForEdgeToEdge": "auto"
-            }
+            "backgroundColor": "#0D1215"
           }
           EOF
           cat capacitor.config.json

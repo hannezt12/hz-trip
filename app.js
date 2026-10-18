@@ -9,7 +9,20 @@
 
   // ---------- jembatan ke Android (atau tiruan di browser untuk uji) ----------
   var native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-  var Plug = native ? window.Capacitor.registerPlugin('HzTrip') : mockPlugin();
+  var Plug;
+  try {
+    Plug = native
+      ? (window.Capacitor.registerPlugin ? window.Capacitor.registerPlugin('HzTrip') : window.Capacitor.Plugins.HzTrip)
+      : mockPlugin();
+  } catch (e) { Plug = null; }
+  window.addEventListener('error', function (e) { showErr(e.message); });
+  window.addEventListener('unhandledrejection', function (e) { showErr(e.reason && e.reason.message || e.reason); });
+  function showErr(m) {
+    var b = document.getElementById('errBar');
+    if (!b) { b = document.createElement('div'); b.id = 'errBar'; b.className = 'warn'; b.style.cssText = 'position:fixed;left:12px;right:12px;top:60px;z-index:99'; document.body.appendChild(b); }
+    b.textContent = 'Galat: ' + m;
+  }
+  if (!Plug) { showErr('Plugin perekam tidak ditemukan'); return; }
 
   function mockPlugin() {
     var L = {}, timer = null, sec = 0, rec = false, lat = -4.9, lng = 105.2;
