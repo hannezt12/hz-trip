@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   var T = window.HzTrips;
+  var E = window.HzEkspor;
   var COL = { g: '#3FD07A', y: '#F5C518', r: '#FF5B50' };
   var HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   function $(id) { return document.getElementById(id); }
@@ -65,7 +66,7 @@
     view: 'spido', mode: 'tidur', manual: false, paused: false, auto: true, winEnd: 0, nextStart: 0,
     perm: true, bg: true, battFree: false,
     live: { v: 0, acc: 0, t: 0, count: 0 },
-    settings: { units: ['BT.13', 'Motor'], defUnit: 'BT.13', splitSec: 60, auto: true, margin: 30, schedule: T.defaultSchedule() },
+    settings: { units: ['BT.13', 'Motor'], defUnit: 'BT.13', splitSec: 60, auto: true, margin: 30, driver: 'Han', mapMode: 'sat', schedule: T.defaultSchedule() },
     ov: { trips: {}, days: {} },
     today: T.ymd(Date.now()), todayPts: [], liveTrip: null,
     hDay: T.ymd(Date.now()), hTrips: []
@@ -107,14 +108,16 @@
   }
 
   // ---------- navigasi ----------
-  var TITLES = { spido: 'SPIDOMETER', riwayat: 'RIWAYAT', set: 'PENGATURAN' };
+  var TITLES = { spido: 'SPIDOMETER', lintasan: 'LINTASAN', riwayat: 'RIWAYAT', set: 'PENGATURAN' };
   function go(v) {
     S.view = v;
-    ['spido', 'riwayat', 'set'].forEach(function (n) { $('v-' + n).classList.toggle('on', n === v); });
+    ['spido', 'lintasan', 'riwayat', 'set'].forEach(function (n) { $('v-' + n).classList.toggle('on', n === v); });
+    $('main').classList.toggle('map', v === 'lintasan');
     $('ttl').textContent = TITLES[v];
     document.querySelectorAll('#drawer a[data-go]').forEach(function (a) { a.classList.toggle('on', a.getAttribute('data-go') === v); });
     closeDrawer();
     if (v === 'riwayat') loadHistory();
+    if (v === 'lintasan') openMap();
     if (v === 'set') { renderSettings(); syncStatus(); }
     if (v === 'spido') { syncStatus(); renderSpido(); }
     $('main').scrollTop = 0;
@@ -314,6 +317,7 @@
       '<div class="muted" style="margin-top:6px">Memecah trip ini menjadi dua di jam yang dipilih.</div>' +
       (hasNext ? '<button class="btn" id="joinGo" style="width:100%;margin-top:10px">Gabung dengan trip berikutnya</button>' : '') +
       (hasEdit ? '<button class="btn" id="undoGo" style="width:100%;margin-top:10px">Batalkan potongan / gabungan</button>' : '') +
+      '<button class="btn" id="printGo" style="width:100%;margin-top:10px">Cetak trip ini (PDF)</button>' +
       '<div class="h">RINCIAN</div>' +
       '<div class="kv"><span>Jarak</span><span>' + T.km1(t.km) + ' km</span></div>' +
       '<div class="kv"><span>Kecepatan min / maks / rata-rata</span><span>' + Math.round(t.min) + ' / ' + Math.round(t.max) + ' / ' + Math.round(t.avg) + ' km/j</span></div>' +
@@ -326,6 +330,7 @@
     $('uOpts').onclick = function (e) { var u = e.target.getAttribute && e.target.getAttribute('data-u'); if (u) change(i, 'unit', u); };
     $('lOpts').onclick = function (e) { var l = e.target.getAttribute && e.target.getAttribute('data-l'); if (l !== null && l !== undefined) change(i, 'label', l || null); };
     $('cutGo').onclick = function () { doCut(i, $('cutAt').value); };
+    $('printGo').onclick = function () { openPrint({ tripId: t.id }); };
     if ($('joinGo')) $('joinGo').onclick = function () { doJoin(i); };
     if ($('undoGo')) $('undoGo').onclick = function () { doUndo(i); };
   }
@@ -423,6 +428,7 @@
         (S.settings.units.length > 1 ? '<button class="btn sm" data-del="' + i + '">Hapus</button>' : '') + '</div>';
     }).join('');
     $('splitSel').value = String(S.settings.splitSec);
+    if (document.activeElement !== $('driverIn')) $('driverIn').value = S.settings.driver || '';
     $('autoChk').checked = !!S.settings.auto;
     $('marginSel').value = String(S.settings.margin);
     var bits = [];
@@ -449,6 +455,193 @@
     x[f] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     saveSettings(); pushSchedule();
     if (f === 'brk' || f === 'in' || f === 'out') { var sc = $('main').scrollTop; renderSched(); $('main').scrollTop = sc; }
+  }
+
+  // ---------- simpan dan bagikan ----------
+  var sharing = false;
+  function textB64(s) { return btoa(unescape(encodeURIComponent(s))); }
+  function saveFile(name, b64, mime) {
+    window.__lastExport = { name: name, b64: b64, mime: mime };
+    var P = window.Capacitor && window.Capacitor.Plugins;
+    if (native && P && P.Filesystem) {
+      if (sharing) { toast('Masih ada proses bagikan berkas, tunggu sebentar'); return Promise.resolve(); }
+      sharing = true;
+      return P.Filesystem.writeFile({ path: 'HZTrip/' + name, data: b64, directory: 'CACHE', recursive: true }).then(function (w) {
+        return P.Share ? P.Share.share({ title: name, url: w.uri, dialogTitle: 'Simpan atau bagikan' }) : null;
+      }).catch(function (e) {
+        var m = e && e.message || String(e);
+        if (!/cancel/i.test(m)) toast('Gagal menyimpan: ' + m);
+      }).then(function () { sharing = false; });
+    }
+    try {
+      var bin = atob(b64), arr = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      var url = URL.createObjectURL(new Blob([arr], { type: mime }));
+      var a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    } catch (e) { toast('Gagal menyimpan: ' + e.message); }
+    return Promise.resolve();
+  }
+
+  // ---------- data untuk ekspor ----------
+  function loadDay(ymd) {
+    return Plug.readDay({ date: ymd }).then(function (r) {
+      var res = T.detectTrips(T.parseCsv(r.text), opts());
+      return { ymd: ymd, pts: res.points, trips: T.applyEdits(res, S.ov.days[ymd]).map(tripView) };
+    });
+  }
+  function dayList(from, to) {
+    var a = from.split('-'), b = to.split('-'), out = [], n = 0;
+    var d = new Date(+a[0], +a[1] - 1, +a[2]), end = new Date(+b[0], +b[1] - 1, +b[2]);
+    while (d <= end && n < 93) { out.push(T.ymd(d.getTime())); d.setDate(d.getDate() + 1); n++; }
+    return out;
+  }
+  function collect(P) {
+    var list = P.scope === 'range' ? dayList(P.from, P.to) : [P.day];
+    return Promise.all(list.map(loadDay)).then(function (ds) {
+      return ds.map(function (d) {
+        d.trips = d.trips.filter(function (x) {
+          if (P.scope === 'trip') return x.t.id === P.tripId;
+          return P.units.indexOf(x.unit) >= 0 && P.labels.indexOf(x.label) >= 0;
+        });
+        return d;
+      }).filter(function (d) { return d.trips.length; });
+    });
+  }
+  function fileBase(P) {
+    if (P.scope === 'range') return 'HZTrip-' + P.from + '_sd_' + P.to;
+    if (P.scope === 'trip') return 'HZTrip-' + P.day + '-trip-' + T.hm(P.tripId).replace('.', '');
+    return 'HZTrip-' + P.day;
+  }
+
+  // ---------- lembar cetak ----------
+  var P = null;
+  function openPrint(o) {
+    o = o || {};
+    P = { scope: o.tripId ? 'trip' : 'hari', tripId: o.tripId || 0, day: o.day || S.hDay, from: S.hDay, to: S.hDay,
+      units: S.settings.units.slice(), labels: ['Kerja', 'Pribadi'], summary: true, color: true };
+    var tripTxt = '';
+    if (o.tripId) { var x = S.hTrips.filter(function (y) { return y.t.id === o.tripId; })[0]; if (x) tripTxt = ' <span class="muted">· ' + T.hm(x.t.start) + ' – ' + T.hm(x.t.end) + '</span>'; }
+    var today = T.ymd(Date.now());
+    openSheet('<div class="grab"></div><div class="st">CETAK LAPORAN</div><div class="plist">' +
+      '<div class="h">CAKUPAN</div>' +
+      (o.tripId ? '<label><input type="radio" name="pscope" value="trip" checked> Satu trip' + tripTxt + '</label>' : '') +
+      '<label><input type="radio" name="pscope" value="hari"' + (o.tripId ? '' : ' checked') + '> Satu hari</label>' +
+      '<label><input type="radio" name="pscope" value="range"> Rentang tanggal</label>' +
+      '<div class="pgrid" style="margin-top:4px"><div><div class="muted">Dari / tanggal</div><input type="date" id="pFrom" value="' + P.day + '" max="' + today + '"></div>' +
+      '<div><div class="muted">Sampai</div><input type="date" id="pTo" value="' + P.day + '" max="' + today + '"></div></div>' +
+      '<div id="pFilters"><div class="h">UNIT</div><div class="pgrid" id="pUnits">' + S.settings.units.map(function (u, i) { return '<label><input type="checkbox" data-u="' + i + '" checked> ' + esc(u) + '</label>'; }).join('') + '</div>' +
+      '<div class="h">LABEL</div><div class="pgrid"><label><input type="checkbox" data-l="Kerja" checked> Kerja</label><label><input type="checkbox" data-l="Pribadi" checked> Pribadi</label></div></div>' +
+      '<div class="h">ISI TAMBAHAN</div>' +
+      '<label><input type="checkbox" id="pSum" checked> Ringkasan di bawah tabel</label>' +
+      '<label><input type="checkbox" id="pCol" checked> Warnai kecepatan maks (kuning dan merah)</label></div>' +
+      '<div class="muted" id="pInfo" style="margin-top:10px">Menghitung…</div>' +
+      '<div class="row" style="margin-top:10px"><button class="btn pri" id="pPdf" style="flex:1.3;height:52px">PDF</button><button class="btn" id="pKml" style="flex:1;height:52px">KML</button></div>' +
+      '<button class="btn" id="pClose" style="width:100%;margin-top:8px">Tutup</button>');
+    $('pClose').onclick = closeSheet;
+    $('sheet').onchange = onPrintChange;
+    $('pPdf').onclick = function () { runExport('pdf'); };
+    $('pKml').onclick = function () { runExport('kml'); };
+    syncPrint();
+  }
+  function onPrintChange(e) {
+    var t = e.target;
+    if (!P || !t) return;
+    if (t.name === 'pscope') P.scope = t.value;
+    else if (t.id === 'pFrom') { P.from = t.value; P.day = t.value; if (P.to < P.from) { P.to = P.from; $('pTo').value = P.to; } }
+    else if (t.id === 'pTo') P.to = t.value;
+    else if (t.getAttribute('data-u') !== null) { P.units = [].slice.call(document.querySelectorAll('#pUnits input')).filter(function (c) { return c.checked; }).map(function (c) { return S.settings.units[+c.getAttribute('data-u')]; }); }
+    else if (t.getAttribute('data-l') !== null) { P.labels = [].slice.call(document.querySelectorAll('input[data-l]')).filter(function (c) { return c.checked; }).map(function (c) { return c.getAttribute('data-l'); }); }
+    else if (t.id === 'pSum') P.summary = t.checked;
+    else if (t.id === 'pCol') P.color = t.checked;
+    syncPrint();
+  }
+  function syncPrint() {
+    if (!$('pFrom')) return;
+    $('pTo').disabled = P.scope !== 'range';
+    $('pFrom').disabled = P.scope === 'trip';
+    $('pFilters').style.opacity = P.scope === 'trip' ? '.4' : '1';
+    $('pInfo').textContent = 'Menghitung…';
+    collect(P).then(function (ds) {
+      var n = 0, km = 0;
+      ds.forEach(function (d) { d.trips.forEach(function (x) { n++; km += x.t.km; }); });
+      if ($('pInfo')) $('pInfo').innerHTML = n ? 'Akan mencetak <b style="color:var(--tx)">' + n + ' trip · ' + T.km1(km) + ' km</b>' + (ds.length > 1 ? ' dalam ' + ds.length + ' hari' : '') : 'Tidak ada trip pada pilihan ini.';
+    });
+  }
+  function runExport(kind) {
+    collect(P).then(function (ds) {
+      if (!ds.length) { toast('Tidak ada trip pada pilihan ini'); return; }
+      var base = fileBase(P);
+      if (kind === 'kml') {
+        return saveFile(base + '.kml', textB64(E.buildKml(ds, { title: 'HZ Trip ' + ds[0].ymd })), 'application/vnd.google-earth.kml+xml');
+      }
+      if (!window.jspdf) { toast('Library PDF belum siap'); return; }
+      var doc = E.buildPdf(ds, { driver: S.settings.driver, scope: P.scope, summary: P.summary, color: P.color });
+      return saveFile(base + '.pdf', doc.output('datauristring').split(',')[1], 'application/pdf');
+    }).catch(function (e) { showErr(e && e.message || e); });
+  }
+
+  // ---------- lintasan (peta) ----------
+  var map = null, tileLayer = null, trackLayer = null, fitted = false, mapSel = -1;
+  var TILES = {
+    sat: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 'Esri World Imagery'],
+    osm: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', '&copy; OpenStreetMap']
+  };
+  function ensureMap() {
+    if (map) return true;
+    if (!window.L) return false;
+    map = L.map('map', { zoomControl: true, preferCanvas: true }).setView([-4.95, 105.2], 14);
+    trackLayer = L.layerGroup().addTo(map);
+    setTiles();
+    return true;
+  }
+  function setTiles() {
+    if (!map) return;
+    if (tileLayer) { map.removeLayer(tileLayer); tileLayer = null; }
+    var m = S.settings.mapMode;
+    if (TILES[m]) tileLayer = L.tileLayer(TILES[m][0], { maxZoom: 19, attribution: TILES[m][1] }).addTo(map);
+    document.querySelectorAll('#mapSeg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-map') === m); });
+  }
+  function openMap() {
+    setTimeout(function () {
+      if (!ensureMap()) { $('mapMsg').textContent = 'Peta tidak tersedia'; return; }
+      map.invalidateSize();
+      setTiles();
+      renderMap(true);
+    }, 60);
+  }
+  function renderMap(fit) {
+    if (!map) return;
+    var res = T.detectTrips(S.todayPts, opts());
+    var trips = T.applyEdits(res, S.ov.days[S.today]).map(tripView), pts = res.points;
+    if (mapSel >= trips.length) mapSel = -1;
+    $('mapChips').innerHTML = trips.length > 1 ? '<button data-i="-1"' + (mapSel < 0 ? ' class="on"' : '') + '>Semua</button>' + trips.map(function (x, i) {
+      return '<button data-i="' + i + '"' + (mapSel === i ? ' class="on"' : '') + '>' + (i + 1) + ' · ' + T.hm(x.t.start) + '</button>';
+    }).join('') : '';
+    trackLayer.clearLayers();
+    var bounds = [];
+    trips.forEach(function (x, i) {
+      if (mapSel >= 0 && mapSel !== i) return;
+      var t = x.t;
+      E.zoneRuns(pts, t.i0, t.i1).forEach(function (r) {
+        var ll = r.pts.map(function (p) { return [p.lat, p.lng]; });
+        L.polyline(ll, { color: COL[r.z], weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(trackLayer);
+        bounds = bounds.concat(ll);
+      });
+      function dot(lat, lng, col, rad, tip) { L.circleMarker([lat, lng], { radius: rad, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1 }).bindTooltip(tip).addTo(trackLayer); }
+      dot(t.startLat, t.startLng, '#3FD07A', 7, 'Mulai ' + T.hm(t.start));
+      dot(t.endLat, t.endLng, '#FF5B50', 7, 'Selesai ' + T.hm(t.end));
+      dot(t.maxLat, t.maxLng, '#F5C518', 8, 'Tercepat ' + Math.round(t.max) + ' km/j (' + T.hm(t.maxT) + ')');
+    });
+    $('mapMsg').textContent = bounds.length ? '' : 'Belum ada lintasan hari ini. Lintasan muncul saat ada trip yang terekam.';
+    if (bounds.length && (fit || !fitted)) { map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 }); fitted = true; }
+  }
+  function mapKml() {
+    loadDay(S.today).then(function (d) {
+      if (!d.trips.length) { toast('Belum ada trip hari ini'); return; }
+      return saveFile('HZTrip-' + S.today + '.kml', textB64(E.buildKml([d], { title: 'HZ Trip ' + S.today })), 'application/vnd.google-earth.kml+xml');
+    });
   }
 
   // ---------- pasang ----------
@@ -486,13 +679,24 @@
     };
     $('btnBatt').onclick = openBatt;
     $('btnBg').onclick = askBackground;
+    $('btnPrint').onclick = function () { openPrint({}); };
+    document.querySelectorAll('#drawer a[data-print]').forEach(function (a) { a.onclick = function () { closeDrawer(); openPrint({ day: S.hDay }); }; });
+    $('mapSeg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-map'); if (m) { S.settings.mapMode = m; saveSettings(); setTiles(); } };
+    $('mapChips').onclick = function (e) { var i = e.target.getAttribute && e.target.getAttribute('data-i'); if (i !== null && i !== undefined) { mapSel = +i; renderMap(true); } };
+    $('mapKml').onclick = mapKml;
+    $('driverIn').onchange = function () { S.settings.driver = this.value.trim(); saveSettings(); };
 
     Plug.addListener('fix', onFix);
     Plug.addListener('state', applyStatus);
     document.addEventListener('visibilitychange', function () {
       if (!document.hidden) { syncStatus(); refreshToday().then(renderSpido); if (S.view === 'riwayat') loadHistory(); }
     });
-    setInterval(function () { if (S.view === 'spido' && !document.hidden) renderSpido(); }, 1000);
+    var tick = 0;
+    setInterval(function () {
+      tick++;
+      if (S.view === 'spido' && !document.hidden) renderSpido();
+      if (S.view === 'lintasan' && !document.hidden && S.mode === 'rekam' && tick % 15 === 0) renderMap(false);
+    }, 1000);
     setInterval(function () { if (!document.hidden) syncStatus(); }, 20000);
 
     loadMeta().then(function () {

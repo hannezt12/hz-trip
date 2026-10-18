@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0D1215">
 <title>HZ Trip</title>
+<link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -38,6 +39,18 @@
       <div id="warnBox"></div>
     </section>
 
+    <!-- B. Lintasan -->
+    <section class="view" id="v-lintasan">
+      <div class="mapbar">
+        <div class="seg" id="mapSeg"><button data-map="sat">Satelit</button><button data-map="osm">Peta</button><button data-map="none">Tanpa peta</button></div>
+        <button class="btn sm" id="mapKml">KML</button>
+      </div>
+      <div class="chips" id="mapChips"></div>
+      <div id="mapWrap"><div id="map"></div><div id="mapMsg"></div></div>
+      <div class="legend" style="margin:8px 16px 4px"><div></div><div></div><div></div></div>
+      <div class="legl" style="margin:0 16px 8px"><span>0</span><span>60</span><span>90</span><span>120+</span></div>
+    </section>
+
     <!-- C. Riwayat -->
     <section class="view" id="v-riwayat">
       <div class="dnav">
@@ -46,6 +59,7 @@
         <button class="ib" id="dNext" aria-label="Hari berikutnya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EAF0F2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
       </div>
       <input type="date" id="dPick" style="margin-top:4px">
+      <button class="btn" id="btnPrint" style="width:100%;margin-top:8px">Cetak / ekspor</button>
       <div id="daySum"></div>
       <div id="tripList"></div>
     </section>
@@ -60,6 +74,9 @@
         <select id="marginSel"><option value="0">tepat jam masuk / pulang</option><option value="15">15 menit sebelum / sesudah</option><option value="30">30 menit sebelum / sesudah</option><option value="45">45 menit sebelum / sesudah</option><option value="60">1 jam sebelum / sesudah</option></select>
       </div>
       <div id="schedBox"></div>
+
+      <div class="h">NAMA PENGEMUDI (UNTUK LAPORAN)</div>
+      <input type="text" id="driverIn" placeholder="Nama" maxlength="40">
 
       <div class="h">UNIT</div>
       <div class="card" id="unitBox"></div>
@@ -82,7 +99,7 @@
       <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Label otomatis: Kerja di dalam jam kerja (di luar istirahat), Pribadi selain itu. Bisa diubah per trip.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
 
       <div class="h">TAHAP BERIKUTNYA</div>
-      <div class="card muted">Lintasan di peta · Cetak PDF/Excel/KML · Penyetelan baterai lanjutan.</div>
+      <div class="card muted">Penyetelan baterai lanjutan · tombol Mulai/Akhiri di Quick Settings · merampingkan data lama.</div>
     </section>
   </div>
 </div>
@@ -91,17 +108,21 @@
 <nav id="drawer">
   <div class="brand">HZ TRIP</div>
   <a data-go="spido" class="on">Spidometer</a>
+  <a data-go="lintasan">Lintasan</a>
   <a data-go="riwayat">Riwayat</a>
-  <a class="off">Lintasan (tahap 3)</a>
-  <a class="off">Cetak (tahap 3)</a>
+  <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.2.1 · tahap 2</div>
+  <div class="ver">Versi 0.3.0 · tahap 3</div>
 </nav>
 <div id="sheet"></div>
 <div id="toast"></div>
 
 <script src="vendor/capacitor-core.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+<script src="vendor/jspdf.plugin.autotable.min.js"></script>
+<script src="vendor/leaflet.js"></script>
 <script src="trips.js"></script>
+<script src="ekspor.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

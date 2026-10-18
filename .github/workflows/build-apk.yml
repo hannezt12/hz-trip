@@ -49,7 +49,7 @@ jobs:
         run: echo "legacy-peer-deps=true" > .npmrc
 
       - name: Pasang Capacitor
-        run: npm install @capacitor/core@latest-7 @capacitor/cli@latest-7 @capacitor/android@latest-7
+        run: npm install @capacitor/core@latest-7 @capacitor/cli@latest-7 @capacitor/android@latest-7 @capacitor/filesystem@latest-7 @capacitor/share@latest-7
 
       - name: Siapkan font (dikemas di dalam aplikasi, tanpa internet)
         run: |
@@ -65,6 +65,11 @@ jobs:
         run: |
           mkdir -p vendor
           cp node_modules/@capacitor/core/dist/capacitor.js vendor/capacitor-core.js
+          npm install jspdf jspdf-autotable leaflet --no-save
+          cp node_modules/jspdf/dist/jspdf.umd.min.js vendor/jspdf.umd.min.js
+          cp node_modules/jspdf-autotable/dist/jspdf.plugin.autotable.min.js vendor/jspdf.plugin.autotable.min.js
+          cp node_modules/leaflet/dist/leaflet.js vendor/leaflet.js
+          cp node_modules/leaflet/dist/leaflet.css vendor/leaflet.css
           ls -la vendor
 
       - name: Buat ikon aplikasi
@@ -75,7 +80,7 @@ jobs:
       - name: Susun folder www/ dari file web
         run: |
           mkdir -p www
-          cp index.html style.css trips.js app.js www/
+          cp index.html style.css trips.js ekspor.js app.js www/
           cp -r fonts www/
           cp -r vendor www/
 

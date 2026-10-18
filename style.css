@@ -109,3 +109,21 @@ input[type=time]{height:46px;width:100%;border:1px solid var(--line);border-radi
 .chev{flex-shrink:0;transition:transform .15s}
 .sday.open .chev{transform:rotate(180deg)}
 .sd-body{padding:0 14px 14px}
+
+#main.map{padding:0;overflow:hidden}
+#v-lintasan{height:100%;flex-direction:column}
+#v-lintasan.on{display:flex}
+.mapbar{display:flex;align-items:center;gap:8px;padding:0 16px 8px}
+.seg{display:flex;flex:1;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{flex:1;height:38px;border:0;background:transparent;font-size:14px;cursor:pointer}
+.seg button.on{background:var(--tx);color:var(--bg);font-weight:600}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:0 16px 8px;flex-shrink:0}
+.chips button{flex-shrink:0;height:34px;padding:0 12px;border-radius:17px;border:1px solid var(--line);background:transparent;font-size:14px;cursor:pointer}
+.chips button.on{background:var(--tx);color:var(--bg);font-weight:600;border-color:var(--tx)}
+#mapWrap{position:relative;flex:1;min-height:200px}
+#map{position:absolute;inset:0;z-index:0;background:#0F1519}
+#mapMsg{position:absolute;left:0;right:0;top:40%;text-align:center;color:var(--tx2);font-size:15px;z-index:1;pointer-events:none;padding:0 24px}
+.leaflet-container{font-family:var(--sans)}
+.plist label{display:flex;align-items:center;gap:12px;min-height:44px;font-size:16px}
+.plist input[type=checkbox],.plist input[type=radio]{width:20px;height:20px;accent-color:#EAF0F2;margin:0}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;column-gap:8px}
