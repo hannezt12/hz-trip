@@ -124,6 +124,14 @@
   function openSheet(html) { $('sheet').innerHTML = html; $('sheet').classList.add('on'); $('scrim').classList.add('on'); }
   function closeSheet() { $('sheet').classList.remove('on'); $('scrim').classList.remove('on'); }
 
+  // Tombol back Android (dipanggil dari MainActivity): true = sudah ditangani di halaman.
+  window.hzBack = function () {
+    if ($('sheet').classList.contains('on')) { closeSheet(); return true; }
+    if ($('drawer').classList.contains('on')) { $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); return true; }
+    if (S.view !== 'spido') { go('spido'); return true; }
+    return false;
+  };
+
   // ---------- spidometer ----------
   function arcPath(r, a0, a1) {
     var cx = 180, cy = 170, rad = Math.PI / 180;
@@ -384,17 +392,26 @@
 
   // ---------- pengaturan ----------
   var ORDER = [1, 2, 3, 4, 5, 6, 0];
+  var openDay = -1;
+  function daySummary(x) {
+    if (!x['in'] || !x.out) return 'Libur';
+    var t = x['in'].replace(':', '.') + ' – ' + x.out.replace(':', '.');
+    if (x.brk && x.brkFrom && x.brkTo) t += ' · istirahat ' + x.brkFrom.replace(':', '.') + '–' + x.brkTo.replace(':', '.');
+    return t;
+  }
   function renderSched() {
     var box = $('schedBox'), sc = S.settings.schedule, m = S.settings.margin;
     box.innerHTML = ORDER.map(function (d) {
-      var x = sc.days[d], w = T.windowOn(sc, T.ymd(Date.now()), m);
+      var x = sc.days[d], open = d === openDay;
       var libur = !x['in'] || !x.out;
       var hint = libur ? 'libur · semua trip Pribadi' : 'otomatis aktif ' + minToHm(T.minOf(x['in']) - m) + ' – ' + minToHm(T.minOf(x.out) + m);
-      return '<div class="card sday" data-d="' + d + '"><div class="sd-h"><b>' + HARI[d] + '</b><span class="muted">' + hint + '</span></div>' +
+      var body = open ? '<div class="sd-body"><div class="muted" style="margin-bottom:8px">' + hint + '</div>' +
         '<div class="r2"><label>MASUK<input type="time" data-f="in" value="' + esc(x['in'] || '') + '"></label><label>PULANG<input type="time" data-f="out" value="' + esc(x.out || '') + '"></label></div>' +
         '<label class="chk"><input type="checkbox" data-f="brk"' + (x.brk ? ' checked' : '') + '> Ada istirahat (dihitung Pribadi)</label>' +
         (x.brk ? '<div class="r2"><label>DARI<input type="time" data-f="brkFrom" value="' + esc(x.brkFrom || '11:00') + '"></label><label>SAMPAI<input type="time" data-f="brkTo" value="' + esc(x.brkTo || '13:30') + '"></label></div>' : '') +
-        (libur ? '' : '<button class="btn sm" data-clear="' + d + '" style="margin-top:8px">Jadikan libur</button>') + '</div>';
+        (libur ? '' : '<button class="btn sm" data-clear="' + d + '" style="margin-top:8px">Jadikan libur</button>') + '</div>' : '';
+      return '<div class="card sday' + (open ? ' open' : '') + '" data-d="' + d + '"><button class="sd-h" data-tog="' + d + '"><b>' + HARI[d] + '</b><span class="sd-s' + (libur ? ' off' : '') + '">' + daySummary(x) + '</span>' +
+        '<svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93A4AD" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>' + body + '</div>';
     }).join('');
   }
   function minToHm(m) { m = (m + 1440) % 1440; return T.pad(Math.floor(m / 60)) + '.' + T.pad(m % 60); }
@@ -462,6 +479,8 @@
     $('marginSel').onchange = function () { S.settings.margin = +this.value; saveSettings(); renderSched(); pushSchedule(); };
     $('schedBox').onchange = onSched;
     $('schedBox').onclick = function (e) {
+      var tg = e.target.closest ? e.target.closest('[data-tog]') : null;
+      if (tg) { var dd = +tg.getAttribute('data-tog'); openDay = (openDay === dd) ? -1 : dd; renderSched(); return; }
       var c = e.target.getAttribute && e.target.getAttribute('data-clear');
       if (c !== null && c !== undefined) { var x = S.settings.schedule.days[+c]; x['in'] = ''; x.out = ''; saveSettings(); pushSchedule(); var sc = $('main').scrollTop; renderSched(); $('main').scrollTop = sc; }
     };
