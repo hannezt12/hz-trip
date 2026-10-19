@@ -158,6 +158,24 @@
   // ---- potong dan gabung (titik mentah tidak diubah) ----
   // ed = { ops: [ {c: waktu_ms} potong | {j: id trip pertama} gabung dengan trip berikutnya ] }
   // Operasi dijalankan berurutan sesuai urutan Han membuatnya.
+  function seg(t) { return { start: t.start, end: t.end, km: t.km, i0: t.i0, i1: t.i1 }; }
+  // gabung dua trip berurutan: statistik dijumlahkan per bagian (jeda di antaranya tidak dihitung)
+  function merge2(a, b) {
+    var m = {}, k;
+    for (k in a) m[k] = a[k];
+    m.km = a.km + b.km;
+    m.movSec = a.movSec + b.movSec;
+    m.avg = m.movSec > 0 ? m.km * 1000 / m.movSec * 3.6 : 0;
+    if (b.max > a.max) { m.max = b.max; m.maxT = b.maxT; m.maxLat = b.maxLat; m.maxLng = b.maxLng; }
+    m.min = (a.min && b.min) ? Math.min(a.min, b.min) : (a.min || b.min);
+    m.zg = a.zg + b.zg; m.zy = a.zy + b.zy; m.zr = a.zr + b.zr;
+    m.end = b.end; m.endLat = b.endLat; m.endLng = b.endLng;
+    m.i1 = b.i1; m.n = b.i1 - a.i0 + 1;
+    m.durSec = (b.end - a.start) / 1000;
+    m.open = b.open; m.manual = a.manual || b.manual;
+    m.parts = (a.parts || [seg(a)]).concat(b.parts || [seg(b)]);
+    return m;
+  }
   function applyEdits(res, ed) {
     var pts = res.points, o = res.o, trips = res.trips.slice();
     if (!ed || !ed.ops) return trips;
@@ -166,8 +184,7 @@
       if (op.j !== undefined) {
         for (i = 0; i < trips.length - 1; i++) {
           if (trips[i].id === op.j) {
-            var a = trips[i], b = trips[i + 1];
-            trips.splice(i, 2, makeTrip(pts, a.i0, b.i1, o, b.open));
+            trips.splice(i, 2, merge2(trips[i], trips[i + 1]));
             break;
           }
         }
@@ -178,7 +195,12 @@
             var k = t.i0;
             while (k < t.i1 && pts[k + 1].t <= op.c) k++;
             if (k > t.i0 && k + 1 < t.i1) {
-              trips.splice(i, 1, makeTrip(pts, t.i0, k, o, false), makeTrip(pts, k + 1, t.i1, o, t.open));
+              var L = makeTrip(pts, t.i0, k, o, false), R = makeTrip(pts, k + 1, t.i1, o, t.open);
+              if (t.parts) {
+                var pl = t.parts.filter(function (p) { return p.end <= op.c; }), pr = t.parts.filter(function (p) { return p.start > op.c; });
+                if (pl.length + pr.length === t.parts.length) { if (pl.length > 1) L.parts = pl; if (pr.length > 1) R.parts = pr; }
+              }
+              trips.splice(i, 1, L, R);
             }
             break;
           }

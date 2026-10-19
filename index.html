@@ -57,7 +57,7 @@
       <button class="btn" id="btnPrint" style="width:100%">Cetak / ekspor</button>
       <div id="monthView"></div>
       <div id="dayView">
-      <button class="btn sm" id="toList" style="margin-top:8px">‹ Daftar 30 hari</button>
+      <div class="row" style="margin-top:8px;justify-content:space-between"><button class="btn sm" id="toList">‹ Daftar 30 hari</button><button class="btn sm" id="mergeMode">☑ Gabungkan trip</button></div>
       <div class="dnav">
         <button class="ib" id="dPrev" aria-label="Hari sebelumnya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EAF0F2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
         <div class="dt" id="dLabel"></div>
@@ -122,8 +122,9 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.4.2</div>
+  <div class="ver">Versi 0.4.3</div>
 </nav>
+<div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
 <div id="toast"></div>
 

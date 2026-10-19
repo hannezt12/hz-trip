@@ -70,6 +70,16 @@ input[type=text],input[type=date],input[type=month],select{height:46px;width:100
 .ucard{margin-top:12px}
 .ucard label{display:block;font-size:12px;font-weight:600;letter-spacing:.1em;color:var(--tx2);margin-bottom:6px}
 
+/* gabung manual */
+#mergeBar{position:fixed;left:0;right:0;bottom:0;z-index:45;display:none;align-items:center;gap:8px;background:var(--card2);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
+#mergeInfo{flex:1;font-size:14px;line-height:1.3;color:var(--tx3)}
+#mergeGo:disabled{opacity:.35}
+.trip .cbx{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;border:2px solid var(--tx2);margin-right:8px;flex-shrink:0;font-size:16px;line-height:1}
+.trip.sel{outline:2px solid var(--tx)}
+.trip.sel .cbx{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.part{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #1E2A31;font-size:15px}
+.gapbtn{width:100%;margin:6px 0;height:38px;font-size:14px}
+
 /* ringkasan 30 hari */
 .mrow{display:flex;align-items:center;width:100%;gap:10px;text-align:left;background:var(--card);border:0;border-radius:14px;padding:10px 12px;margin-top:6px;cursor:pointer}
 .mrow.none{background:transparent;border:1px dashed var(--line);cursor:pointer}

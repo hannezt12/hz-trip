@@ -69,7 +69,7 @@
     settings: { units: ['BT.13', 'Motor'], defUnit: 'BT.13', splitSec: 60, auto: true, margin: 30, driver: 'Han', radius: 150, unitType: { 'BT.13': 'Kerja', 'Motor': 'Pribadi' }, unitLog: [{ t: 0, k: 'Kerja', u: 'BT.13' }, { t: 0, k: 'Pribadi', u: 'Motor' }], mapMode: 'sat', schedule: T.defaultSchedule() },
     ov: { trips: {}, days: {} },
     today: T.ymd(Date.now()), todayPts: [], liveTrip: null,
-    hDay: T.ymd(Date.now()), hTrips: [], hMode: 'list'
+    hDay: T.ymd(Date.now()), hTrips: [], hMode: 'list', sel: null
   };
 
   function opts() { return { splitSec: S.settings.splitSec }; }
@@ -126,6 +126,7 @@
     S.view = v;
     ['spido', 'lintasan', 'riwayat', 'set'].forEach(function (n) { $('v-' + n).classList.toggle('on', n === v); });
     $('main').classList.toggle('map', v === 'lintasan');
+    if (S.sel) exitSel();
     $('ttl').textContent = TITLES[v];
     document.querySelectorAll('#drawer a[data-go]').forEach(function (a) { a.classList.toggle('on', a.getAttribute('data-go') === v); });
     closeDrawer();
@@ -150,6 +151,7 @@
   window.hzBack = function () {
     if ($('sheet').classList.contains('on')) { closeSheet(); return true; }
     if ($('drawer').classList.contains('on')) { $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); return true; }
+    if (S.sel) { exitSel(); renderHistory(); return true; }
     if (S.view === 'riwayat' && S.hMode === 'day') { S.hMode = 'list'; loadRiwayat(); return true; }
     if (S.view !== 'spido') { go('spido'); return true; }
     return false;
@@ -318,7 +320,7 @@
   function tripView(t) {
     var o = S.ov.trips[t.id] || {};
     var u = o.unit || unitAt(t.start);
-    return { t: t, unit: u, label: typeOf(u), check: false, hist: o.hist || [] };
+    return { t: t, unit: u, label: typeOf(u), check: T.classify(S.settings.schedule, t.start) !== T.classify(S.settings.schedule, t.end - 1000), hist: o.hist || [] };
   }
   // ---------- ringkasan 30 hari ----------
   function daySumm(ymd) {
@@ -372,9 +374,13 @@
   }
   function labelChip(x) {
     var c = x.label === 'Kerja' ? 'k' : 'p';
-    return '<span class="chip ' + c + '">' + x.label + '</span>' + (x.check ? '<span class="chip f">cek</span>' : '');
+    return '<span class="chip ' + c + '">' + x.label + '</span>' + (x.check ? '<span class="chip f">melewati batas jam</span>' : '') + (x.t.parts ? '<span class="chip m">' + x.t.parts.length + ' bagian</span>' : '');
   }
   function renderHistory() {
+    $('mergeMode').style.display = S.hTrips.length > 1 && !S.sel ? '' : 'none';
+    $('mergeBar').style.display = S.sel ? 'flex' : 'none';
+    $('tripList').style.paddingBottom = S.sel ? '90px' : '0';
+    if (S.sel) updateMergeBar();
     $('dLabel').textContent = T.dateLong(S.hDay);
     $('dPick').value = S.hDay;
     $('dNext').style.opacity = S.hDay >= T.ymd(Date.now()) ? '.3' : '1';
@@ -394,11 +400,43 @@
       '<div class="muted" style="margin-top:8px">Kerja ' + T.km1(kk) + ' km · Pribadi ' + T.km1(kp) + ' km<br>Waktu bergerak: hijau ' + T.durText(zg) + ' · kuning ' + T.durText(zy) + ' · merah ' + T.durText(zr) + '</div></div>';
     $('tripList').innerHTML = list.map(function (x, i) {
       var t = x.t;
-      return '<button class="trip" data-i="' + i + '"><div class="t1"><span class="tm">' + T.hm(t.start) + ' – ' + T.hm(t.end) + (t.open ? ' ●' : '') + '</span>' + (t.manual ? '<span class="chip m">manual</span>' : '') + '<span class="chip">' + esc(x.unit) + '</span>' + labelChip(x) + '</div>' +
+      var isSel = S.sel && S.sel.indexOf(i) >= 0;
+      return '<button class="trip' + (isSel ? ' sel' : '') + '" data-i="' + i + '"><div class="t1">' + (S.sel ? '<span class="cbx">' + (isSel ? '✓' : '') + '</span>' : '') + '<span class="tm">' + T.hm(t.start) + ' – ' + T.hm(t.end) + (t.open ? ' ●' : '') + '</span>' + (t.manual ? '<span class="chip m">manual</span>' : '') + '<span class="chip">' + esc(x.unit) + '</span>' + labelChip(x) + '</div>' +
         '<div class="t2"><div><small>DURASI</small><b style="font-size:18px">' + T.durText(t.durSec) + '</b></div><div><small>MIN</small><b>' + Math.round(t.min) + '</b></div><div><small>MAKS</small><b style="color:' + zc(t.max) + '">' + Math.round(t.max) + '</b></div><div><small>KM</small><b>' + T.km1(t.km) + '</b></div></div></button>';
     }).join('');
   }
+  function exitSel() { S.sel = null; $('mergeBar').style.display = 'none'; $('tripList').style.paddingBottom = '0'; }
+  function selRange() {
+    var a = S.sel.slice().sort(function (x, y) { return x - y; });
+    return { lo: a[0], hi: a[a.length - 1], n: a.length, ok: a.length >= 2 && a[a.length - 1] - a[0] + 1 === a.length };
+  }
+  function updateMergeBar() {
+    var r = S.sel.length ? selRange() : null;
+    if (r && r.ok) {
+      $('mergeInfo').textContent = 'Gabungkan ' + r.n + ' trip · ' + T.hm(S.hTrips[r.lo].t.start) + ' – ' + T.hm(S.hTrips[r.hi].t.end);
+      $('mergeGo').disabled = false;
+    } else {
+      $('mergeInfo').textContent = r && r.n >= 2 ? 'Pilih trip yang berurutan.' : 'Centang 2 trip atau lebih yang berurutan.';
+      $('mergeGo').disabled = true;
+    }
+  }
+  function toggleSel(i) {
+    var k = S.sel.indexOf(i);
+    if (k >= 0) S.sel.splice(k, 1); else S.sel.push(i);
+    renderHistory();
+  }
+  function doMerge() {
+    var r = selRange();
+    if (!r.ok) return;
+    var ed = dayEdits(), id = S.hTrips[r.lo].t.id;
+    for (var k = r.lo; k < r.hi; k++) ed.ops.push({ j: id });
+    saveOv();
+    exitSel();
+    afterEdit(-1);
+    toast(r.n + ' trip digabung');
+  }
   function shiftDay(n) {
+    exitSel();
     var p = S.hDay.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2] + n);
     var nd = T.ymd(d.getTime());
     if (nd > T.ymd(Date.now())) return;
@@ -421,9 +459,19 @@
     var ed = S.ov.days[S.hDay];
     var hasEdit = ed && (ed.ops || []).some(function (op) { return op.j === t.id || (op.c !== undefined && op.c >= t.start - 5000 && op.c <= t.end + 5000); });
     var mid = hmsOf(t.start + (t.end - t.start) / 2);
+    var bts = x.check ? boundaryTs(t) : 0;
+    var parts = '';
+    if (t.parts && t.parts.length > 1) {
+      parts = '<div class="h">BAGIAN TRIP</div>';
+      t.parts.forEach(function (p, k) {
+        if (k > 0) { var q = t.parts[k - 1]; parts += '<button class="btn gapbtn" data-gap="' + k + '">Jeda ' + T.durText((p.start - q.end) / 1000) + ' · Pisahkan di sini</button>'; }
+        parts += '<div class="part"><span>' + T.hm(p.start) + ' – ' + T.hm(p.end) + '</span><span>' + T.km1(p.km) + ' km</span></div>';
+      });
+    }
     openSheet('<div class="grab"></div><div class="st">TRIP ' + T.hm(t.start) + ' – ' + T.hm(t.end) + '</div>' +
+      (bts ? '<div class="warn" style="margin:6px 0">Trip ini melewati batas jam kerja pada ' + T.hm(bts) + '.<br><button class="btn sm" id="cutBound" style="margin-top:8px">Pisahkan di ' + T.hm(bts) + '</button></div>' : '') +
       '<div class="h">UNIT · ' + x.label.toUpperCase() + '</div><div class="opts" id="uOpts">' + uOpts + '</div>' +
-      '<div class="h">POTONG TRIP</div><div class="row"><input type="time" step="1" id="cutAt" value="' + mid + '"><button class="btn pri" id="cutGo" style="flex-shrink:0">Potong</button></div>' +
+      parts + '<div class="h">POTONG TRIP</div><div class="row"><input type="time" step="1" id="cutAt" value="' + mid + '"><button class="btn pri" id="cutGo" style="flex-shrink:0">Potong</button></div>' +
       '<div class="muted" style="margin-top:6px">Memecah trip ini menjadi dua di jam yang dipilih.</div>' +
       (hasNext ? '<button class="btn" id="joinGo" style="width:100%;margin-top:10px">Gabung dengan trip berikutnya</button>' : '') +
       (hasEdit ? '<button class="btn" id="undoGo" style="width:100%;margin-top:10px">Batalkan potongan / gabungan</button>' : '') +
@@ -439,6 +487,8 @@
     $('shClose').onclick = closeSheet;
     $('uOpts').onclick = function (e) { var u = e.target.getAttribute && e.target.getAttribute('data-u'); if (u) change(i, 'unit', u); };
     $('cutGo').onclick = function () { doCut(i, $('cutAt').value); };
+    if ($('cutBound')) $('cutBound').onclick = function () { doCutAt(i, bts, true); };
+    document.querySelectorAll('#sheet [data-gap]').forEach(function (b) { b.onclick = function () { var k = +b.getAttribute('data-gap'); doCutAt(i, Math.round((t.parts[k - 1].end + t.parts[k].start) / 2000) * 1000, false); }; });
     $('printGo').onclick = function () { openPrint({ tripId: t.id }); };
     if ($('joinGo')) $('joinGo').onclick = function () { doJoin(i); };
     if ($('undoGo')) $('undoGo').onclick = function () { doUndo(i); };
@@ -462,9 +512,16 @@
     });
   }
   function doCut(i, hms) {
-    var x = S.hTrips[i], t = x.t;
     if (!hms) { toast('Pilih jam potong'); return; }
-    var ts = tsOf(S.hDay, hms);
+    doCutAt(i, tsOf(S.hDay, hms), false);
+  }
+  function boundaryTs(t) {
+    var k0 = T.classify(S.settings.schedule, t.start), m0 = Math.ceil((t.start + 5000) / 60000) * 60000;
+    for (var m = m0; m < t.end - 5000; m += 60000) { if (T.classify(S.settings.schedule, m) !== k0) return m; }
+    return 0;
+  }
+  function doCutAt(i, ts, noInherit) {
+    var x = S.hTrips[i], t = x.t, hms = hmsOf(ts);
     if (!(ts > t.start + 5000 && ts < t.end - 5000)) { toast('Jam potong harus di dalam trip (' + T.hm(t.start) + ' – ' + T.hm(t.end) + ')'); return; }
     var ed = dayEdits();
     ed.ops.push({ c: ts });
@@ -475,7 +532,7 @@
       var trips = T.applyEdits(res, ed);
       var second = null;
       for (var k = 0; k < trips.length; k++) { if (trips[k].start > ts && trips[k - 1] && trips[k - 1].id === t.id) { second = trips[k]; break; } }
-      if (src && second && !S.ov.trips[second.id]) {
+      if (!noInherit && src && second && !S.ov.trips[second.id]) {
         var c = { hist: [] };
         if (src.unit) c.unit = src.unit;
         S.ov.trips[second.id] = c;
@@ -776,12 +833,15 @@
     $('btnRec').onclick = toggleRec;
     $('modeBox').onclick = onModeAction;
     $('warnBox').onclick = onModeAction;
-    $('toList').onclick = function () { S.hMode = 'list'; loadRiwayat(); $('main').scrollTop = 0; };
-    $('monthView').onclick = function (e) { var b = e.target.closest ? e.target.closest('.mrow') : null; if (b) { S.hDay = b.getAttribute('data-d'); S.hMode = 'day'; loadRiwayat(); $('main').scrollTop = 0; } };
+    $('mergeMode').onclick = function () { S.sel = []; renderHistory(); };
+    $('mergeNo').onclick = function () { exitSel(); renderHistory(); };
+    $('mergeGo').onclick = doMerge;
+    $('toList').onclick = function () { exitSel(); S.hMode = 'list'; loadRiwayat(); $('main').scrollTop = 0; };
+    $('monthView').onclick = function (e) { var b = e.target.closest ? e.target.closest('.mrow') : null; if (b) { exitSel(); S.hDay = b.getAttribute('data-d'); S.hMode = 'day'; loadRiwayat(); $('main').scrollTop = 0; } };
     $('dPrev').onclick = function () { shiftDay(-1); };
     $('dNext').onclick = function () { shiftDay(1); };
-    $('dPick').onchange = function () { if (this.value && this.value <= T.ymd(Date.now())) { S.hDay = this.value; loadHistory(); } };
-    $('tripList').onclick = function (e) { var b = e.target.closest ? e.target.closest('.trip') : null; if (b) openTrip(+b.getAttribute('data-i')); };
+    $('dPick').onchange = function () { if (this.value && this.value <= T.ymd(Date.now())) { exitSel(); S.hDay = this.value; loadHistory(); } };
+    $('tripList').onclick = function (e) { var b = e.target.closest ? e.target.closest('.trip') : null; if (b) { var ii = +b.getAttribute('data-i'); if (S.sel) toggleSel(ii); else openTrip(ii); } };
     $('unitAdd').onclick = addUnit;
     $('unitSel').onchange = function () { setUnit(this.value); renderUnitCard(); toast('Unit dipakai: ' + this.value); };
     $('unitBox').onclick = function (e) {
