@@ -67,6 +67,9 @@ input[type=text],input[type=date],select{height:46px;width:100%;border:1px solid
 .trip .t2 div:first-child{text-align:left}
 .empty{text-align:center;color:var(--tx2);padding:36px 12px;line-height:1.5}
 
+.ucard{margin-top:12px}
+.ucard label{display:block;font-size:12px;font-weight:600;letter-spacing:.1em;color:var(--tx2);margin-bottom:6px}
+
 /* ringkasan 30 hari */
 .mrow{display:flex;align-items:center;width:100%;gap:10px;text-align:left;background:var(--card);border:0;border-radius:14px;padding:10px 12px;margin-top:6px;cursor:pointer}
 .mrow.none{background:transparent;border:1px dashed var(--line);cursor:pointer}

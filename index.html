@@ -33,6 +33,7 @@
       </div>
       <div class="legend"><div></div><div></div><div></div></div>
       <div class="legl"><span>0</span><span>60</span><span>90</span><span>120+</span></div>
+      <div class="card ucard"><label for="unitSel">UNIT DIPAKAI</label><select id="unitSel"></select></div>
       <button class="recbtn start" id="btnRec"></button>
       <div class="gps" id="gpsLine"></div>
       <div id="modeBox"></div>
@@ -84,7 +85,7 @@
 
       <div class="h">UNIT</div>
       <div class="card" id="unitBox"></div>
-      <div class="row" style="margin-top:8px"><input type="text" id="unitNew" placeholder="Nomor unit baru, mis. BT.15" maxlength="20"><button class="btn pri" id="unitAdd" style="flex-shrink:0">Tambah</button></div>
+      <div class="row" style="margin-top:8px"><input type="text" id="unitNew" placeholder="Nomor unit baru, mis. BT.15" maxlength="20"><select id="unitNewType" style="width:112px;flex-shrink:0"><option>Kerja</option><option>Pribadi</option></select><button class="btn pri" id="unitAdd" style="flex-shrink:0">Tambah</button></div>
 
       <div class="h">BATAS PISAH TRIP</div>
       <select id="splitSel">
@@ -105,7 +106,7 @@
       </div>
 
       <div class="h">ATURAN TETAP</div>
-      <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Label otomatis: Kerja di dalam jam kerja (di luar istirahat), Pribadi selain itu. Bisa diubah per trip.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
+      <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Label Kerja / Pribadi mengikuti jenis unit yang dipakai (diatur saat unit didaftarkan). Unit tiap trip bisa diubah di Riwayat.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
 
       <div class="h">TAHAP BERIKUTNYA</div>
       <div class="card muted">Merampingkan data lama · cadangan data.</div>
@@ -121,7 +122,7 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.4.0 · tahap 4</div>
+  <div class="ver">Versi 0.4.1</div>
 </nav>
 <div id="sheet"></div>
 <div id="toast"></div>

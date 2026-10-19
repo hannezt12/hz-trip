@@ -66,7 +66,7 @@
     view: 'spido', mode: 'tidur', manual: false, paused: false, auto: true, winEnd: 0, nextStart: 0,
     perm: true, bg: true, battFree: false,
     live: { v: 0, acc: 0, t: 0, count: 0 },
-    settings: { units: ['BT.13', 'Motor'], defUnit: 'BT.13', splitSec: 60, auto: true, margin: 30, driver: 'Han', radius: 150, mapMode: 'sat', schedule: T.defaultSchedule() },
+    settings: { units: ['BT.13', 'Motor'], defUnit: 'BT.13', splitSec: 60, auto: true, margin: 30, driver: 'Han', radius: 150, unitType: { 'BT.13': 'Kerja', 'Motor': 'Pribadi' }, unitLog: [{ t: 0, u: 'BT.13' }], mapMode: 'sat', schedule: T.defaultSchedule() },
     ov: { trips: {}, days: {} },
     today: T.ymd(Date.now()), todayPts: [], liveTrip: null,
     hDay: T.ymd(Date.now()), hTrips: [], hMode: 'list'
@@ -79,6 +79,12 @@
     return Promise.all([Plug.loadJson({ name: 'settings' }), Plug.loadJson({ name: 'overrides' })]).then(function (r) {
       try { var s = JSON.parse(r[0].data); if (s && s.units) S.settings = Object.assign(S.settings, s); } catch (e) {}
       try { var o = JSON.parse(r[1].data); if (o && o.trips) { S.ov = o; if (!S.ov.days) S.ov.days = {}; } } catch (e) {}
+      var st = S.settings;
+      if (!st.unitType) {
+        st.unitType = {};
+        st.units.forEach(function (u) { st.unitType[u] = /motor|pribadi|mobil/i.test(u) ? 'Pribadi' : 'Kerja'; });
+      }
+      if (!st.unitLog || !st.unitLog.length) st.unitLog = [{ t: 0, u: st.defUnit || st.units[0] }];
       if (!S.settings.schedule || !S.settings.schedule.days || S.settings.schedule.days.length !== 7) S.settings.schedule = T.defaultSchedule();
     }).catch(function () {});
   }
@@ -119,7 +125,7 @@
     if (v === 'riwayat') { S.hMode = 'list'; loadRiwayat(); }
     if (v === 'lintasan') openMap();
     if (v === 'set') { renderSettings(); syncStatus(); }
-    if (v === 'spido') { syncStatus(); renderSpido(); }
+    if (v === 'spido') { syncStatus(); renderSpido(); renderUnitCard(); }
     $('main').scrollTop = 0;
   }
   function openDrawer() { $('drawer').classList.add('on'); $('scrim').classList.add('on'); }
@@ -240,14 +246,30 @@
   }
 
   // ---------- riwayat ----------
+  function typeOf(u) { return (S.settings.unitType && S.settings.unitType[u]) || 'Kerja'; }
+  function unitAt(ts) {
+    var lg = S.settings.unitLog, r = lg[0].u;
+    for (var i = 0; i < lg.length; i++) { if (lg[i].t <= ts) r = lg[i].u; }
+    return r;
+  }
+  function activeUnit() { var lg = S.settings.unitLog; return lg[lg.length - 1].u; }
+  function setActiveUnit(u) {
+    if (u === activeUnit()) return;
+    S.settings.unitLog.push({ t: Date.now(), u: u });
+    if (S.settings.unitLog.length > 400) S.settings.unitLog.splice(1, 100);
+    S.settings.defUnit = u;
+    saveSettings();
+  }
+  function renderUnitCard() {
+    var sel = $('unitSel');
+    if (!sel || document.activeElement === sel) return;
+    var a = activeUnit();
+    sel.innerHTML = S.settings.units.map(function (u) { return '<option value="' + esc(u) + '"' + (u === a ? ' selected' : '') + '>' + esc(u) + ' · ' + typeOf(u) + '</option>'; }).join('');
+  }
   function tripView(t) {
     var o = S.ov.trips[t.id] || {};
-    var al = T.autoLabel(S.settings.schedule, t);
-    return {
-      t: t, unit: o.unit || S.settings.defUnit,
-      label: o.label || al.label, auto: al.label, edited: !!o.label,
-      check: al.check && !o.label, hist: o.hist || []
-    };
+    var u = o.unit || unitAt(t.start);
+    return { t: t, unit: u, label: typeOf(u), check: false, hist: o.hist || [] };
   }
   // ---------- ringkasan 30 hari ----------
   function daySumm(ymd) {
@@ -343,8 +365,6 @@
   function openTrip(i) {
     var x = S.hTrips[i], t = x.t;
     var uOpts = S.settings.units.map(function (u) { return '<button class="opt' + (u === x.unit ? ' on' : '') + '" data-u="' + esc(u) + '">' + esc(u) + '</button>'; }).join('');
-    var lOpts = ['Kerja', 'Pribadi'].map(function (l) { return '<button class="opt' + (l === x.label ? ' on' : '') + '" data-l="' + l + '">' + l + '</button>'; }).join('') +
-      (x.edited ? '<button class="opt" data-l="">Kembali ke otomatis (' + x.auto + ')</button>' : '');
     var hist = x.hist.length ? x.hist.map(function (h) {
       return '<div class="kv"><span>' + T.hm(h.at) + ' · ' + esc(h.f) + '</span><span>' + esc(h.from || '–') + ' → ' + esc(h.to || '–') + '</span></div>';
     }).join('') : '<div class="muted">Belum ada perubahan.</div>';
@@ -353,9 +373,7 @@
     var hasEdit = ed && (ed.ops || []).some(function (op) { return op.j === t.id || (op.c !== undefined && op.c >= t.start - 5000 && op.c <= t.end + 5000); });
     var mid = hmsOf(t.start + (t.end - t.start) / 2);
     openSheet('<div class="grab"></div><div class="st">TRIP ' + T.hm(t.start) + ' – ' + T.hm(t.end) + '</div>' +
-      (x.check ? '<div class="warn" style="margin:6px 0">Trip ini melewati batas jam kerja. Periksa labelnya, atau potong di jam pergantian.</div>' : '') +
-      '<div class="h">UNIT</div><div class="opts" id="uOpts">' + uOpts + '</div>' +
-      '<div class="h">LABEL</div><div class="opts" id="lOpts">' + lOpts + '</div>' +
+      '<div class="h">UNIT · ' + x.label.toUpperCase() + '</div><div class="opts" id="uOpts">' + uOpts + '</div>' +
       '<div class="h">POTONG TRIP</div><div class="row"><input type="time" step="1" id="cutAt" value="' + mid + '"><button class="btn pri" id="cutGo" style="flex-shrink:0">Potong</button></div>' +
       '<div class="muted" style="margin-top:6px">Memecah trip ini menjadi dua di jam yang dipilih.</div>' +
       (hasNext ? '<button class="btn" id="joinGo" style="width:100%;margin-top:10px">Gabung dengan trip berikutnya</button>' : '') +
@@ -371,7 +389,6 @@
       '<button class="btn" id="shClose" style="width:100%;margin-top:14px">Tutup</button>');
     $('shClose').onclick = closeSheet;
     $('uOpts').onclick = function (e) { var u = e.target.getAttribute && e.target.getAttribute('data-u'); if (u) change(i, 'unit', u); };
-    $('lOpts').onclick = function (e) { var l = e.target.getAttribute && e.target.getAttribute('data-l'); if (l !== null && l !== undefined) change(i, 'label', l || null); };
     $('cutGo').onclick = function () { doCut(i, $('cutAt').value); };
     $('printGo').onclick = function () { openPrint({ tripId: t.id }); };
     if ($('joinGo')) $('joinGo').onclick = function () { doJoin(i); };
@@ -380,11 +397,10 @@
   function change(i, field, val) {
     var x = S.hTrips[i], id = x.t.id;
     var o = S.ov.trips[id] || (S.ov.trips[id] = { hist: [] });
-    var from = field === 'unit' ? x.unit : x.label;
-    var to = val === null ? x.auto : val;
+    var from = x.unit, to = val;
     if (from === to) return;
-    if (val === null) delete o[field]; else o[field] = val;
-    o.hist = (o.hist || []).concat([{ at: Date.now(), f: field === 'unit' ? 'Unit' : 'Label', from: from, to: to }]);
+    o[field] = val;
+    o.hist = (o.hist || []).concat([{ at: Date.now(), f: 'Unit', from: from, to: to }]);
     saveOv();
     afterEdit(i);
   }
@@ -413,7 +429,6 @@
       if (src && second && !S.ov.trips[second.id]) {
         var c = { hist: [] };
         if (src.unit) c.unit = src.unit;
-        if (src.label) c.label = src.label;
         S.ov.trips[second.id] = c;
       }
       saveOv();
@@ -455,7 +470,7 @@
       var hint = libur ? 'libur · semua trip Pribadi' : 'otomatis aktif ' + minToHm(T.minOf(x['in']) - m) + ' – ' + minToHm(T.minOf(x.out) + m);
       var body = open ? '<div class="sd-body"><div class="muted" style="margin-bottom:8px">' + hint + '</div>' +
         '<div class="r2"><label>MASUK<input type="time" data-f="in" value="' + esc(x['in'] || '') + '"></label><label>PULANG<input type="time" data-f="out" value="' + esc(x.out || '') + '"></label></div>' +
-        '<label class="chk"><input type="checkbox" data-f="brk"' + (x.brk ? ' checked' : '') + '> Ada istirahat (dihitung Pribadi)</label>' +
+        '<label class="chk"><input type="checkbox" data-f="brk"' + (x.brk ? ' checked' : '') + '> Ada istirahat (rekam otomatis jeda)</label>' +
         (x.brk ? '<div class="r2"><label>DARI<input type="time" data-f="brkFrom" value="' + esc(x.brkFrom || '11:00') + '"></label><label>SAMPAI<input type="time" data-f="brkTo" value="' + esc(x.brkTo || '13:30') + '"></label></div>' : '') +
         (libur ? '' : '<button class="btn sm" data-clear="' + d + '" style="margin-top:8px">Jadikan libur</button>') + '</div>' : '';
       return '<div class="card sday' + (open ? ' open' : '') + '" data-d="' + d + '"><button class="sd-h" data-tog="' + d + '"><b>' + HARI[d] + '</b><span class="sd-s' + (libur ? ' off' : '') + '">' + daySummary(x) + '</span>' +
@@ -465,11 +480,12 @@
   function minToHm(m) { m = (m + 1440) % 1440; return T.pad(Math.floor(m / 60)) + '.' + T.pad(m % 60); }
   function renderSettings() {
     $('unitBox').innerHTML = S.settings.units.map(function (u, i) {
-      var d = u === S.settings.defUnit;
-      return '<div class="unit"><span>' + esc(u) + (d ? ' <small class="muted">· bawaan</small>' : '') + '</span>' +
-        (d ? '' : '<button class="btn sm" data-def="' + i + '">Jadikan bawaan</button>') +
+      var k = typeOf(u);
+      return '<div class="unit"><span>' + esc(u) + ' <span class="chip ' + (k === 'Kerja' ? 'k' : 'p') + '">' + k + '</span></span>' +
+        '<button class="btn sm" data-type="' + i + '">Jadi ' + (k === 'Kerja' ? 'Pribadi' : 'Kerja') + '</button>' +
         (S.settings.units.length > 1 ? '<button class="btn sm" data-del="' + i + '">Hapus</button>' : '') + '</div>';
     }).join('');
+    renderUnitCard();
     $('splitSel').value = String(S.settings.splitSec);
     $('radiusSel').value = String(S.settings.radius || 150);
     if (document.activeElement !== $('driverIn')) $('driverIn').value = S.settings.driver || '';
@@ -488,7 +504,7 @@
     var v = $('unitNew').value.trim();
     if (!v) return;
     if (S.settings.units.indexOf(v) >= 0) { toast('Unit sudah ada'); return; }
-    S.settings.units.push(v); $('unitNew').value = ''; saveSettings(); renderSettings();
+    S.settings.units.push(v); S.settings.unitType[v] = $('unitNewType').value === 'Pribadi' ? 'Pribadi' : 'Kerja'; $('unitNew').value = ''; saveSettings(); renderSettings();
   }
   function onSched(e) {
     var card = e.target.closest ? e.target.closest('.sday') : null;
@@ -703,13 +719,15 @@
     $('dPick').onchange = function () { if (this.value && this.value <= T.ymd(Date.now())) { S.hDay = this.value; loadHistory(); } };
     $('tripList').onclick = function (e) { var b = e.target.closest ? e.target.closest('.trip') : null; if (b) openTrip(+b.getAttribute('data-i')); };
     $('unitAdd').onclick = addUnit;
+    $('unitSel').onchange = function () { setActiveUnit(this.value); toast('Unit dipakai: ' + this.value); };
     $('unitBox').onclick = function (e) {
-      var d = e.target.getAttribute('data-def'), x = e.target.getAttribute('data-del');
-      if (d !== null) { S.settings.defUnit = S.settings.units[+d]; saveSettings(); renderSettings(); }
+      var d = e.target.getAttribute('data-type'), x = e.target.getAttribute('data-del');
+      if (d !== null) { var un = S.settings.units[+d]; S.settings.unitType[un] = typeOf(un) === 'Kerja' ? 'Pribadi' : 'Kerja'; saveSettings(); renderSettings(); }
       if (x !== null) {
         var u = S.settings.units[+x];
         S.settings.units.splice(+x, 1);
-        if (S.settings.defUnit === u) S.settings.defUnit = S.settings.units[0];
+        delete S.settings.unitType[u];
+        if (activeUnit() === u) setActiveUnit(S.settings.units[0]);
         saveSettings(); renderSettings();
       }
     };
