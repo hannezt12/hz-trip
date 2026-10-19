@@ -66,7 +66,7 @@
     view: 'spido', mode: 'tidur', manual: false, paused: false, auto: true, winEnd: 0, nextStart: 0,
     perm: true, bg: true, battFree: false,
     live: { v: 0, acc: 0, t: 0, count: 0 },
-    settings: { units: ['BT.13', 'Motor'], defUnit: 'BT.13', splitSec: 60, auto: true, margin: 30, driver: 'Han', radius: 150, unitType: { 'BT.13': 'Kerja', 'Motor': 'Pribadi' }, unitLog: [{ t: 0, u: 'BT.13' }], mapMode: 'sat', schedule: T.defaultSchedule() },
+    settings: { units: ['BT.13', 'Motor'], defUnit: 'BT.13', splitSec: 60, auto: true, margin: 30, driver: 'Han', radius: 150, unitType: { 'BT.13': 'Kerja', 'Motor': 'Pribadi' }, unitLog: [{ t: 0, k: 'Kerja', u: 'BT.13' }, { t: 0, k: 'Pribadi', u: 'Motor' }], mapMode: 'sat', schedule: T.defaultSchedule() },
     ov: { trips: {}, days: {} },
     today: T.ymd(Date.now()), todayPts: [], liveTrip: null,
     hDay: T.ymd(Date.now()), hTrips: [], hMode: 'list'
@@ -84,7 +84,14 @@
         st.unitType = {};
         st.units.forEach(function (u) { st.unitType[u] = /motor|pribadi|mobil/i.test(u) ? 'Pribadi' : 'Kerja'; });
       }
-      if (!st.unitLog || !st.unitLog.length) st.unitLog = [{ t: 0, u: st.defUnit || st.units[0] }];
+      if (!st.unitLog) st.unitLog = [];
+      st.unitLog = st.unitLog.map(function (e) { if (!e.ov && !e.k) e.k = (st.unitType[e.u] || 'Kerja'); return e; });
+      ['Kerja', 'Pribadi'].forEach(function (k) {
+        if (!st.unitLog.some(function (e) { return !e.ov && e.k === k; })) {
+          var f = st.units.filter(function (u) { return st.unitType[u] === k; })[0] || st.units[0];
+          st.unitLog.unshift({ t: 0, k: k, u: f });
+        }
+      });
       if (!S.settings.schedule || !S.settings.schedule.days || S.settings.schedule.days.length !== 7) S.settings.schedule = T.defaultSchedule();
     }).catch(function () {});
   }
@@ -131,6 +138,12 @@
   function openDrawer() { $('drawer').classList.add('on'); $('scrim').classList.add('on'); }
   function closeDrawer() { $('drawer').classList.remove('on'); if (!$('sheet').classList.contains('on')) $('scrim').classList.remove('on'); }
   function openSheet(html) { $('sheet').innerHTML = html; $('sheet').classList.add('on'); $('scrim').classList.add('on'); }
+  function askConfirm(title, msg, okLabel, onOk) {
+    openSheet('<div class="grab"></div><div class="st">' + esc(title) + '</div><div class="muted" style="margin:6px 0 14px">' + esc(msg) + '</div>' +
+      '<div class="row"><button class="btn" id="cfNo" style="flex:1;height:50px">Batal</button><button class="btn pri" id="cfYes" style="flex:1;height:50px;background:var(--r);border-color:var(--r);color:#fff">' + esc(okLabel) + '</button></div>');
+    $('cfNo').onclick = closeSheet;
+    $('cfYes').onclick = function () { closeSheet(); onOk(); };
+  }
   function closeSheet() { $('sheet').classList.remove('on'); $('scrim').classList.remove('on'); }
 
   // Tombol back Android (dipanggil dari MainActivity): true = sudah ditangani di halaman.
@@ -247,24 +260,60 @@
 
   // ---------- riwayat ----------
   function typeOf(u) { return (S.settings.unitType && S.settings.unitType[u]) || 'Kerja'; }
-  function unitAt(ts) {
-    var lg = S.settings.unitLog, r = lg[0].u;
-    for (var i = 0; i < lg.length; i++) { if (lg[i].t <= ts) r = lg[i].u; }
-    return r;
+  var KINDS = ['Kerja', 'Pribadi'];
+  function firstOfType(k) {
+    var us = S.settings.units;
+    for (var i = 0; i < us.length; i++) if (typeOf(us[i]) === k) return us[i];
+    return us[0];
   }
-  function activeUnit() { var lg = S.settings.unitLog; return lg[lg.length - 1].u; }
-  function setActiveUnit(u) {
-    if (u === activeUnit()) return;
-    S.settings.unitLog.push({ t: Date.now(), u: u });
-    if (S.settings.unitLog.length > 400) S.settings.unitLog.splice(1, 100);
+  function slotAt(k, ts) {
+    var lg = S.settings.unitLog, r = null, i;
+    for (i = 0; i < lg.length; i++) { var e = lg[i]; if (!e.ov && e.k === k && e.t <= ts) r = e.u; }
+    if (r) return r;
+    for (i = 0; i < lg.length; i++) if (!lg[i].ov && lg[i].k === k) return lg[i].u;
+    return firstOfType(k);
+  }
+  function overrideAt(ts) {
+    var lg = S.settings.unitLog;
+    for (var i = lg.length - 1; i >= 0; i--) {
+      if (lg[i].ov && lg[i].t <= ts) return (lg[i].u && lg[i].until > ts) ? lg[i] : null;
+    }
+    return null;
+  }
+  function kindAt(ts) { return T.classify(S.settings.schedule, ts); }
+  function unitAt(ts) { var o = overrideAt(ts); return o ? o.u : slotAt(kindAt(ts), ts); }
+  function nextBoundary(now) {
+    var k0 = kindAt(now), t0 = Math.floor(now / 60000) * 60000;
+    for (var i = 1; i <= 2880; i++) { var ts = t0 + i * 60000; if (kindAt(ts) !== k0) return ts; }
+    return now + 48 * 3600000;
+  }
+  function pushLog(e) {
+    var lg = S.settings.unitLog;
+    lg.push(e);
+    if (lg.length > 400) lg.splice(2, 100);
+  }
+  function setUnit(u) {
+    var now = Date.now(), k = typeOf(u), cur = unitAt(now);
+    if (u === cur && !overrideAt(now)) return;
+    pushLog({ t: now, k: k, u: u });
+    if (k !== kindAt(now)) pushLog({ ov: true, t: now, u: u, until: nextBoundary(now) });
+    else pushLog({ ov: true, t: now, u: null, until: 0 });
     S.settings.defUnit = u;
     saveSettings();
+  }
+  function fixSlotsAfterDelete(u) {
+    var now = Date.now();
+    KINDS.forEach(function (k) { if (slotAt(k, now) === u) pushLog({ t: now, k: k, u: firstOfType(k) }); });
+    var o = overrideAt(now);
+    if (o && o.u === u) pushLog({ ov: true, t: now, u: null, until: 0 });
   }
   function renderUnitCard() {
     var sel = $('unitSel');
     if (!sel || document.activeElement === sel) return;
-    var a = activeUnit();
+    var now = Date.now(), a = unitAt(now), o = overrideAt(now);
     sel.innerHTML = S.settings.units.map(function (u) { return '<option value="' + esc(u) + '"' + (u === a ? ' selected' : '') + '>' + esc(u) + ' · ' + typeOf(u) + '</option>'; }).join('');
+    var nt = $('unitNote');
+    if (nt) nt.textContent = o ? 'Manual sampai ' + T.hm(o.until) + ', lalu kembali otomatis.' : 'Otomatis: sekarang jam ' + (kindAt(now) === 'Kerja' ? 'kerja' : 'pribadi') + '.';
   }
   function tripView(t) {
     var o = S.ov.trips[t.id] || {};
@@ -558,7 +607,7 @@
     return out;
   }
   function collect(P) {
-    var list = P.scope === 'range' ? dayList(P.from, P.to) : [P.day];
+    var list = (P.scope === 'range' || P.scope === 'bulan') ? dayList(P.from, P.to) : [P.day];
     return Promise.all(list.map(loadDay)).then(function (ds) {
       return ds.map(function (d) {
         d.trips = d.trips.filter(function (x) {
@@ -570,6 +619,7 @@
     });
   }
   function fileBase(P) {
+    if (P.scope === 'bulan') return 'HZTrip-Rekap-' + P.from.slice(0, 7);
     if (P.scope === 'range') return 'HZTrip-' + P.from + '_sd_' + P.to;
     if (P.scope === 'trip') return 'HZTrip-' + P.day + '-trip-' + T.hm(P.tripId).replace('.', '');
     return 'HZTrip-' + P.day;
@@ -580,7 +630,7 @@
   function openPrint(o) {
     o = o || {};
     P = { scope: o.tripId ? 'trip' : 'hari', tripId: o.tripId || 0, day: o.day || S.hDay, from: o.day || S.hDay, to: o.day || S.hDay,
-      units: S.settings.units.slice(), labels: ['Kerja', 'Pribadi'], summary: true, color: true };
+      units: S.settings.units.slice(), labels: ['Kerja', 'Pribadi'], summary: true, color: true, month: T.ymd(Date.now()).slice(0, 7) };
     var tripTxt = '';
     if (o.tripId) { var x = S.hTrips.filter(function (y) { return y.t.id === o.tripId; })[0]; if (x) tripTxt = ' <span class="muted">· ' + T.hm(x.t.start) + ' – ' + T.hm(x.t.end) + '</span>'; }
     var today = T.ymd(Date.now());
@@ -588,7 +638,9 @@
       '<div class="h">CAKUPAN</div>' +
       (o.tripId ? '<label><input type="radio" name="pscope" value="trip" checked> Satu trip' + tripTxt + '</label>' : '') +
       '<label><input type="radio" name="pscope" value="hari"' + (o.tripId ? '' : ' checked') + '> Satu hari</label>' +
-      '<label><input type="radio" name="pscope" value="range"> Rentang tanggal</label>' +
+      '<label><input type="radio" name="pscope" value="range"> Rentang tanggal (rincian per trip)</label>' +
+      '<label><input type="radio" name="pscope" value="bulan"> Rekap bulanan (total per hari)</label>' +
+      '<div style="margin:2px 0 4px"><div class="muted">Bulan (untuk rekap bulanan)</div><input type="month" id="pMonth" value="' + today.slice(0, 7) + '" max="' + today.slice(0, 7) + '"></div>' +
       '<div class="pgrid" style="margin-top:4px"><div><div class="muted">Dari / tanggal</div><input type="date" id="pFrom" value="' + P.day + '" max="' + today + '"></div>' +
       '<div><div class="muted">Sampai</div><input type="date" id="pTo" value="' + P.day + '" max="' + today + '"></div></div>' +
       '<div id="pFilters"><div class="h">UNIT</div><div class="pgrid" id="pUnits">' + S.settings.units.map(function (u, i) { return '<label><input type="checkbox" data-u="' + i + '" checked> ' + esc(u) + '</label>'; }).join('') + '</div>' +
@@ -611,33 +663,45 @@
     if (t.name === 'pscope') P.scope = t.value;
     else if (t.id === 'pFrom') { P.from = t.value; P.day = t.value; if (P.to < P.from) { P.to = P.from; $('pTo').value = P.to; } }
     else if (t.id === 'pTo') P.to = t.value;
+    else if (t.id === 'pMonth') { if (t.value) P.month = t.value; }
     else if (t.getAttribute('data-u') !== null) { P.units = [].slice.call(document.querySelectorAll('#pUnits input')).filter(function (c) { return c.checked; }).map(function (c) { return S.settings.units[+c.getAttribute('data-u')]; }); }
     else if (t.getAttribute('data-l') !== null) { P.labels = [].slice.call(document.querySelectorAll('input[data-l]')).filter(function (c) { return c.checked; }).map(function (c) { return c.getAttribute('data-l'); }); }
     else if (t.id === 'pSum') P.summary = t.checked;
     else if (t.id === 'pCol') P.color = t.checked;
     syncPrint();
   }
+  function setMonthRange() {
+    var m = (P.month || T.ymd(Date.now()).slice(0, 7)).split('-'), y = +m[0], mo = +m[1];
+    var last = new Date(y, mo, 0).getDate(), today = T.ymd(Date.now());
+    P.from = m[0] + '-' + m[1] + '-01';
+    var to = m[0] + '-' + m[1] + '-' + T.pad(last);
+    P.to = to > today ? today : to;
+  }
   function syncPrint() {
     if (!$('pFrom')) return;
+    if (P.scope === 'bulan') setMonthRange();
     $('pTo').disabled = P.scope !== 'range';
-    $('pFrom').disabled = P.scope === 'trip';
+    $('pFrom').disabled = P.scope === 'trip' || P.scope === 'bulan';
+    $('pMonth').disabled = P.scope !== 'bulan';
+    $('pSum').disabled = P.scope === 'bulan';
     $('pFilters').style.opacity = P.scope === 'trip' ? '.4' : '1';
     $('pInfo').textContent = 'Menghitung…';
     collect(P).then(function (ds) {
       var n = 0, km = 0;
       ds.forEach(function (d) { d.trips.forEach(function (x) { n++; km += x.t.km; }); });
-      if ($('pInfo')) $('pInfo').innerHTML = n ? 'Akan mencetak <b style="color:var(--tx)">' + n + ' trip · ' + T.km1(km) + ' km</b>' + (ds.length > 1 ? ' dalam ' + ds.length + ' hari' : '') : 'Tidak ada trip pada pilihan ini.';
+      if ($('pInfo')) $('pInfo').innerHTML = n ? 'Akan mencetak <b style="color:var(--tx)">' + (P.scope === 'bulan' ? ds.length + ' hari · ' + T.km1(km) + ' km' : n + ' trip · ' + T.km1(km) + ' km') + '</b>' + (P.scope !== 'bulan' && ds.length > 1 ? ' dalam ' + ds.length + ' hari' : '') : 'Tidak ada trip pada pilihan ini.';
     });
   }
   function runExport(kind) {
     collect(P).then(function (ds) {
       if (!ds.length) { toast('Tidak ada trip pada pilihan ini'); return; }
+      if (P.scope === 'bulan') ds.month = P.month;
       var base = fileBase(P);
       if (kind === 'kml') {
         return saveFile(base + '.kml', textB64(E.buildKml(ds, { title: 'HZ Trip ' + ds[0].ymd })), 'application/vnd.google-earth.kml+xml');
       }
       if (!window.jspdf) { toast('Library PDF belum siap'); return; }
-      var doc = E.buildPdf(ds, { driver: S.settings.driver, scope: P.scope, summary: P.summary, color: P.color });
+      var doc = E.buildPdf(ds, { driver: S.settings.driver, scope: P.scope, summary: P.summary, color: P.color, month: P.month });
       return saveFile(base + '.pdf', doc.output('datauristring').split(',')[1], 'application/pdf');
     }).catch(function (e) { showErr(e && e.message || e); });
   }
@@ -719,16 +783,18 @@
     $('dPick').onchange = function () { if (this.value && this.value <= T.ymd(Date.now())) { S.hDay = this.value; loadHistory(); } };
     $('tripList').onclick = function (e) { var b = e.target.closest ? e.target.closest('.trip') : null; if (b) openTrip(+b.getAttribute('data-i')); };
     $('unitAdd').onclick = addUnit;
-    $('unitSel').onchange = function () { setActiveUnit(this.value); toast('Unit dipakai: ' + this.value); };
+    $('unitSel').onchange = function () { setUnit(this.value); renderUnitCard(); toast('Unit dipakai: ' + this.value); };
     $('unitBox').onclick = function (e) {
       var d = e.target.getAttribute('data-type'), x = e.target.getAttribute('data-del');
       if (d !== null) { var un = S.settings.units[+d]; S.settings.unitType[un] = typeOf(un) === 'Kerja' ? 'Pribadi' : 'Kerja'; saveSettings(); renderSettings(); }
       if (x !== null) {
         var u = S.settings.units[+x];
-        S.settings.units.splice(+x, 1);
-        delete S.settings.unitType[u];
-        if (activeUnit() === u) setActiveUnit(S.settings.units[0]);
-        saveSettings(); renderSettings();
+        askConfirm('Hapus unit ' + u + '?', 'Trip lama tetap tersimpan dengan nama unit ini.' + (unitAt(Date.now()) === u ? ' Unit ini sedang dipakai; unit aktif akan pindah ke unit lain di daftar.' : ''), 'Hapus', function () {
+          S.settings.units.splice(S.settings.units.indexOf(u), 1);
+          fixSlotsAfterDelete(u);
+          delete S.settings.unitType[u];
+          saveSettings(); renderSettings();
+        });
       }
     };
     $('splitSel').onchange = function () { S.settings.splitSec = +this.value; saveSettings(); recomputeLive(); toast('Batas pisah trip disimpan'); };
@@ -759,7 +825,7 @@
     var tick = 0;
     setInterval(function () {
       tick++;
-      if (S.view === 'spido' && !document.hidden) renderSpido();
+      if (S.view === 'spido' && !document.hidden) { renderSpido(); if (tick % 20 === 0) renderUnitCard(); }
       if (S.view === 'lintasan' && !document.hidden && S.mode === 'rekam' && tick % 15 === 0) renderMap(false);
     }, 1000);
     setInterval(function () { if (!document.hidden) syncStatus(); }, 20000);

@@ -46,7 +46,7 @@ button{font-family:inherit;color:inherit}
 .btn{height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--tx2);background:transparent;font-size:15px;font-weight:600;cursor:pointer}
 .btn.pri{background:var(--tx);color:var(--bg);border-color:var(--tx)}
 .btn.sm{height:36px;padding:0 12px;font-size:14px}
-input[type=text],input[type=date],select{height:46px;width:100%;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--tx);font-size:16px;padding:0 14px;font-family:inherit}
+input[type=text],input[type=date],input[type=month],select{height:46px;width:100%;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--tx);font-size:16px;padding:0 14px;font-family:inherit}
 .muted{color:var(--tx2);font-size:14px;line-height:1.45}
 .chip{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:13px;background:#1E2A31;font-size:13px;font-weight:500}
 .chip.k{background:#16332A;color:#7FE0AE}.chip.p{background:#2F2A16;color:#E8D27A}.chip.n{background:transparent;border:1px dashed var(--line);color:var(--tx2)}

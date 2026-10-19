@@ -60,7 +60,7 @@
       '<tr><td><b>Unit</b></td><td>' + xe(x.unit) + '</td></tr>' +
       '<tr><td><b>Label</b></td><td>' + x.label + '</td></tr>' +
       '<tr><td><b>Jarak</b></td><td>' + T.km1(t.km) + ' km</td></tr>' +
-      '<tr><td><b>Kecepatan</b></td><td>min ' + Math.round(t.min) + ' | maks ' + Math.round(t.max) + ' | rata-rata ' + Math.round(t.avg) + ' km/j</td></tr>' +
+      '<tr><td><b>Kecepatan</b></td><td>maks ' + Math.round(t.max) + ' | rata-rata ' + Math.round(t.avg) + ' km/j</td></tr>' +
       '<tr><td><b>Waktu bergerak</b></td><td>hijau ' + T.durText(t.zg) + ' | kuning ' + T.durText(t.zy) + ' | merah ' + T.durText(t.zr) + '</td></tr>' +
       '</table>]]>';
   }
@@ -122,6 +122,59 @@
       doc.text(String(s), x, y, align ? { align: align } : undefined);
     }
 
+    if (opts.scope === 'bulan') { monthPage(); days = []; }
+    function monthPage() {
+      var BLN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      var mm = (opts.month || (days[0] && days[0].ymd.slice(0, 7)) || '').split('-');
+      var title = mm.length === 2 ? BLN[+mm[1] - 1] + ' ' + mm[0] : '';
+      txt('HZ TRIP', M, 17, 9, true, '#4A5A63');
+      txt('Rekap Bulanan Perjalanan', M, 25, 18, true);
+      txt(title, W - M, 25, 13, true, '#161C20', 'right');
+      doc.setDrawColor.apply(doc, hex('#161C20')); doc.setLineWidth(0.6); doc.line(M, 28, W - M, 28);
+      var us = [], lb = [];
+      days.forEach(function (d) { d.trips.forEach(function (x) { if (us.indexOf(x.unit) < 0) us.push(x.unit); if (lb.indexOf(x.label) < 0) lb.push(x.label); }); });
+      [['Pengemudi', driver || '-'], ['Unit', us.join(', ') || '-'], ['Label', lb.join(' dan ') || '-']].forEach(function (it, k) {
+        var x = M + k * ((W - 2 * M) / 3);
+        txt(it[0], x, 34, 8, false, '#4A5A63'); txt(it[1], x, 39, 10, true);
+      });
+      var tk = 0, tmax = 0, ws = 0, ds = 0;
+      var rows = days.map(function (d) {
+        var km = 0, mx = 0, w = 0, du = 0;
+        d.trips.forEach(function (x) { km += x.t.km; mx = Math.max(mx, x.t.max); w += x.t.avg * x.t.durSec; du += x.t.durSec; });
+        tk += km; tmax = Math.max(tmax, mx); ws += w; ds += du;
+        return { cells: [T.dateLong(d.ymd), units(d).join(', '), String(Math.round(mx)), String(Math.round(du ? w / du : 0)), T.km1(km)], max: mx };
+      });
+      var body = rows.map(function (r) { return r.cells; });
+      body.push(['Total (' + rows.length + ' hari)', '', String(Math.round(tmax)), String(Math.round(ds ? ws / ds : 0)), T.km1(tk)]);
+      doc.autoTable({
+        startY: 43, margin: { left: M, right: M }, theme: 'grid',
+        head: [['Tanggal', 'Unit', 'Maks km/j', 'Rata-rata km/j', 'Total km']], body: body,
+        styles: { font: 'helvetica', fontSize: 10, cellPadding: { top: 2, bottom: 2, left: 2, right: 2.5 }, lineColor: [221, 227, 230], lineWidth: 0.2, textColor: hex('#161C20') },
+        headStyles: { fillColor: hex('#E9EEF0'), textColor: hex('#2C3A41'), fontStyle: 'bold', fontSize: 9, lineColor: [201, 210, 215] },
+        columnStyles: { 0: { fontStyle: 'bold' }, 1: { cellWidth: 36 }, 2: { halign: 'right', cellWidth: 26 }, 3: { halign: 'right', cellWidth: 32 }, 4: { halign: 'right', cellWidth: 24 } },
+        didParseCell: function (d) {
+          if (d.section === 'head' && d.column.index >= 2) d.cell.styles.halign = 'right';
+          if (d.section === 'body' && d.row.index === rows.length) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = hex('#F3F6F7'); }
+          if (d.section === 'body' && d.column.index === 2 && opts.color !== false) {
+            var v = d.row.index < rows.length ? rows[d.row.index].max : tmax;
+            d.cell.styles.fontStyle = 'bold';
+            if (v > 90) { d.cell.styles.fillColor = hex('#FFB9B2'); d.cell.styles.textColor = hex('#6E0F08'); }
+            else if (v > 60) { d.cell.styles.fillColor = hex('#FFE98A'); d.cell.styles.textColor = hex('#4A3A00'); }
+          }
+        }
+      });
+      var y = doc.lastAutoTable.finalY + 6;
+      if (opts.color !== false) {
+        txt('Kecepatan maks:', M, y, 8, false, '#4A5A63');
+        var lx = M + 28;
+        [['#FFFFFF', 'hingga 60'], ['#FFE98A', '60-90'], ['#FFB9B2', '90 ke atas']].forEach(function (b) {
+          doc.setFillColor.apply(doc, hex(b[0])); doc.setDrawColor.apply(doc, hex('#C9D2D7')); doc.setLineWidth(0.2);
+          doc.rect(lx, y - 2.6, 5, 3.4, 'FD'); txt(b[1], lx + 6.5, y, 8, false, '#4A5A63'); lx += 8 + doc.getTextWidth(b[1]) + 6;
+        });
+      }
+      doc.setDrawColor.apply(doc, hex('#C9D2D7')); doc.setLineWidth(0.3); doc.line(M, 280, W - M, 280);
+      txt('Rata-rata harian dihitung dari seluruh waktu berjalan pada hari itu. Data direkam dari GPS ponsel dan bersifat pembanding.', M, 284, 8, false, '#4A5A63');
+    }
     days.forEach(function (day, di) {
       if (di > 0) doc.addPage();
       anyCheck = false;
@@ -141,18 +194,18 @@
       var body = day.trips.map(function (x, i) {
         if (x.check) anyCheck = true;
         var t = x.t;
-        return [String(i + 1), range(t) + (x.check ? ' *' : ''), x.unit, String(Math.round(t.min)), String(Math.round(t.max)), String(Math.round(t.avg)), T.km1(t.km)];
+        return [String(i + 1), range(t) + (x.check ? ' *' : ''), x.unit, String(Math.round(t.max)), String(Math.round(t.avg)), T.km1(t.km)];
       });
       doc.autoTable({
         startY: 43, margin: { left: M, right: M },
-        head: [['No', 'Waktu', 'Unit', 'Min', 'Maks', 'Rata-rata', 'Jarak km']],
+        head: [['No', 'Waktu', 'Unit', 'Maks', 'Rata-rata', 'Jarak km']],
         body: body, theme: 'grid',
         styles: { font: 'helvetica', fontSize: 10, cellPadding: { top: 2, bottom: 2, left: 2, right: 2.5 }, lineColor: [221, 227, 230], lineWidth: 0.2, textColor: hex('#161C20') },
         headStyles: { fillColor: hex('#E9EEF0'), textColor: hex('#2C3A41'), fontStyle: 'bold', fontSize: 9, lineColor: [201, 210, 215] },
-        columnStyles: { 0: { halign: 'center', cellWidth: 12, textColor: hex('#4A5A63') }, 1: { cellWidth: 'auto', fontStyle: 'bold' }, 2: { cellWidth: 28 }, 3: { halign: 'right', cellWidth: 16 }, 4: { halign: 'right', cellWidth: 18 }, 5: { halign: 'right', cellWidth: 24 }, 6: { halign: 'right', cellWidth: 26 } },
+        columnStyles: { 0: { halign: 'center', cellWidth: 12, textColor: hex('#4A5A63') }, 1: { cellWidth: 'auto', fontStyle: 'bold' }, 2: { cellWidth: 34 }, 3: { halign: 'right', cellWidth: 22 }, 4: { halign: 'right', cellWidth: 28 }, 5: { halign: 'right', cellWidth: 30 } },
         didParseCell: function (d) {
           if (d.section === 'head' && d.column.index >= 3) d.cell.styles.halign = 'right';
-          if (d.section === 'body' && d.column.index === 4 && opts.color !== false) {
+          if (d.section === 'body' && d.column.index === 3 && opts.color !== false) {
             var v = day.trips[d.row.index].t.max;
             d.cell.styles.fontStyle = 'bold';
             if (v > 90) { d.cell.styles.fillColor = hex('#FFB9B2'); d.cell.styles.textColor = hex('#6E0F08'); }
@@ -198,13 +251,12 @@
       }
 
       var notes = [];
-      if (anyCheck) notes.push('* Trip melewati batas jam kerja; labelnya belum diperiksa.');
       notes.push('Data direkam dari GPS ponsel dan bersifat pembanding.');
       doc.setDrawColor.apply(doc, hex('#C9D2D7')); doc.setLineWidth(0.3); doc.line(M, 280, W - M, 280);
       notes.forEach(function (n, k) { txt(n, M, 284 + k * 4, 8, false, '#4A5A63'); });
     });
 
-    if (days.length > 1) {
+    if (days.length > 1 && opts.scope !== 'bulan') {
       doc.addPage();
       txt('HZ TRIP', M, 17, 9, true, '#4A5A63');
       txt('Rekap Rentang Tanggal', M, 25, 18, true);
