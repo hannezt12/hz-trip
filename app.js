@@ -69,7 +69,7 @@
     settings: { units: ['BT.13', 'Motor'], defUnit: 'BT.13', splitSec: 60, auto: true, margin: 30, driver: 'Han', radius: 150, mapMode: 'sat', schedule: T.defaultSchedule() },
     ov: { trips: {}, days: {} },
     today: T.ymd(Date.now()), todayPts: [], liveTrip: null,
-    hDay: T.ymd(Date.now()), hTrips: []
+    hDay: T.ymd(Date.now()), hTrips: [], hMode: 'list'
   };
 
   function opts() { return { splitSec: S.settings.splitSec }; }
@@ -116,7 +116,7 @@
     $('ttl').textContent = TITLES[v];
     document.querySelectorAll('#drawer a[data-go]').forEach(function (a) { a.classList.toggle('on', a.getAttribute('data-go') === v); });
     closeDrawer();
-    if (v === 'riwayat') loadHistory();
+    if (v === 'riwayat') { S.hMode = 'list'; loadRiwayat(); }
     if (v === 'lintasan') openMap();
     if (v === 'set') { renderSettings(); syncStatus(); }
     if (v === 'spido') { syncStatus(); renderSpido(); }
@@ -131,6 +131,7 @@
   window.hzBack = function () {
     if ($('sheet').classList.contains('on')) { closeSheet(); return true; }
     if ($('drawer').classList.contains('on')) { $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); return true; }
+    if (S.view === 'riwayat' && S.hMode === 'day') { S.hMode = 'list'; loadRiwayat(); return true; }
     if (S.view !== 'spido') { go('spido'); return true; }
     return false;
   };
@@ -248,6 +249,48 @@
       check: al.check && !o.label, hist: o.hist || []
     };
   }
+  // ---------- ringkasan 30 hari ----------
+  function daySumm(ymd) {
+    return Plug.readDay({ date: ymd }).then(function (r) {
+      var res = T.detectTrips(T.parseCsv(r.text), opts());
+      var tr = T.applyEdits(res, S.ov.days[ymd]);
+      var km = 0, mx = 0, ws = 0, ds = 0;
+      tr.forEach(function (t) { km += t.km; mx = Math.max(mx, t.max); ws += t.avg * t.durSec; ds += t.durSec; });
+      return { ymd: ymd, n: tr.length, km: km, max: mx, avg: ds ? ws / ds : 0 };
+    }).catch(function () { return { ymd: ymd, n: 0, km: 0, max: 0, avg: 0 }; });
+  }
+  var BLN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  var HR3 = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+  function loadMonth() {
+    var list = [], now = new Date(), i;
+    for (i = 0; i < 30; i++) list.push(T.ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i).getTime()));
+    return Promise.all(list.map(daySumm)).then(function (rows) {
+      if (S.view !== 'riwayat' || S.hMode !== 'list') return;
+      var n = 0, km = 0, mx = 0, dd = 0;
+      rows.forEach(function (r) { n += r.n; km += r.km; mx = Math.max(mx, r.max); if (r.n) dd++; });
+      var html = '<div class="card"><div class="sum"><div><b>' + n + '</b><small>trip</small></div><div><b>' + T.km1(km) + '</b><small>km</small></div><div><b style="color:' + zc(mx) + '">' + Math.round(mx) + '</b><small>maks km/j</small></div></div>' +
+        '<div class="muted" style="margin-top:8px;text-align:center">30 hari terakhir · ' + dd + ' hari ada perjalanan</div></div>';
+      html += rows.map(function (r) {
+        var d = r.ymd.split('-'), dt = new Date(+d[0], +d[1] - 1, +d[2]);
+        var head = '<div class="md"><small>' + HR3[dt.getDay()] + '</small><b>' + (+d[2]) + ' ' + BLN[dt.getMonth()] + '</b></div>';
+        if (!r.n) return '<button class="mrow none" data-d="' + r.ymd + '">' + head + '<div class="mc"><b>–</b></div></button>';
+        return '<button class="mrow" data-d="' + r.ymd + '">' + head +
+          '<div class="mc"><small>MAKS</small><b style="color:' + zc(r.max) + '">' + Math.round(r.max) + '</b></div>' +
+          '<div class="mc"><small>RATA2</small><b>' + Math.round(r.avg) + '</b></div>' +
+          '<div class="mc"><small>KM</small><b>' + T.km1(r.km) + '</b></div>' +
+          '<div class="mt">' + r.n + ' trip</div></button>';
+      }).join('');
+      $('monthView').innerHTML = html;
+    });
+  }
+  function loadRiwayat() {
+    var list = S.hMode === 'list';
+    $('monthView').style.display = list ? 'block' : 'none';
+    $('dayView').style.display = list ? 'none' : 'block';
+    if (list) { if (!$('monthView').firstChild) $('monthView').innerHTML = '<div class="empty">Menghitung…</div>'; loadMonth(); }
+    else loadHistory();
+  }
+
   function dayEdits() { return S.ov.days[S.hDay] || (S.ov.days[S.hDay] = { ops: [] }); }
   function loadHistory() {
     Plug.readDay({ date: S.hDay }).then(function (r) {
@@ -520,7 +563,7 @@
   var P = null;
   function openPrint(o) {
     o = o || {};
-    P = { scope: o.tripId ? 'trip' : 'hari', tripId: o.tripId || 0, day: o.day || S.hDay, from: S.hDay, to: S.hDay,
+    P = { scope: o.tripId ? 'trip' : 'hari', tripId: o.tripId || 0, day: o.day || S.hDay, from: o.day || S.hDay, to: o.day || S.hDay,
       units: S.settings.units.slice(), labels: ['Kerja', 'Pribadi'], summary: true, color: true };
     var tripTxt = '';
     if (o.tripId) { var x = S.hTrips.filter(function (y) { return y.t.id === o.tripId; })[0]; if (x) tripTxt = ' <span class="muted">· ' + T.hm(x.t.start) + ' – ' + T.hm(x.t.end) + '</span>'; }
@@ -653,6 +696,8 @@
     $('btnRec').onclick = toggleRec;
     $('modeBox').onclick = onModeAction;
     $('warnBox').onclick = onModeAction;
+    $('toList').onclick = function () { S.hMode = 'list'; loadRiwayat(); $('main').scrollTop = 0; };
+    $('monthView').onclick = function (e) { var b = e.target.closest ? e.target.closest('.mrow') : null; if (b) { S.hDay = b.getAttribute('data-d'); S.hMode = 'day'; loadRiwayat(); $('main').scrollTop = 0; } };
     $('dPrev').onclick = function () { shiftDay(-1); };
     $('dNext').onclick = function () { shiftDay(1); };
     $('dPick').onchange = function () { if (this.value && this.value <= T.ymd(Date.now())) { S.hDay = this.value; loadHistory(); } };
@@ -680,7 +725,7 @@
     };
     $('btnBatt').onclick = openBatt;
     $('btnBg').onclick = askBackground;
-    $('btnPrint').onclick = function () { openPrint({}); };
+    $('btnPrint').onclick = function () { openPrint({ day: S.hMode === 'list' ? T.ymd(Date.now()) : S.hDay }); };
     document.querySelectorAll('#drawer a[data-print]').forEach(function (a) { a.onclick = function () { closeDrawer(); openPrint({ day: S.hDay }); }; });
     $('mapSeg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-map'); if (m) { S.settings.mapMode = m; saveSettings(); setTiles(); } };
     $('mapChips').onclick = function (e) { var i = e.target.getAttribute && e.target.getAttribute('data-i'); if (i !== null && i !== undefined) { mapSel = +i; renderMap(true); } };
@@ -691,7 +736,7 @@
     Plug.addListener('fix', onFix);
     Plug.addListener('state', applyStatus);
     document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) { syncStatus(); refreshToday().then(renderSpido); if (S.view === 'riwayat') loadHistory(); }
+      if (!document.hidden) { syncStatus(); refreshToday().then(renderSpido); if (S.view === 'riwayat') loadRiwayat(); }
     });
     var tick = 0;
     setInterval(function () {

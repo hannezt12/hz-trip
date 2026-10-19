@@ -53,15 +53,19 @@
 
     <!-- C. Riwayat -->
     <section class="view" id="v-riwayat">
+      <button class="btn" id="btnPrint" style="width:100%">Cetak / ekspor</button>
+      <div id="monthView"></div>
+      <div id="dayView">
+      <button class="btn sm" id="toList" style="margin-top:8px">‹ Daftar 30 hari</button>
       <div class="dnav">
         <button class="ib" id="dPrev" aria-label="Hari sebelumnya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EAF0F2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
         <div class="dt" id="dLabel"></div>
         <button class="ib" id="dNext" aria-label="Hari berikutnya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EAF0F2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
       </div>
       <input type="date" id="dPick" style="margin-top:4px">
-      <button class="btn" id="btnPrint" style="width:100%;margin-top:8px">Cetak / ekspor</button>
       <div id="daySum"></div>
       <div id="tripList"></div>
+      </div>
     </section>
 
     <!-- Pengaturan -->
@@ -97,13 +101,14 @@
         <button class="btn" id="btnBg" style="margin-top:10px;width:100%">Atur izin lokasi "Selalu"</button>
         <button class="btn" id="btnBatt" style="margin-top:8px;width:100%">Atur penghematan baterai</button>
         <div class="muted" style="margin-top:8px">Pilih HZ Trip lalu "Tanpa pembatasan" agar perekaman tidak dimatikan sistem.</div>
+        <div class="muted" style="margin-top:8px">Tombol cepat: geser layar dari atas dua kali, ketuk ikon pensil, lalu seret "HZ Trip" ke deretan atas. Satu ketuk untuk Mulai / Akhiri.</div>
       </div>
 
       <div class="h">ATURAN TETAP</div>
       <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Label otomatis: Kerja di dalam jam kerja (di luar istirahat), Pribadi selain itu. Bisa diubah per trip.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
 
       <div class="h">TAHAP BERIKUTNYA</div>
-      <div class="card muted">Penyetelan baterai lanjutan · tombol Mulai/Akhiri di Quick Settings · merampingkan data lama.</div>
+      <div class="card muted">Merampingkan data lama · cadangan data.</div>
     </section>
   </div>
 </div>
@@ -116,7 +121,7 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.3.1</div>
+  <div class="ver">Versi 0.4.0 · tahap 4</div>
 </nav>
 <div id="sheet"></div>
 <div id="toast"></div>

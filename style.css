@@ -67,6 +67,18 @@ input[type=text],input[type=date],select{height:46px;width:100%;border:1px solid
 .trip .t2 div:first-child{text-align:left}
 .empty{text-align:center;color:var(--tx2);padding:36px 12px;line-height:1.5}
 
+/* ringkasan 30 hari */
+.mrow{display:flex;align-items:center;width:100%;gap:10px;text-align:left;background:var(--card);border:0;border-radius:14px;padding:10px 12px;margin-top:6px;cursor:pointer}
+.mrow.none{background:transparent;border:1px dashed var(--line);cursor:pointer}
+.mrow .md{width:72px;flex-shrink:0;white-space:nowrap}
+.mrow .md small{display:block;font-size:11px;color:var(--tx2);letter-spacing:.06em}
+.mrow .md b{font-family:var(--cond);font-weight:600;font-size:21px;line-height:1.1}
+.mrow .mc{flex:1;text-align:right}
+.mrow .mc small{display:block;font-size:10px;color:var(--tx2);letter-spacing:.06em}
+.mrow .mc b{font-family:var(--cond);font-weight:700;font-size:22px;line-height:1.15}
+.mrow.none .mc b{color:var(--tx2);font-weight:500}
+.mrow .mt{width:44px;text-align:center;font-size:12px;color:var(--tx2);flex-shrink:0}
+
 /* drawer & sheet */
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;z-index:50}.scrim.on{display:block}
 #drawer{position:fixed;top:0;bottom:0;left:0;width:78%;max-width:300px;background:var(--card2);border-right:1px solid var(--line);z-index:60;transform:translateX(-102%);transition:transform .2s;padding:calc(16px + env(safe-area-inset-top,0px)) 0 16px;display:flex;flex-direction:column}

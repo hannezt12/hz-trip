@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -109,6 +110,10 @@ public class TripService extends Service {
     private long lastFast = 0;
     private boolean reminded = false;
     private boolean everFast = false;
+    private double sessMax = 0;
+    private double sessMeters = 0;
+    private double prevKmh = 0;
+    private long lastNotifMs = 0;
     private int fenceHits = 0;
     private Location anchor = null;
 
@@ -327,6 +332,9 @@ public class TripService extends Service {
         long now = System.currentTimeMillis();
         mode = M_REKAM;
         everFast = false;
+        sessMax = 0;
+        sessMeters = 0;
+        prevKmh = 0;
         lastMove = now;
         lastFast = now;
         reminded = false;
@@ -564,6 +572,7 @@ public class TripService extends Service {
         } else {
             speed = 0f;
         }
+        Location p0 = prev;
         prev = loc;
         double kmh = speed * 3.6;
         String line = t + "," + String.format(Locale.US, "%.6f,%.6f,%.2f,%.0f,%d", loc.getLatitude(), loc.getLongitude(), speed, acc, manual ? 1 : 0);
@@ -601,6 +610,14 @@ public class TripService extends Service {
             writeLine(line, t);
             long now = System.currentTimeMillis();
             if (acc <= MAX_ACC) {
+                double cand = Math.min(kmh, prevKmh);
+                if (cand > sessMax) {
+                    sessMax = cand;
+                }
+                prevKmh = kmh;
+                if (p0 != null && kmh >= MOVE_KMH && t - p0.getTime() <= 10000L && t > p0.getTime()) {
+                    sessMeters += p0.distanceTo(loc);
+                }
                 if (kmh >= MOVE_KMH) {
                     lastMove = now;
                     reminded = false;
@@ -612,6 +629,10 @@ public class TripService extends Service {
                 }
             }
             checkRecordingEnd(now);
+            if (mode == M_REKAM && now - lastNotifMs >= 5000L) {
+                lastNotifMs = now;
+                updateNotif();
+            }
         } else {
             return;
         }
@@ -743,51 +764,63 @@ public class TripService extends Service {
         }
     }
 
-    private String titleNow() {
-        if (mode == M_REKAM) {
-            return manual ? "HZ Trip merekam (manual)" : "HZ Trip merekam";
-        }
-        if (mode == M_CEK) {
-            return "HZ Trip memeriksa gerakan";
-        }
-        return "HZ Trip siaga";
-    }
+    private static final Locale ID = new Locale("id", "ID");
 
-    private String textNow() {
-        if (mode == M_REKAM) {
-            return manual ? "Ketuk Akhiri bila sudah selesai." : "Otomatis berhenti sendiri setelah 5 menit diam.";
-        }
-        if (mode == M_CEK) {
-            return "GPS menyala sebentar.";
-        }
-        long we = Sched.windowEnd(this, System.currentTimeMillis());
-        if (we > 0L) {
-            Calendar c = Calendar.getInstance();
-            c.setTimeInMillis(we);
-            return String.format(Locale.US, "Menunggu gerakan, jadwal sampai %02d.%02d", c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE));
-        }
-        return "Menunggu gerakan.";
+    private PendingIntent actionPi(String action, int req) {
+        Intent i = new Intent(this, TripService.class).setAction(action);
+        return PendingIntent.getService(this, req, i, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
     private Notification buildNotif() {
         Intent open = getPackageManager().getLaunchIntentForPackage(getPackageName());
         PendingIntent openPi = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        Intent stop = new Intent(this, TripService.class).setAction(ACTION_STOP);
-        PendingIntent stopPi = PendingIntent.getService(this, 1, stop, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification.Builder b;
         if (Build.VERSION.SDK_INT >= 26) {
             b = new Notification.Builder(this, CHANNEL_ID);
         } else {
             b = new Notification.Builder(this);
         }
+        String title;
+        String text;
+        int color = 0xFF93A4AD;
+        if (mode == M_REKAM) {
+            double kmh = lastSpeed * 3.6;
+            if (System.currentTimeMillis() - lastT > 15000L) {
+                kmh = 0;
+            }
+            title = (manual ? "Merekam (manual)" : "Merekam") + " \u00B7 " + Math.round(kmh) + " km/j";
+            text = String.format(ID, "Maks %d \u00B7 %.1f km", Math.round(sessMax), sessMeters / 1000.0);
+            color = kmh > 90 ? 0xFFFF5B50 : (kmh > 60 ? 0xFFF5C518 : 0xFF3FD07A);
+            b.setUsesChronometer(true).setWhen(startedAt).setShowWhen(true);
+        } else if (mode == M_CEK) {
+            title = "HZ Trip memeriksa gerakan";
+            text = "GPS menyala sebentar.";
+        } else {
+            title = "HZ Trip siaga";
+            long we = Sched.windowEnd(this, System.currentTimeMillis());
+            if (we > 0L) {
+                Calendar c = Calendar.getInstance();
+                c.setTimeInMillis(we);
+                text = String.format(Locale.US, "Menunggu gerakan \u00B7 jadwal sampai %02d.%02d", c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE));
+            } else {
+                text = "Menunggu gerakan.";
+            }
+        }
         b.setSmallIcon(android.R.drawable.ic_menu_mylocation)
-                .setContentTitle(titleNow())
-                .setContentText(textNow())
+                .setContentTitle(title)
+                .setContentText(text)
+                .setColor(color)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setContentIntent(openPi);
-        String label = (mode == M_REKAM) ? "Akhiri" : "Jeda otomatis";
-        b.addAction(new Notification.Action.Builder(android.R.drawable.ic_media_pause, label, stopPi).build());
+        if (mode == M_REKAM) {
+            b.addAction(new Notification.Action.Builder(android.R.drawable.ic_media_pause, "Akhiri", actionPi(ACTION_STOP, 1)).build());
+            b.addAction(new Notification.Action.Builder(android.R.drawable.ic_menu_view, "Buka", openPi).build());
+        } else {
+            b.addAction(new Notification.Action.Builder(android.R.drawable.ic_media_play, "Mulai rekam", actionPi(ACTION_START, 3)).build());
+            b.addAction(new Notification.Action.Builder(android.R.drawable.ic_media_pause, "Jeda otomatis", actionPi(ACTION_STOP, 1)).build());
+        }
         return b.build();
     }
 
@@ -845,6 +878,12 @@ public class TripService extends Service {
     }
 
     private void notifyState() {
+        try {
+            if (Build.VERSION.SDK_INT >= 24) {
+                android.service.quicksettings.TileService.requestListeningState(this, new ComponentName(this, HzTileService.class));
+            }
+        } catch (Exception ignored) {
+        }
         Listener l = listener;
         if (l != null) {
             l.onState();

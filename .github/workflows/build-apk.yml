@@ -106,7 +106,7 @@ jobs:
         run: |
           DEST=android/app/src/main/java/com/hz/hztrip
           mkdir -p "$DEST"
-          cp MainActivity.java HzTripPlugin.java TripService.java Sched.java ScheduleReceiver.java "$DEST/"
+          cp MainActivity.java HzTripPlugin.java TripService.java Sched.java ScheduleReceiver.java HzTileService.java "$DEST/"
           ls -la "$DEST"
 
       - name: Ganti ikon aplikasi
@@ -146,12 +146,13 @@ jobs:
       - name: Tambah izin lokasi dan service perekam ke manifest
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's#</application>#    <service android:name=".TripService" android:exported="false" android:foregroundServiceType="location" />\n        <receiver android:name=".ScheduleReceiver" android:exported="true">\n            <intent-filter>\n                <action android:name="android.intent.action.BOOT_COMPLETED" />\n                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />\n                <action android:name="android.intent.action.TIME_SET" />\n                <action android:name="android.intent.action.TIMEZONE_CHANGED" />\n            </intent-filter>\n        </receiver>\n    </application>#' "$MANIFEST"
+          sed -i 's#</application>#    <service android:name=".TripService" android:exported="false" android:foregroundServiceType="location" />\n        <service android:name=".HzTileService" android:exported="true" android:label="HZ Trip" android:icon="@android:drawable/ic_menu_mylocation" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">\n            <intent-filter>\n                <action android:name="android.service.quicksettings.action.QS_TILE" />\n            </intent-filter>\n        </service>\n        <receiver android:name=".ScheduleReceiver" android:exported="true">\n            <intent-filter>\n                <action android:name="android.intent.action.BOOT_COMPLETED" />\n                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />\n                <action android:name="android.intent.action.TIME_SET" />\n                <action android:name="android.intent.action.TIMEZONE_CHANGED" />\n            </intent-filter>\n        </receiver>\n    </application>#' "$MANIFEST"
           sed -i 's#</manifest>#    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.WAKE_LOCK" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />\n    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />\n</manifest>#' "$MANIFEST"
           cat "$MANIFEST"
           grep -q 'TripService' "$MANIFEST"
           grep -q 'FOREGROUND_SERVICE_LOCATION' "$MANIFEST"
           grep -q 'ScheduleReceiver' "$MANIFEST"
+          grep -q 'HzTileService' "$MANIFEST"
           grep -q 'USE_EXACT_ALARM' "$MANIFEST"
 
       - name: Perbaiki konflik versi Kotlin
