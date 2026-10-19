@@ -267,6 +267,68 @@ public class HzTripPlugin extends Plugin {
         call.resolve(o);
     }
 
+    /** Hapus permanen titik GPS dengan waktu dalam [from, to] (ms) pada satu hari. Hanya untuk hari yang sudah lewat. */
+    @PluginMethod
+    public void deletePoints(PluginCall call) {
+        String date = call.getString("date", "");
+        long fromT = 0L;
+        long toT = 0L;
+        try {
+            fromT = Long.parseLong(call.getString("from", "0"));
+            toT = Long.parseLong(call.getString("to", "0"));
+        } catch (NumberFormatException e) {
+            call.reject("Parameter tidak valid");
+            return;
+        }
+        final long from = fromT;
+        final long to = toT;
+        if (!DATE_RE.matcher(date).matches() || to < from) {
+            call.reject("Parameter tidak valid");
+            return;
+        }
+        File dir = new File(getContext().getFilesDir(), "points");
+        File f = new File(dir, "points-" + date + ".csv");
+        JSObject o = new JSObject();
+        int removed = 0;
+        if (f.exists()) {
+            try {
+                File tmp = new File(dir, "points-" + date + ".csv.tmp");
+                java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(new java.io.FileInputStream(f), "UTF-8"));
+                java.io.BufferedWriter out = new java.io.BufferedWriter(new java.io.OutputStreamWriter(new java.io.FileOutputStream(tmp), "UTF-8"));
+                String line;
+                while ((line = in.readLine()) != null) {
+                    int c = line.indexOf(',');
+                    boolean drop = false;
+                    if (c > 0) {
+                        try {
+                            long t = Long.parseLong(line.substring(0, c));
+                            drop = t >= from && t <= to;
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                    if (drop) {
+                        removed++;
+                    } else {
+                        out.write(line);
+                        out.write('\n');
+                    }
+                }
+                in.close();
+                out.flush();
+                out.close();
+                if (!tmp.renameTo(f)) {
+                    f.delete();
+                    tmp.renameTo(f);
+                }
+            } catch (Exception e) {
+                call.reject("Gagal menghapus titik: " + e.getMessage());
+                return;
+            }
+        }
+        o.put("removed", removed);
+        call.resolve(o);
+    }
+
     @PluginMethod
     public void saveJson(PluginCall call) {
         String name = call.getString("name", "");

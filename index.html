@@ -58,7 +58,7 @@
       <button class="btn" id="btnPrint" style="width:100%">Cetak / ekspor</button>
       <div id="monthView"></div>
       <div id="dayView">
-      <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm" id="toList">‹ Daftar 30 hari</button><button class="btn sm" id="toMap">Lihat di peta</button><button class="btn sm" id="mergeMode">☑ Gabungkan</button></div>
+      <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm" id="toList">‹ Daftar 30 hari</button><button class="btn sm" id="toMap">Lihat di peta</button></div>
       <div class="dnav">
         <button class="ib" id="dPrev" aria-label="Hari sebelumnya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EAF0F2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
         <div class="dt" id="dLabel"></div>
@@ -98,6 +98,9 @@
       <select id="radiusSel"><option value="150">150 meter</option><option value="200">200 meter</option></select>
       <div class="muted" style="margin-top:6px">Setelah berhenti, bila ponsel keluar dari lingkaran ini rekaman langsung dimulai tanpa menunggu kecepatan.</div>
 
+      <div class="h">TRIP DIHAPUS</div>
+      <div class="card"><div id="hidList" class="muted">Tidak ada.</div><div class="muted" style="margin-top:8px">Trip yang dihapus disembunyikan 30 hari, lalu titik GPS-nya dihapus permanen.</div></div>
+
       <div class="h">CACHE PETA</div>
       <div class="card"><div class="muted" id="tcInfo">Menghitung…</div>
         <div class="muted" style="margin-top:6px">Peta satelit dan peta jalan yang pernah Anda lihat tersimpan di ponsel, jadi bisa dibuka lagi tanpa internet. Batas 300 MB; yang paling lama dibuang lebih dulu.</div>
@@ -128,7 +131,7 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.5.0</div>
+  <div class="ver">Versi 0.5.1</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
