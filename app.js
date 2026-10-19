@@ -69,7 +69,7 @@
     settings: { units: ['BT.13', 'Motor'], defUnit: 'BT.13', splitSec: 60, auto: true, margin: 30, driver: 'Han', radius: 150, unitType: { 'BT.13': 'Kerja', 'Motor': 'Pribadi' }, unitLog: [{ t: 0, k: 'Kerja', u: 'BT.13' }, { t: 0, k: 'Pribadi', u: 'Motor' }], mapMode: 'sat', schedule: T.defaultSchedule() },
     ov: { trips: {}, days: {} },
     today: T.ymd(Date.now()), todayPts: [], liveTrip: null,
-    hDay: T.ymd(Date.now()), hTrips: [], hMode: 'list', sel: null
+    hDay: T.ymd(Date.now()), hTrips: [], hMode: 'list', sel: null, mapDay: ''
   };
 
   function opts() { return { splitSec: S.settings.splitSec }; }
@@ -132,7 +132,7 @@
     closeDrawer();
     if (v === 'riwayat') { S.hMode = 'list'; loadRiwayat(); }
     if (v === 'lintasan') openMap();
-    if (v === 'set') { renderSettings(); syncStatus(); }
+    if (v === 'set') { renderSettings(); syncStatus(); renderCacheInfo(); }
     if (v === 'spido') { syncStatus(); renderSpido(); renderUnitCard(); }
     $('main').scrollTop = 0;
   }
@@ -475,6 +475,7 @@
       '<div class="muted" style="margin-top:6px">Memecah trip ini menjadi dua di jam yang dipilih.</div>' +
       (hasNext ? '<button class="btn" id="joinGo" style="width:100%;margin-top:10px">Gabung dengan trip berikutnya</button>' : '') +
       (hasEdit ? '<button class="btn" id="undoGo" style="width:100%;margin-top:10px">Batalkan potongan / gabungan</button>' : '') +
+      '<button class="btn" id="mapGo" style="width:100%;margin-top:10px">Lihat di peta</button>' +
       '<button class="btn" id="printGo" style="width:100%;margin-top:10px">Cetak trip ini (PDF)</button>' +
       '<div class="h">RINCIAN</div>' +
       '<div class="kv"><span>Jarak</span><span>' + T.km1(t.km) + ' km</span></div>' +
@@ -490,6 +491,7 @@
     if ($('cutBound')) $('cutBound').onclick = function () { doCutAt(i, bts, true); };
     document.querySelectorAll('#sheet [data-gap]').forEach(function (b) { b.onclick = function () { var k = +b.getAttribute('data-gap'); doCutAt(i, Math.round((t.parts[k - 1].end + t.parts[k].start) / 2000) * 1000, false); }; });
     $('printGo').onclick = function () { openPrint({ tripId: t.id }); };
+    $('mapGo').onclick = function () { closeSheet(); showMap(S.hDay, i); };
     if ($('joinGo')) $('joinGo').onclick = function () { doJoin(i); };
     if ($('undoGo')) $('undoGo').onclick = function () { doUndo(i); };
   }
@@ -763,8 +765,98 @@
     }).catch(function (e) { showErr(e && e.message || e); });
   }
 
+  // ---------- cache peta (IndexedDB) ----------
+  var TC = (function () {
+    var dbp = null, CAP = 300 * 1024 * 1024, puts = 0;
+    function open() {
+      if (dbp) return dbp;
+      dbp = new Promise(function (res, rej) {
+        try {
+          var rq = indexedDB.open('hztiles', 1);
+          rq.onupgradeneeded = function () { rq.result.createObjectStore('tiles', { keyPath: 'k' }); };
+          rq.onsuccess = function () { res(rq.result); };
+          rq.onerror = function () { rej(rq.error); };
+        } catch (e) { rej(e); }
+      });
+      dbp.catch(function () {});
+      return dbp;
+    }
+    function tx(mode, fn) {
+      return open().then(function (db) {
+        return new Promise(function (res, rej) {
+          var t = db.transaction('tiles', mode), st = t.objectStore('tiles'), out = fn(st);
+          t.oncomplete = function () { res(out && out.result !== undefined ? out.result : out); };
+          t.onerror = function () { rej(t.error); };
+        });
+      });
+    }
+    function get(k) { return tx('readonly', function (st) { return st.get(k); }).then(function (r) { return r ? r.blob : null; }).catch(function () { return null; }); }
+    function stats() {
+      return open().then(function (db) {
+        return new Promise(function (res) {
+          var n = 0, bytes = 0, rq = db.transaction('tiles', 'readonly').objectStore('tiles').openCursor();
+          rq.onsuccess = function () { var c = rq.result; if (c) { n++; bytes += c.value.size || 0; c.continue(); } else res({ n: n, bytes: bytes }); };
+          rq.onerror = function () { res({ n: n, bytes: bytes }); };
+        });
+      }).catch(function () { return { n: 0, bytes: 0 }; });
+    }
+    function prune() {
+      return open().then(function (db) {
+        return new Promise(function (res) {
+          var all = [], total = 0, rq = db.transaction('tiles', 'readonly').objectStore('tiles').openCursor();
+          rq.onsuccess = function () {
+            var c = rq.result;
+            if (c) { all.push({ k: c.value.k, t: c.value.t, s: c.value.size || 0 }); total += c.value.size || 0; c.continue(); return; }
+            if (total <= CAP) { res(); return; }
+            all.sort(function (x, y) { return x.t - y.t; });
+            var st = db.transaction('tiles', 'readwrite').objectStore('tiles');
+            for (var i = 0; i < all.length && total > CAP * 0.85; i++) { st.delete(all[i].k); total -= all[i].s; }
+            res();
+          };
+          rq.onerror = function () { res(); };
+        });
+      }).catch(function () {});
+    }
+    function put(k, blob) {
+      tx('readwrite', function (st) { return st.put({ k: k, blob: blob, size: blob.size, t: Date.now() }); }).catch(function () {});
+      if (++puts % 60 === 0) prune();
+    }
+    function clear() { return tx('readwrite', function (st) { return st.clear(); }).catch(function () {}); }
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+    return { get: get, put: put, stats: stats, clear: clear };
+  })();
+
+  var CachedLayer = null;
+  function cachedLayerClass() {
+    if (CachedLayer) return CachedLayer;
+    CachedLayer = L.TileLayer.extend({
+      createTile: function (coords, done) {
+        var img = document.createElement('img'), url = this.getTileUrl(coords);
+        img.alt = ''; img.setAttribute('role', 'presentation');
+        function show(src, revoke) {
+          img.onload = function () { if (revoke) URL.revokeObjectURL(src); done(null, img); };
+          img.onerror = function () { if (revoke) URL.revokeObjectURL(src); done(null, img); };
+          img.src = src;
+        }
+        TC.get(url).then(function (blob) {
+          if (blob) { show(URL.createObjectURL(blob), true); return; }
+          if (typeof fetch !== 'function') { show(url, false); return; }
+          fetch(url, { mode: 'cors' }).then(function (r) { if (!r.ok) throw new Error('x'); return r.blob(); }).then(function (b) {
+            TC.put(url, b); show(URL.createObjectURL(b), true);
+          }).catch(function () { show(url, false); });
+        });
+        return img;
+      }
+    });
+    return CachedLayer;
+  }
+  function renderCacheInfo() {
+    if (!$('tcInfo')) return;
+    TC.stats().then(function (s) { $('tcInfo').textContent = 'Cache peta: ' + (s.bytes / 1048576).toFixed(1).replace('.', ',') + ' MB · ' + s.n + ' kotak peta'; });
+  }
+
   // ---------- lintasan (peta) ----------
-  var map = null, tileLayer = null, trackLayer = null, fitted = false, mapSel = -1;
+  var map = null, tileLayer = null, trackLayer = null, fitted = false, mapSel = -1, mapKeep = false;
   var TILES = {
     sat: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 'Esri World Imagery'],
     osm: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', '&copy; OpenStreetMap']
@@ -781,10 +873,16 @@
     if (!map) return;
     if (tileLayer) { map.removeLayer(tileLayer); tileLayer = null; }
     var m = S.settings.mapMode;
-    if (TILES[m]) tileLayer = L.tileLayer(TILES[m][0], { maxZoom: 19, attribution: TILES[m][1] }).addTo(map);
+    if (TILES[m]) tileLayer = new (cachedLayerClass())(TILES[m][0], { maxZoom: 19, attribution: TILES[m][1] }).addTo(map);
     document.querySelectorAll('#mapSeg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-map') === m); });
   }
+  function showMap(ymd, sel) {
+    S.mapDay = ymd; mapSel = sel === undefined ? -1 : sel; mapKeep = true; fitted = false;
+    go('lintasan');
+  }
   function openMap() {
+    if (!mapKeep) { S.mapDay = S.today; mapSel = -1; fitted = false; }
+    mapKeep = false;
     setTimeout(function () {
       if (!ensureMap()) { $('mapMsg').textContent = 'Peta tidak tersedia'; return; }
       map.invalidateSize();
@@ -792,36 +890,55 @@
       renderMap(true);
     }, 60);
   }
+  function mapData() {
+    if (S.mapDay === S.today) {
+      var res = T.detectTrips(S.todayPts, opts());
+      return Promise.resolve({ pts: res.points, trips: T.applyEdits(res, S.ov.days[S.today]).map(tripView) });
+    }
+    return loadDay(S.mapDay).then(function (d) { return { pts: d.pts, trips: d.trips }; });
+  }
+  function shiftMap(n) {
+    var p = S.mapDay.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2] + n), nd = T.ymd(d.getTime());
+    if (nd > S.today) return;
+    S.mapDay = nd; mapSel = -1; fitted = false; renderMap(true);
+  }
   function renderMap(fit) {
     if (!map) return;
-    var res = T.detectTrips(S.todayPts, opts());
-    var trips = T.applyEdits(res, S.ov.days[S.today]).map(tripView), pts = res.points;
-    if (mapSel >= trips.length) mapSel = -1;
-    $('mapChips').innerHTML = trips.length > 1 ? '<button data-i="-1"' + (mapSel < 0 ? ' class="on"' : '') + '>Semua</button>' + trips.map(function (x, i) {
-      return '<button data-i="' + i + '"' + (mapSel === i ? ' class="on"' : '') + '>' + (i + 1) + ' · ' + T.hm(x.t.start) + '</button>';
-    }).join('') : '';
-    trackLayer.clearLayers();
-    var bounds = [];
-    trips.forEach(function (x, i) {
-      if (mapSel >= 0 && mapSel !== i) return;
-      var t = x.t;
-      E.zoneRuns(pts, t.i0, t.i1).forEach(function (r) {
-        var ll = r.pts.map(function (p) { return [p.lat, p.lng]; });
-        L.polyline(ll, { color: COL[r.z], weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(trackLayer);
-        bounds = bounds.concat(ll);
+    var day = S.mapDay;
+    $('mPick').value = day; $('mPick').max = S.today;
+    $('mNext').style.opacity = day >= S.today ? '.3' : '1';
+    $('mToday').style.visibility = day === S.today ? 'hidden' : 'visible';
+    mapData().then(function (d) {
+      if (day !== S.mapDay || S.view !== 'lintasan') return;
+      var trips = d.trips, pts = d.pts;
+      if (mapSel >= trips.length) mapSel = -1;
+      $('mapChips').innerHTML = trips.length > 1 ? '<button data-i="-1"' + (mapSel < 0 ? ' class="on"' : '') + '>Semua</button>' + trips.map(function (x, i) {
+        return '<button data-i="' + i + '"' + (mapSel === i ? ' class="on"' : '') + '>' + (i + 1) + ' · ' + T.hm(x.t.start) + '</button>';
+      }).join('') : '';
+      trackLayer.clearLayers();
+      var bounds = [];
+      trips.forEach(function (x, i) {
+        if (mapSel >= 0 && mapSel !== i) return;
+        var t = x.t;
+        E.zoneRuns(pts, t.i0, t.i1).forEach(function (r) {
+          var ll = r.pts.map(function (p) { return [p.lat, p.lng]; });
+          L.polyline(ll, { color: COL[r.z], weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(trackLayer);
+          bounds = bounds.concat(ll);
+        });
+        function dot(lat, lng, col, rad, tip) { L.circleMarker([lat, lng], { radius: rad, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1 }).bindTooltip(tip).addTo(trackLayer); }
+        dot(t.startLat, t.startLng, '#3FD07A', 7, 'Mulai ' + T.hm(t.start));
+        dot(t.endLat, t.endLng, '#FF5B50', 7, 'Selesai ' + T.hm(t.end));
+        dot(t.maxLat, t.maxLng, '#F5C518', 8, 'Tercepat ' + Math.round(t.max) + ' km/j (' + T.hm(t.maxT) + ')');
       });
-      function dot(lat, lng, col, rad, tip) { L.circleMarker([lat, lng], { radius: rad, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1 }).bindTooltip(tip).addTo(trackLayer); }
-      dot(t.startLat, t.startLng, '#3FD07A', 7, 'Mulai ' + T.hm(t.start));
-      dot(t.endLat, t.endLng, '#FF5B50', 7, 'Selesai ' + T.hm(t.end));
-      dot(t.maxLat, t.maxLng, '#F5C518', 8, 'Tercepat ' + Math.round(t.max) + ' km/j (' + T.hm(t.maxT) + ')');
+      $('mapMsg').textContent = bounds.length ? '' : (day === S.today ? 'Belum ada lintasan hari ini. Lintasan muncul saat ada trip yang terekam.' : 'Tidak ada lintasan pada ' + T.dateLong(day) + '.');
+      if (bounds.length && (fit || !fitted)) { map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 }); fitted = true; }
     });
-    $('mapMsg').textContent = bounds.length ? '' : 'Belum ada lintasan hari ini. Lintasan muncul saat ada trip yang terekam.';
-    if (bounds.length && (fit || !fitted)) { map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 }); fitted = true; }
   }
   function mapKml() {
-    loadDay(S.today).then(function (d) {
-      if (!d.trips.length) { toast('Belum ada trip hari ini'); return; }
-      return saveFile('HZTrip-' + S.today + '.kml', textB64(E.buildKml([d], { title: 'HZ Trip ' + S.today })), 'application/vnd.google-earth.kml+xml');
+    var day = S.mapDay;
+    loadDay(day).then(function (d) {
+      if (!d.trips.length) { toast('Belum ada trip pada hari ini'); return; }
+      return saveFile('HZTrip-' + day + '.kml', textB64(E.buildKml([d], { title: 'HZ Trip ' + day })), 'application/vnd.google-earth.kml+xml');
     });
   }
 
@@ -874,6 +991,12 @@
     $('mapSeg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-map'); if (m) { S.settings.mapMode = m; saveSettings(); setTiles(); } };
     $('mapChips').onclick = function (e) { var i = e.target.getAttribute && e.target.getAttribute('data-i'); if (i !== null && i !== undefined) { mapSel = +i; renderMap(true); } };
     $('mapKml').onclick = mapKml;
+    $('mPrev').onclick = function () { shiftMap(-1); };
+    $('mNext').onclick = function () { shiftMap(1); };
+    $('mToday').onclick = function () { S.mapDay = S.today; mapSel = -1; fitted = false; renderMap(true); };
+    $('mPick').onchange = function () { if (this.value && this.value <= S.today) { S.mapDay = this.value; mapSel = -1; fitted = false; renderMap(true); } };
+    $('toMap').onclick = function () { showMap(S.hDay, -1); };
+    $('tcClear').onclick = function () { askConfirm('Bersihkan cache peta?', 'Peta yang tersimpan dihapus. Peta akan diunduh lagi saat Anda melihatnya dengan internet.', 'Bersihkan', function () { TC.clear().then(function () { renderCacheInfo(); toast('Cache peta dibersihkan'); }); }); };
     $('radiusSel').onchange = function () { S.settings.radius = +this.value; saveSettings(); pushSchedule(); };
     $('driverIn').onchange = function () { S.settings.driver = this.value.trim(); saveSettings(); };
 
@@ -886,7 +1009,7 @@
     setInterval(function () {
       tick++;
       if (S.view === 'spido' && !document.hidden) { renderSpido(); if (tick % 20 === 0) renderUnitCard(); }
-      if (S.view === 'lintasan' && !document.hidden && S.mode === 'rekam' && tick % 15 === 0) renderMap(false);
+      if (S.view === 'lintasan' && !document.hidden && S.mode === 'rekam' && S.mapDay === S.today && tick % 15 === 0) renderMap(false);
     }, 1000);
     setInterval(function () { if (!document.hidden) syncStatus(); }, 20000);
 
