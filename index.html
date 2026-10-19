@@ -86,7 +86,11 @@
       <select id="splitSel">
         <option value="15">15 detik</option><option value="60">1 menit</option><option value="180">3 menit</option><option value="300">5 menit</option>
       </select>
-      <div class="muted" style="margin-top:6px">Berhenti selama ini = trip berakhir. Trip baru mulai otomatis saat kecepatan 15 km/jam atau lebih selama 10 detik.</div>
+      <div class="muted" style="margin-top:6px">Berhenti selama ini = trip berakhir. Trip baru mulai otomatis saat kecepatan 5 km/jam atau lebih selama 5 detik, atau saat keluar dari lingkaran titik berhenti terakhir. Trip hanya disimpan bila pernah mencapai 10 km/jam.</div>
+
+      <div class="h">LINGKARAN TITIK BERHENTI</div>
+      <select id="radiusSel"><option value="150">150 meter</option><option value="200">200 meter</option></select>
+      <div class="muted" style="margin-top:6px">Setelah berhenti, bila ponsel keluar dari lingkaran ini rekaman langsung dimulai tanpa menunggu kecepatan.</div>
 
       <div class="h">PEREKAMAN DI LATAR BELAKANG</div>
       <div class="card"><div class="muted" id="setStat"></div>
@@ -112,7 +116,7 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.3.0 · tahap 3</div>
+  <div class="ver">Versi 0.3.1</div>
 </nav>
 <div id="sheet"></div>
 <div id="toast"></div>

@@ -6,14 +6,15 @@
 })(typeof self !== 'undefined' ? self : this, function () {
 
   var DEF = {
-    startKmh: 15,     // trip mulai bila kecepatan >= ini ...
-    startSec: 10,     // ... selama sekurang-kurangnya ini (detik)
+    startKmh: 5,      // trip mulai bila kecepatan >= ini ...
+    startSec: 5,       // ... selama sekurang-kurangnya ini (detik)
     stopKmh: 3,       // di bawah ini dianggap berhenti
     splitSec: 60,     // berhenti selama ini (detik) -> trip berakhir
     slowKmh: 10,      // di bawah ini terus-menerus dianggap jalan kaki/merayap
     slowSec: 600,     // ... selama ini (detik) -> trip berakhir
     gapSec: 300,      // data GPS hilang selama ini -> trip berakhir
     maxAcc: 50,       // titik dengan akurasi lebih buruk (meter) diabaikan
+    validKmh: 10,     // trip sah hanya bila kecepatan maks mencapai ini (jalan kaki dibuang)
     minMoveKmh: 10    // kecepatan "min" = terendah di antara titik yang masih >= ini
   };
 
@@ -116,6 +117,8 @@
     return { trips: trips, points: pts, o: o };
   }
 
+  function addTrip(trips, t, o) { if (t.max >= o.validKmh) trips.push(t); }
+
   function runSegment(pts, a, b, o, trips, isLast) {
     var cur = null, runStart = -1, lastMove = 0, lastFast = 0;
     for (var i = a; i <= b; i++) {
@@ -137,17 +140,17 @@
         if (p.v >= o.stopKmh) lastMove = i;
         if (p.v >= o.slowKmh) lastFast = i;
         if (p.t - pts[lastMove].t >= o.splitSec * 1000) {
-          trips.push(makeTrip(pts, cur.s, lastMove, o, false));
+          addTrip(trips, makeTrip(pts, cur.s, lastMove, o, false), o);
           cur = null; runStart = -1;
         } else if (p.t - pts[lastFast].t >= o.slowSec * 1000) {
-          trips.push(makeTrip(pts, cur.s, lastFast, o, false));
+          addTrip(trips, makeTrip(pts, cur.s, lastFast, o, false), o);
           cur = null; runStart = -1;
         }
       }
     }
     if (cur) {
       // Data berakhir saat trip masih jalan. Di segmen terakhir = trip masih berjalan (open).
-      trips.push(makeTrip(pts, cur.s, lastMove, o, isLast));
+      addTrip(trips, makeTrip(pts, cur.s, lastMove, o, isLast), o);
     }
   }
 

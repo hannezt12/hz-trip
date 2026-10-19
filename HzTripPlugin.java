@@ -198,10 +198,12 @@ public class HzTripPlugin extends Plugin {
             }
             Boolean auto = call.getBoolean("auto", true);
             Integer margin = call.getInt("margin", 30);
+            Integer radius = call.getInt("radius", 150);
             Sched.p(ctx).edit()
                     .putString("sched", sb.toString())
                     .putBoolean("auto", auto == null || auto)
                     .putInt("margin", margin == null ? 30 : margin)
+                    .putInt("radius", radius == null ? 150 : radius)
                     .putLong("pausedUntil", 0L)
                     .apply();
         } catch (Exception e) {

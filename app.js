@@ -66,7 +66,7 @@
     view: 'spido', mode: 'tidur', manual: false, paused: false, auto: true, winEnd: 0, nextStart: 0,
     perm: true, bg: true, battFree: false,
     live: { v: 0, acc: 0, t: 0, count: 0 },
-    settings: { units: ['BT.13', 'Motor'], defUnit: 'BT.13', splitSec: 60, auto: true, margin: 30, driver: 'Han', mapMode: 'sat', schedule: T.defaultSchedule() },
+    settings: { units: ['BT.13', 'Motor'], defUnit: 'BT.13', splitSec: 60, auto: true, margin: 30, driver: 'Han', radius: 150, mapMode: 'sat', schedule: T.defaultSchedule() },
     ov: { trips: {}, days: {} },
     today: T.ymd(Date.now()), todayPts: [], liveTrip: null,
     hDay: T.ymd(Date.now()), hTrips: []
@@ -103,7 +103,7 @@
   function pushSchedule() {
     clearTimeout(pushT);
     pushT = setTimeout(function () {
-      Plug.setSchedule({ days: T.nativeDays(S.settings.schedule), auto: S.settings.auto, margin: S.settings.margin }).then(applyStatus).catch(function () {});
+      Plug.setSchedule({ days: T.nativeDays(S.settings.schedule), auto: S.settings.auto, margin: S.settings.margin, radius: S.settings.radius }).then(applyStatus).catch(function () {});
     }, 600);
   }
 
@@ -428,6 +428,7 @@
         (S.settings.units.length > 1 ? '<button class="btn sm" data-del="' + i + '">Hapus</button>' : '') + '</div>';
     }).join('');
     $('splitSel').value = String(S.settings.splitSec);
+    $('radiusSel').value = String(S.settings.radius || 150);
     if (document.activeElement !== $('driverIn')) $('driverIn').value = S.settings.driver || '';
     $('autoChk').checked = !!S.settings.auto;
     $('marginSel').value = String(S.settings.margin);
@@ -684,6 +685,7 @@
     $('mapSeg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-map'); if (m) { S.settings.mapMode = m; saveSettings(); setTiles(); } };
     $('mapChips').onclick = function (e) { var i = e.target.getAttribute && e.target.getAttribute('data-i'); if (i !== null && i !== undefined) { mapSel = +i; renderMap(true); } };
     $('mapKml').onclick = mapKml;
+    $('radiusSel').onchange = function () { S.settings.radius = +this.value; saveSettings(); pushSchedule(); };
     $('driverIn').onchange = function () { S.settings.driver = this.value.trim(); saveSettings(); };
 
     Plug.addListener('fix', onFix);

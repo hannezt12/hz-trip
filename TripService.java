@@ -61,15 +61,16 @@ public class TripService extends Service {
     public static final int M_OFF = 0, M_SIAGA = 1, M_CEK = 2, M_REKAM = 3;
 
     // Parameter (lihat Tahap 4 untuk penyetelan baterai)
-    static final double START_KMH = 15.0;
-    static final long START_HOLD_MS = 10000L;
+    static final double START_KMH = 5.0;
+    static final long START_HOLD_MS = 5000L;
+    static final long NO_FAST_MS = 5L * 60000L;
     static final double MOVE_KMH = 3.0;
     static final double FAST_KMH = 10.0;
     static final long STOP_WAIT_MS = 5L * 60000L;
     static final long SLOW_WAIT_MS = 10L * 60000L;
-    static final long CEK_MOTION_MS = 90000L;
-    static final long CEK_PROBE_MS = 20000L;
-    static final long PROBE_EVERY_MS = 6L * 60000L;
+    static final long CEK_MOTION_MS = 180000L;
+    static final long CEK_PROBE_MS = 30000L;
+    static final long PROBE_EVERY_MS = 2L * 60000L;
     static final long REARM_DELAY_MS = 60000L;
     static final long REMIND_MS = 30L * 60000L;
     static final float MAX_ACC = 50f;
@@ -107,6 +108,9 @@ public class TripService extends Service {
     private long lastMove = 0;
     private long lastFast = 0;
     private boolean reminded = false;
+    private boolean everFast = false;
+    private int fenceHits = 0;
+    private Location anchor = null;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -127,6 +131,7 @@ public class TripService extends Service {
             sig = sm.getDefaultSensor(Sensor.TYPE_SIGNIFICANT_MOTION);
         }
         createChannel();
+        loadAnchor();
     }
 
     @Override
@@ -291,6 +296,7 @@ public class TripService extends Service {
         buffer.clear();
         bufferT.clear();
         runStart = 0;
+        fenceHits = 0;
         acquireWl(maxMs + 30000L);
         startGps();
         h.postDelayed(cekTimeout, maxMs);
@@ -320,6 +326,7 @@ public class TripService extends Service {
         cancelSig();
         long now = System.currentTimeMillis();
         mode = M_REKAM;
+        everFast = false;
         lastMove = now;
         lastFast = now;
         reminded = false;
@@ -358,6 +365,12 @@ public class TripService extends Service {
             }
             return;
         }
+        if (!everFast && now - startedAt >= NO_FAST_MS) {
+            // Jalan kaki / tidak pernah melaju: akhiri tanpa memindahkan titik acuan.
+            endRecording();
+            afterTrip();
+            return;
+        }
         if (now - lastMove >= STOP_WAIT_MS || now - lastFast >= SLOW_WAIT_MS) {
             endRecording();
             afterTrip();
@@ -366,6 +379,9 @@ public class TripService extends Service {
 
     private void endRecording() {
         h.removeCallbacks(watchdog);
+        if (everFast) {
+            saveAnchor();
+        }
         stopGps();
         closeWriter();
         releaseWl();
@@ -490,8 +506,10 @@ public class TripService extends Service {
     private final LocationListener passiveListener = new LocationListener() {
         @Override
         public void onLocationChanged(Location loc) {
-            if (mode == M_SIAGA && loc.hasSpeed() && loc.hasAccuracy() && loc.getAccuracy() <= MAX_ACC
-                    && loc.getSpeed() * 3.6 >= START_KMH) {
+            if (mode != M_SIAGA || !loc.hasAccuracy() || loc.getAccuracy() > MAX_ACC) {
+                return;
+            }
+            if ((loc.hasSpeed() && loc.getSpeed() * 3.6 >= START_KMH) || outsideFence(loc)) {
                 toCek(CEK_MOTION_MS);
             }
         }
@@ -557,15 +575,27 @@ public class TripService extends Service {
                 buffer.remove(0);
                 bufferT.remove(0);
             }
+            boolean go = false;
             if (acc <= MAX_ACC && kmh >= START_KMH) {
                 if (runStart == 0) {
                     runStart = t;
                 }
                 if (t - runStart >= START_HOLD_MS) {
-                    toRekam();
+                    go = true;
                 }
             } else {
                 runStart = 0;
+            }
+            if (acc <= MAX_ACC && outsideFence(loc)) {
+                fenceHits++;
+                if (fenceHits >= 2) {
+                    go = true;
+                }
+            } else {
+                fenceHits = 0;
+            }
+            if (go) {
+                toRekam();
             }
         } else if (mode == M_REKAM) {
             writeLine(line, t);
@@ -578,6 +608,7 @@ public class TripService extends Service {
                 }
                 if (kmh >= FAST_KMH) {
                     lastFast = now;
+                    everFast = true;
                 }
             }
             checkRecordingEnd(now);
@@ -592,6 +623,39 @@ public class TripService extends Service {
         if (l != null) {
             l.onFix(t, loc.getLatitude(), loc.getLongitude(), speed, acc, count);
         }
+    }
+
+    // ================= titik acuan (pagar virtual) =================
+
+    private void loadAnchor() {
+        anchor = null;
+        try {
+            String s = Sched.p(this).getString("anchor", "");
+            if (s != null && s.indexOf(',') > 0) {
+                String[] a = s.split(",");
+                Location l = new Location("anchor");
+                l.setLatitude(Double.parseDouble(a[0]));
+                l.setLongitude(Double.parseDouble(a[1]));
+                anchor = l;
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void saveAnchor() {
+        if (prev == null) {
+            return;
+        }
+        anchor = new Location(prev);
+        Sched.p(this).edit().putString("anchor", String.format(Locale.US, "%.6f,%.6f", prev.getLatitude(), prev.getLongitude())).apply();
+    }
+
+    private boolean outsideFence(Location loc) {
+        if (anchor == null) {
+            return false;
+        }
+        int r = Sched.p(this).getInt("radius", 150);
+        return loc.distanceTo(anchor) >= r;
     }
 
     // ================= berkas =================
