@@ -43,6 +43,19 @@
     });
   }
 
+  // dialog konfirmasi sendiri (di atas layar kalibrasi/setel/bersihkan)
+  function cfm(title, msg, okLabel, fn) {
+    var d = document.createElement('div');
+    d.className = 'cfm';
+    d.innerHTML = '<div><b></b><p></p><div class="row"><button class="btn" data-n="1">Batal</button><button class="btn pri" data-y="1" style="background:var(--r);border-color:var(--r);color:#fff"></button></div></div>';
+    d.querySelector('b').textContent = title; d.querySelector('p').textContent = msg; d.querySelector('[data-y]').textContent = okLabel;
+    d.onclick = function (e) {
+      if (e.target.getAttribute('data-y')) { d.remove(); fn(); }
+      else if (e.target.getAttribute('data-n') || e.target === d) d.remove();
+    };
+    document.body.appendChild(d);
+  }
+
   // ---------- impor PDF ----------
   function loadPdfJs() {
     if (root.pdfjsLib) return Promise.resolve(root.pdfjsLib);
@@ -436,7 +449,7 @@
         else if (step === 5) { step = 4; cal.length = 2; }
         show();
       }
-      else if (id === 'cRe') { cal = []; imgMk.clearLayers(); if (geoMk) geoMk.clearLayers(); refreshOverlay(); step = 0; show(); }
+      else if (id === 'cRe') { cfm('Ulangi dari awal?', 'Titik acuan yang sudah dipasang dihapus.', 'Ulangi', function () { cal = []; imgMk.clearLayers(); if (geoMk) geoMk.clearLayers(); refreshOverlay(); step = 0; show(); }); }
       else if (id === 'cAdd') { step = 5; show(); }
       else if (id === 'cOk') { cx.onSave(cal.slice()); close(); }
       else if (id === 'calGo') {
@@ -583,7 +596,7 @@
     function up(e) { delete ptrs[e.pointerId]; }
     cont.addEventListener('pointerup', up); cont.addEventListener('pointercancel', up);
     $('tUndo').onclick = function () { if (hist.length) { af = hist.pop(); layer.setToLL(toLLFn(af)); info(); } else if (cx.toast) cx.toast('Tidak ada yang diurungkan'); };
-    $('tReset').onclick = function () { apply(Object.assign({}, reset)); };
+    $('tReset').onclick = function () { cfm('Kembali ke hasil kalibrasi?', 'Geser, putar, dan skala yang Anda setel dibatalkan.', 'Reset', function () { apply(Object.assign({}, reset)); }); };
     function close() { try { map.remove(); } catch (e) {} el.remove(); }
     $('tNo').onclick = close;
     $('tClean').onclick = function () { clean(meta, { onChange: function () { layer._draw(); }, onDone: function () { if (cx.onClean) cx.onClean(); } }); };
@@ -682,12 +695,14 @@
     $('kBoost').onchange = function () { snap(); };
     $('kBoxes').onclick = function (e) {
       var x = e.target.getAttribute('data-x'); if (x === null) return;
-      snap();
-      if (x === 'crop') ed.crop = null; else ed.erase.splice(+x, 1);
-      redraw();
+      cfm(x === 'crop' ? 'Hapus pangkas?' : 'Hapus kotak ' + (+x + 1) + '?', x === 'crop' ? 'Batas pangkas dibuang; seluruh gambar tampil lagi.' : 'Bagian yang tadi dihapus tampil lagi.', 'Hapus', function () {
+        snap();
+        if (x === 'crop') ed.crop = null; else ed.erase.splice(+x, 1);
+        redraw();
+      });
     };
     $('kUndo').onclick = function () { if (!hist.length) return; var o = JSON.parse(hist.pop()); ed.keyBg = o.keyBg; ed.tol = o.tol; ed.boost = o.boost; ed.crop = o.crop; ed.erase = o.erase; redraw(); };
-    $('kClr').onclick = function () { snap(); ed.keyBg = false; ed.crop = null; ed.erase = []; ed.tol = 6; ed.boost = 100; redraw(); };
+    $('kClr').onclick = function () { cfm('Reset bersih?', 'Hapus latar, pangkas, dan semua kotak hapus dibatalkan.', 'Reset', function () { snap(); ed.keyBg = false; ed.crop = null; ed.erase = []; ed.tol = 6; ed.boost = 100; redraw(); }); };
     function close() { try { map.remove(); } catch (e) {} el.remove(); }
     $('kNo').onclick = function () { meta.edit = JSON.parse(ed0); if (cx.onChange) cx.onChange(); close(); };
     $('kOk').onclick = function () { close(); if (cx.onDone) cx.onDone(meta.edit); };

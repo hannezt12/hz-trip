@@ -329,6 +329,45 @@ public class HzTripPlugin extends Plugin {
         call.resolve(o);
     }
 
+    /** Pulihkan satu hari titik GPS dari cadangan. Ditolak bila berkas hari itu sudah ada dan overwrite bukan "1". */
+    @PluginMethod
+    public void writeDay(PluginCall call) {
+        String date = call.getString("date", "");
+        String text = call.getString("text", "");
+        boolean over = "1".equals(call.getString("overwrite", "0"));
+        if (!DATE_RE.matcher(date).matches()) {
+            call.reject("Tanggal tidak valid");
+            return;
+        }
+        try {
+            File dir = new File(getContext().getFilesDir(), "points");
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            File dest = new File(dir, "points-" + date + ".csv");
+            JSObject o = new JSObject();
+            if (dest.exists() && !over) {
+                o.put("written", false);
+                call.resolve(o);
+                return;
+            }
+            File tmp = new File(dir, "points-" + date + ".csv.tmp");
+            FileOutputStream out = new FileOutputStream(tmp);
+            out.write(text.getBytes("UTF-8"));
+            out.flush();
+            out.getFD().sync();
+            out.close();
+            if (!tmp.renameTo(dest)) {
+                dest.delete();
+                tmp.renameTo(dest);
+            }
+            o.put("written", true);
+            call.resolve(o);
+        } catch (Exception e) {
+            call.reject("Gagal menulis: " + e.getMessage());
+        }
+    }
+
     @PluginMethod
     public void saveJson(PluginCall call) {
         String name = call.getString("name", "");

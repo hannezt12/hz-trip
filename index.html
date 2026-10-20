@@ -11,7 +11,7 @@
 <body>
 <div id="app">
   <div id="top">
-    <button class="ib" id="btnMenu" aria-label="Menu"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#EAF0F2" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <button class="ib" id="btnMenu" aria-label="Menu"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <div class="ttl" id="ttl">SPIDOMETER</div>
     <div style="width:48px"></div>
   </div>
@@ -21,7 +21,7 @@
     <section class="view on" id="v-spido">
       <div class="gwrap">
         <svg viewBox="0 0 360 300" aria-hidden="true">
-          <path id="gTrack" fill="none" stroke="#1E2A31" stroke-width="22" stroke-linecap="round"/>
+          <path id="gTrack" fill="none" style="stroke:var(--sf)" stroke-width="22" stroke-linecap="round"/>
           <path id="gVal" fill="none" stroke="#3FD07A" stroke-width="22" stroke-linecap="round"/>
         </svg>
         <div class="gnum"><b id="gNum">0</b><span>KM/JAM</span></div>
@@ -38,11 +38,12 @@
       <div class="gps" id="gpsLine"></div>
       <div id="modeBox"></div>
       <div id="warnBox"></div>
+      <div id="bkNote"></div>
     </section>
 
     <!-- B. Lintasan -->
     <section class="view" id="v-lintasan">
-      <div class="mapnav"><button class="ib" id="mPrev" aria-label="Hari sebelumnya"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EAF0F2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><input type="date" id="mPick"><button class="ib" id="mNext" aria-label="Hari berikutnya"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EAF0F2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button><button class="btn sm" id="mToday">Hari ini</button></div>
+      <div class="mapnav"><button class="ib" id="mPrev" aria-label="Hari sebelumnya"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><input type="date" id="mPick"><button class="ib" id="mNext" aria-label="Hari berikutnya"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button><button class="btn sm" id="mToday">Hari ini</button></div>
       <div class="mapbar">
         <div class="seg" id="mapSeg"><button data-map="sat">Satelit</button><button data-map="osm">Peta</button></div>
         <button class="btn sm" id="mapOv">Peta saya</button><button class="btn sm" id="mapKml">KML</button>
@@ -61,9 +62,9 @@
       <div id="dayView">
       <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm" id="toList">‹ Daftar 30 hari</button><button class="btn sm" id="toMap">Lihat di peta</button></div>
       <div class="dnav">
-        <button class="ib" id="dPrev" aria-label="Hari sebelumnya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EAF0F2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <button class="ib" id="dPrev" aria-label="Hari sebelumnya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
         <div class="dt" id="dLabel"></div>
-        <button class="ib" id="dNext" aria-label="Hari berikutnya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EAF0F2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+        <button class="ib" id="dNext" aria-label="Hari berikutnya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
       </div>
       <input type="date" id="dPick" style="margin-top:4px">
       <div id="daySum"></div>
@@ -74,6 +75,9 @@
 
     <!-- Pengaturan -->
     <section class="view" id="v-set">
+      <div id="setMenu"></div>
+      <div class="spage" id="sp-jadwal">
+        <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Jadwal dan rekam otomatis</b></div>
       <div class="h">JADWAL MINGGUAN</div>
       <div class="card">
         <label class="chk"><input type="checkbox" id="autoChk"> Rekam otomatis sesuai jadwal</label>
@@ -82,13 +86,6 @@
         <select id="marginSel"><option value="0">tepat jam masuk / pulang</option><option value="15">15 menit sebelum / sesudah</option><option value="30">30 menit sebelum / sesudah</option><option value="45">45 menit sebelum / sesudah</option><option value="60">1 jam sebelum / sesudah</option></select>
       </div>
       <div id="schedBox"></div>
-
-      <div class="h">NAMA PENGEMUDI (UNTUK LAPORAN)</div>
-      <input type="text" id="driverIn" placeholder="Nama" maxlength="40">
-
-      <div class="h">UNIT</div>
-      <div class="card" id="unitBox"></div>
-      <div class="row" style="margin-top:8px"><input type="text" id="unitNew" placeholder="Nomor unit baru, mis. BT.15" maxlength="20"><select id="unitNewType" style="width:112px;flex-shrink:0"><option>Kerja</option><option>Pribadi</option></select><button class="btn pri" id="unitAdd" style="flex-shrink:0">Tambah</button></div>
 
       <div class="h">BATAS PISAH TRIP</div>
       <select id="splitSel">
@@ -99,10 +96,18 @@
       <div class="h">LINGKARAN TITIK BERHENTI</div>
       <select id="radiusSel"><option value="150">150 meter</option><option value="200">200 meter</option></select>
       <div class="muted" style="margin-top:6px">Setelah berhenti, bila ponsel keluar dari lingkaran ini rekaman langsung dimulai tanpa menunggu kecepatan.</div>
+      </div>
+      <div class="spage" id="sp-unit">
+        <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Unit dan pengemudi</b></div>
+      <div class="h">NAMA PENGEMUDI (UNTUK LAPORAN)</div>
+      <input type="text" id="driverIn" placeholder="Nama" maxlength="40">
 
-      <div class="h">TRIP DIHAPUS</div>
-      <div class="card"><div id="hidList" class="muted">Tidak ada.</div><div class="muted" style="margin-top:8px">Trip yang dihapus disembunyikan 30 hari, lalu titik GPS-nya dihapus permanen.</div></div>
-
+      <div class="h">UNIT</div>
+      <div class="card" id="unitBox"></div>
+      <div class="row" style="margin-top:8px"><input type="text" id="unitNew" placeholder="Nomor unit baru, mis. BT.15" maxlength="20"><select id="unitNewType" style="width:112px;flex-shrink:0"><option>Kerja</option><option>Pribadi</option></select><button class="btn pri" id="unitAdd" style="flex-shrink:0">Tambah</button></div>
+      </div>
+      <div class="spage" id="sp-peta">
+        <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Peta</b></div>
       <div class="h">PETA SAYA (PDF)</div>
       <div class="card"><div id="ovList" class="muted">Belum ada.</div>
         <button class="btn" id="ovAdd" style="margin-top:10px;width:100%">+ Tambah peta dari PDF</button>
@@ -113,7 +118,21 @@
       <div class="card"><div class="muted" id="tcInfo">Menghitung…</div>
         <div class="muted" style="margin-top:6px">Peta satelit dan peta jalan yang pernah Anda lihat tersimpan di ponsel, jadi bisa dibuka lagi tanpa internet. Batas 300 MB; yang paling lama dibuang lebih dulu.</div>
         <button class="btn" id="tcClear" style="margin-top:10px;width:100%">Bersihkan cache peta</button></div>
+      </div>
+      <div class="spage" id="sp-data">
+        <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Data dan cadangan</b></div>
+      <div class="h">CADANGAN DATA</div>
+      <div class="card"><div class="muted" id="bkInfo">Memeriksa…</div>
+        <button class="btn pri" id="bkMake" style="margin-top:10px;width:100%">Buat cadangan sekarang</button>
+        <button class="btn" id="bkRestore" style="margin-top:8px;width:100%">Pulihkan dari cadangan</button>
+        <input type="file" id="bkFile" accept=".hztrip,application/gzip,application/octet-stream,application/json" style="display:none">
+        <div class="muted" style="margin-top:8px">Satu berkas berisi semua trip, jadwal, unit, dan pengaturan. Kirim ke WhatsApp atau Drive supaya aman bila ponsel hilang. Peta saya (PDF) tidak ikut; impor ulang dari berkas PDF Anda.</div></div>
 
+      <div class="h">TRIP DIHAPUS</div>
+      <div class="card"><div id="hidList" class="muted">Tidak ada.</div><div class="muted" style="margin-top:8px">Trip yang dihapus disembunyikan 30 hari, lalu titik GPS-nya dihapus permanen.</div></div>
+      </div>
+      <div class="spage" id="sp-latar">
+        <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Perekaman latar belakang</b></div>
       <div class="h">PEREKAMAN DI LATAR BELAKANG</div>
       <div class="card"><div class="muted" id="setStat"></div>
         <button class="btn" id="btnBg" style="margin-top:10px;width:100%">Atur izin lokasi "Selalu"</button>
@@ -121,12 +140,21 @@
         <div class="muted" style="margin-top:8px">Pilih HZ Trip lalu "Tanpa pembatasan" agar perekaman tidak dimatikan sistem.</div>
         <div class="muted" style="margin-top:8px">Tombol cepat: geser layar dari atas dua kali, ketuk ikon pensil, lalu seret "HZ Trip" ke deretan atas. Satu ketuk untuk Mulai / Akhiri.</div>
       </div>
-
+      </div>
+      <div class="spage" id="sp-tampil">
+        <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Tampilan</b></div>
+      <div class="h">TEMA</div>
+      <div class="themeseg" id="themeSeg"><button data-t="dark">Gelap</button><button data-t="light">Terang</button><button data-t="auto">Ikuti sistem</button></div>
+      <div class="muted" style="margin-top:8px">Tema terang lebih mudah dibaca di bawah matahari. Peta, cetakan PDF, dan KML tidak berubah.</div>
+      </div>
+      <div class="spage" id="sp-tentang">
+        <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Tentang</b></div>
       <div class="h">ATURAN TETAP</div>
       <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Label Kerja / Pribadi mengikuti jenis unit yang dipakai (diatur saat unit didaftarkan). Unit tiap trip bisa diubah di Riwayat.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
 
-      <div class="h">TAHAP BERIKUTNYA</div>
-      <div class="card muted">Merampingkan data lama · cadangan data.</div>
+      <div class="h">VERSI</div>
+      <div class="card muted">HZ Trip versi 0.5.5<br>Berikutnya: perbaikan pemicu otomatis, catatan diagnostik, merampingkan data lama, putar ulang lintasan.</div>
+      </div>
     </section>
   </div>
 </div>
@@ -139,7 +167,7 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.5.4</div>
+  <div class="ver">Versi 0.5.5</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>

@@ -7,7 +7,7 @@
   var HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function zc(v) { return COL[T.zoneOf(v)]; }
+  function zc(v) { return 'var(--' + T.zoneOf(v) + ')'; }
 
   // ---------- jembatan ke Android (atau tiruan di browser untuk uji) ----------
   var native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
@@ -61,6 +61,7 @@
         localStorage.setItem(k(o.date), keep.length ? keep.join('\n') + '\n' : '');
         return Promise.resolve({ removed: n });
       },
+      writeDay: function (o) { if (localStorage.getItem(k(o.date)) && o.overwrite !== '1') return Promise.resolve({ written: false }); localStorage.setItem(k(o.date), o.text); return Promise.resolve({ written: true }); },
       saveJson: function (o) { localStorage.setItem('mock-json-' + o.name, o.data); return Promise.resolve(); },
       loadJson: function (o) { return Promise.resolve({ data: localStorage.getItem('mock-json-' + o.name) || '' }); },
       openBatterySettings: function () { return Promise.resolve(); }
@@ -100,6 +101,8 @@
         }
       });
       if (!S.settings.schedule || !S.settings.schedule.days || S.settings.schedule.days.length !== 7) S.settings.schedule = T.defaultSchedule();
+      if (!S.settings.firstSeen) { S.settings.firstSeen = Date.now(); saveSettings(); }
+      applyTheme();
     }).catch(function () {});
   }
 
@@ -141,7 +144,8 @@
     if (v !== 'lintasan' && map && map._loc) locStop(map);
     if (v === 'riwayat') { S.hMode = 'list'; loadRiwayat(); }
     if (v === 'lintasan') openMap();
-    if (v === 'set') { renderOv(); renderSettings(); syncStatus(); renderCacheInfo(); renderHidden(); }
+    if (S.spPushed && v !== 'set') { S.spPushed = false; try { history.back(); } catch (e) {} }
+    if (v === 'set') { showSet(null); renderOv(); renderSettings(); syncStatus(); renderCacheInfo(); renderHidden(); }
     if (v === 'spido') { syncStatus(); renderSpido(); renderUnitCard(); }
     $('main').scrollTop = 0;
   }
@@ -179,7 +183,7 @@
     var g = $('gVal');
     if (f < 0.004) { g.setAttribute('d', ''); return; }
     g.setAttribute('d', arcPath(140, a0, a0 + span * f));
-    g.setAttribute('stroke', zc(v));
+    g.style.stroke = zc(v);
   }
   function whenText(ts) {
     var d = new Date(ts), n = new Date();
@@ -204,6 +208,7 @@
     $('gNum').textContent = Math.round(v);
     $('gNum').style.color = fresh && v > 0 ? zc(v) : '';
     drawGauge(v);
+    renderBkNote(false);
     var lt = S.liveTrip;
     $('sMax').textContent = lt ? Math.round(lt.max) : '–';
     $('sAvg').textContent = lt ? Math.round(lt.avg) : '–';
@@ -524,7 +529,7 @@
       });
     };
     if ($('joinGo')) $('joinGo').onclick = function () { doJoin(i); };
-    if ($('undoGo')) $('undoGo').onclick = function () { doUndo(i); };
+    if ($('undoGo')) $('undoGo').onclick = function () { askConfirm('Batalkan potongan / gabungan?', 'Trip ini kembali seperti hasil deteksi awal (potongan dan gabungan yang terkait dibatalkan).', 'Batalkan', function () { doUndo(i); }); };
   }
   function change(i, field, val) {
     var x = S.hTrips[i], id = x.t.id;
@@ -649,7 +654,7 @@
         (x.brk ? '<div class="r2"><label>DARI<input type="time" data-f="brkFrom" value="' + esc(x.brkFrom || '11:00') + '"></label><label>SAMPAI<input type="time" data-f="brkTo" value="' + esc(x.brkTo || '13:30') + '"></label></div>' : '') +
         (libur ? '' : '<button class="btn sm" data-clear="' + d + '" style="margin-top:8px">Jadikan libur</button>') + '</div>' : '';
       return '<div class="card sday' + (open ? ' open' : '') + '" data-d="' + d + '"><button class="sd-h" data-tog="' + d + '"><b>' + HARI[d] + '</b><span class="sd-s' + (libur ? ' off' : '') + '">' + daySummary(x) + '</span>' +
-        '<svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93A4AD" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>' + body + '</div>';
+        '<svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>' + body + '</div>';
     }).join('');
   }
   function minToHm(m) { m = (m + 1440) % 1440; return T.pad(Math.floor(m / 60)) + '.' + T.pad(m % 60); }
@@ -673,6 +678,7 @@
       bits.push(S.battFree ? 'Penghematan baterai: dimatikan (bagus).' : 'Penghematan baterai: belum dimatikan.');
     } else bits.push('Mode uji di browser.');
     $('setStat').innerHTML = bits.join('<br>');
+    if (!S.setPage && $('setMenu').firstChild) renderSetMenu();
     if (!$('schedBox').firstChild || $('schedBox').getAttribute('data-m') !== String(S.settings.margin)) { renderSched(); $('schedBox').setAttribute('data-m', String(S.settings.margin)); }
   }
   function addUnit() {
@@ -920,6 +926,147 @@
   function renderCacheInfo() {
     if (!$('tcInfo')) return;
     TC.stats().then(function (s) { $('tcInfo').textContent = 'Cache peta: ' + (s.bytes / 1048576).toFixed(1).replace('.', ',') + ' MB · ' + s.n + ' kotak peta'; });
+  }
+
+
+  // ---------- tema ----------
+  var themeMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+  function applyTheme() {
+    var t = S.settings.theme || 'dark', r = t === 'auto' ? (themeMQ && themeMQ.matches ? 'light' : 'dark') : t;
+    document.documentElement.setAttribute('data-theme', r);
+    var m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', r === 'light' ? '#F2F5F6' : '#0D1215');
+    document.querySelectorAll('#themeSeg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-t') === t); });
+  }
+  if (themeMQ && themeMQ.addEventListener) themeMQ.addEventListener('change', function () { if ((S.settings.theme || 'dark') === 'auto') applyTheme(); });
+
+  // ---------- menu Pengaturan per judul ----------
+  var CHEV = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>';
+  function bkAge() { var b = S.settings.lastBackup; return b ? Math.floor((Date.now() - b) / 86400000) : -1; }
+  function dtText(ts) { var d = new Date(ts); return d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + T.pad(d.getHours()) + '.' + T.pad(d.getMinutes()); }
+  var SPAGES = [
+    { k: 'jadwal', t: 'Jadwal dan rekam otomatis', s: function () { var n = 0; S.settings.schedule.days.forEach(function (x) { if (x['in'] && x.out) n++; }); return (S.settings.auto ? 'Otomatis aktif' : 'Otomatis mati') + ' · ' + n + ' hari terjadwal'; } },
+    { k: 'unit', t: 'Unit dan pengemudi', s: function () { return 'Dipakai: ' + unitAt(Date.now()) + ' · ' + S.settings.units.length + ' unit'; } },
+    { k: 'peta', t: 'Peta', s: function () { var n = ovList().length; return n + ' peta saya · cache peta'; } },
+    { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
+    { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
+    { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.5.5'; } }
+  ];
+  function renderSetMenu() {
+    $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
+  }
+  function showSet(key) {
+    S.setPage = key || null;
+    $('setMenu').style.display = key ? 'none' : 'block';
+    document.querySelectorAll('.spage').forEach(function (e) { e.classList.toggle('on', e.id === 'sp-' + key); });
+    if (!key) renderSetMenu();
+  }
+  function openSet(key) {
+    showSet(key);
+    try { history.pushState({ sp: key }, ''); S.spPushed = true; } catch (e) { S.spPushed = false; }
+    $('main').scrollTop = 0;
+    if (key === 'peta') { renderOv(); renderCacheInfo(); }
+    if (key === 'data') { renderHidden(); renderBackupInfo(); }
+    if (key === 'latar') syncStatus();
+    if (key === 'tampil') applyTheme();
+    renderSettings();
+  }
+  function backSet() {
+    if (S.spPushed) { try { history.back(); return; } catch (e) {} }
+    showSet(null);
+  }
+  window.addEventListener('popstate', function () { if (S.setPage) { S.spPushed = false; showSet(null); } });
+
+  // ---------- cadangan data ----------
+  function toGz(text) {
+    if (window.CompressionStream) return new Response(new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))).blob();
+    return Promise.resolve(new Blob([text]));
+  }
+  function blobB64(b) {
+    return new Promise(function (res, rej) { var r = new FileReader(); r.onload = function () { res(String(r.result).split(',')[1] || ''); }; r.onerror = function () { rej(r.error); }; r.readAsDataURL(b); });
+  }
+  function renderBackupInfo() {
+    if (!$('bkInfo')) return;
+    Plug.listDays().then(function (r) {
+      var n = (r.days || []).length;
+      $('bkInfo').innerHTML = (S.settings.lastBackup ? 'Terakhir dibuat: <b>' + dtText(S.settings.lastBackup) + '</b> (' + bkAge() + ' hari lalu)' : 'Belum pernah membuat cadangan.') + '<br>Data di ponsel: ' + n + ' hari rekaman.';
+    }).catch(function () {});
+  }
+  var bkBusy = false;
+  function makeBackup() {
+    if (bkBusy) return Promise.resolve();
+    bkBusy = true; toast('Menyiapkan cadangan…');
+    return Plug.listDays().then(function (r) {
+      var days = r.days || [], out = {}, i = 0;
+      function next() { if (i >= days.length) return Promise.resolve(); var d = days[i++]; return Plug.readDay({ date: d }).then(function (x) { if (x.text) out[d] = x.text; return next(); }); }
+      return next().then(function () { return out; });
+    }).then(function (daysObj) {
+      var st = JSON.parse(JSON.stringify(S.settings)); delete st.ovl; delete st.bkSnooze;
+      return toGz(JSON.stringify({ app: 'hztrip', v: 1, at: Date.now(), settings: st, overrides: S.ov, days: daysObj }));
+    }).then(blobB64).then(function (b64) {
+      return saveFile('HZTrip-cadangan-' + T.ymd(Date.now()) + '.hztrip', b64, 'application/octet-stream');
+    }).then(function () {
+      S.settings.lastBackup = Date.now(); saveSettings(); renderBackupInfo(); renderSetMenu(); renderBkNote(true);
+    }).catch(function (e) { toast('Cadangan gagal: ' + (e && e.message || e)); }).then(function () { bkBusy = false; });
+  }
+  function readBackup(file) {
+    return file.arrayBuffer().then(function (buf) {
+      var u = new Uint8Array(buf);
+      if (u[0] === 0x1f && u[1] === 0x8b) {
+        if (!window.DecompressionStream) throw new Error('Perangkat ini tidak bisa membuka berkas cadangan');
+        return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+      }
+      return new TextDecoder().decode(u);
+    }).then(function (t) {
+      var d; try { d = JSON.parse(t); } catch (e) { throw new Error('Bukan berkas cadangan HZ Trip'); }
+      if (!d || d.app !== 'hztrip' || !d.days || !d.settings) throw new Error('Bukan berkas cadangan HZ Trip');
+      return d;
+    });
+  }
+  function restoreBackup(d) {
+    var keys = Object.keys(d.days).sort(), today = T.ymd(Date.now());
+    openSheet('<div class="grab"></div><div class="st">PULIHKAN CADANGAN</div>' +
+      '<div class="muted" style="margin:6px 0">Dibuat ' + dtText(d.at || 0) + ' · ' + keys.length + ' hari rekaman · ' + (d.settings.units || []).length + ' unit.</div>' +
+      '<div class="muted" style="margin-bottom:12px"><b>Tambah hari yang belum ada</b>: hanya menambah rekaman hari yang belum ada di ponsel ini; pengaturan tidak berubah.<br><b>Pulihkan semua</b>: rekaman, trip yang diedit, jadwal, unit, dan pengaturan diganti dengan isi cadangan.</div>' +
+      '<div class="row" style="gap:8px"><button class="btn" id="rsAdd" style="flex:1;height:50px">Tambah hari</button><button class="btn pri" id="rsAll" style="flex:1;height:50px">Pulihkan semua</button></div>' +
+      '<button class="btn" id="rsNo" style="width:100%;margin-top:8px">Batal</button>');
+    $('rsNo').onclick = closeSheet;
+    function run(over) {
+      closeSheet(); toast('Memulihkan…');
+      var i = 0, added = 0;
+      function next() {
+        if (i >= keys.length) return Promise.resolve();
+        var k = keys[i++];
+        return Plug.writeDay({ date: k, text: d.days[k], overwrite: (over && k !== today) ? '1' : '0' }).then(function (r) { if (r && r.written) added++; return next(); });
+      }
+      next().then(function () {
+        if (over) {
+          var keep = S.settings.ovl, fs = S.settings.firstSeen;
+          S.settings = Object.assign({}, S.settings, d.settings); S.settings.ovl = keep; S.settings.firstSeen = fs; S.settings.lastBackup = d.at || S.settings.lastBackup;
+          S.ov = d.overrides && d.overrides.trips ? d.overrides : S.ov;
+          return saveSettings().then(saveOv);
+        }
+      }).then(function () {
+        toast(over ? 'Selesai, memuat ulang…' : added + ' hari ditambahkan');
+        if (over) setTimeout(function () { location.reload(); }, 900); else { renderBackupInfo(); }
+      }).catch(function (e) { toast('Pemulihan gagal: ' + (e && e.message || e)); });
+    }
+    $('rsAdd').onclick = function () { run(false); };
+    $('rsAll').onclick = function () { askConfirm('Pulihkan semua?', 'Rekaman hari yang sama, jadwal, unit, dan pengaturan di ponsel ini diganti dengan isi cadangan.', 'Pulihkan', function () { run(true); }); };
+  }
+  var bkNoteKey = null;
+  function renderBkNote(force) {
+    var box = $('bkNote'); if (!box) return;
+    var base = S.settings.lastBackup || S.settings.firstSeen || Date.now(), age = Math.floor((Date.now() - base) / 86400000);
+    var show = age >= 7 && Date.now() > (S.settings.bkSnooze || 0);
+    var key = show ? 'y' + age : 'n';
+    if (!force && key === bkNoteKey) return;
+    bkNoteKey = key;
+    box.innerHTML = show ? '<div class="bknote">' + (S.settings.lastBackup ? 'Sudah ' + age + ' hari sejak cadangan terakhir.' : 'Data Anda belum pernah dicadangkan.') + ' Cadangkan supaya aman bila ponsel hilang atau rusak.<div class="row"><button class="btn sm pri" id="bkNow">Cadangkan</button><button class="btn sm" id="bkLater">Nanti</button></div></div>' : '';
+    if (show) {
+      $('bkNow').onclick = function () { makeBackup(); };
+      $('bkLater').onclick = function () { S.settings.bkSnooze = Date.now() + 3 * 86400000; saveSettings(); renderBkNote(true); };
+    }
   }
 
   // ---------- lintasan (peta) ----------
@@ -1247,6 +1394,12 @@
   // ---------- pasang ----------
   function init() {
     $('btnMenu').onclick = openDrawer;
+    $('setMenu').onclick = function (e) { var b = e.target.closest ? e.target.closest('[data-sp]') : null; if (b) openSet(b.getAttribute('data-sp')); };
+    document.querySelectorAll('[data-back]').forEach(function (b) { b.onclick = backSet; });
+    $('themeSeg').onclick = function (e) { var t = e.target.getAttribute && e.target.getAttribute('data-t'); if (t) { S.settings.theme = t; saveSettings(); applyTheme(); } };
+    $('bkMake').onclick = function () { makeBackup(); };
+    $('bkRestore').onclick = function () { $('bkFile').value = ''; $('bkFile').click(); };
+    $('bkFile').onchange = function () { var f = this.files && this.files[0]; if (f) readBackup(f).then(restoreBackup).catch(function (e) { toast(e && e.message || 'Berkas tidak bisa dibaca'); }); };
     $('scrim').onclick = function () { closeSheet(); $('drawer').classList.remove('on'); };
     document.querySelectorAll('#drawer a[data-go]').forEach(function (a) { a.onclick = function () { go(a.getAttribute('data-go')); }; });
     $('btnRec').onclick = toggleRec;
@@ -1311,7 +1464,10 @@
       var tg = e.target.closest ? e.target.closest('[data-tog]') : null;
       if (tg) { var dd = +tg.getAttribute('data-tog'); openDay = (openDay === dd) ? -1 : dd; renderSched(); return; }
       var c = e.target.getAttribute && e.target.getAttribute('data-clear');
-      if (c !== null && c !== undefined) { var x = S.settings.schedule.days[+c]; x['in'] = ''; x.out = ''; saveSettings(); pushSchedule(); var sc = $('main').scrollTop; renderSched(); $('main').scrollTop = sc; }
+      if (c !== null && c !== undefined) {
+        var x = S.settings.schedule.days[+c];
+        askConfirm('Jadikan ' + HARI[+c] + ' libur?', 'Jam masuk dan pulang hari ini dikosongkan. Semua trip hari itu dianggap Pribadi.', 'Jadikan libur', function () { x['in'] = ''; x.out = ''; saveSettings(); pushSchedule(); var sc = $('main').scrollTop; renderSched(); $('main').scrollTop = sc; });
+      }
     };
     $('btnBatt').onclick = openBatt;
     $('btnBg').onclick = askBackground;
