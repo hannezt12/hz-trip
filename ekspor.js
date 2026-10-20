@@ -6,8 +6,8 @@
   else root.HzEkspor = factory(root.HzTrips);
 })(typeof self !== 'undefined' ? self : this, function (T) {
 
-  var KCOL = { g: 'ff7ad03f', y: 'ff18c5f5', r: 'ff505bff' }; // KML = aabbggrr
-  var ZNAME = { g: 'hingga 60 km/j', y: '60-90 km/j', r: 'di atas 90 km/j' };
+  var KCOL = { g: 'ff7ad03f', y: 'ff18c5f5', r: 'ff505bff', s: 'ff9e9e9e' }; // KML = aabbggrr
+  var ZNAME = { g: 'hingga 60 km/j', y: '60-90 km/j', r: 'di atas 90 km/j', s: 'berhenti' };
 
   function xe(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]; }); }
   function iso(ts) { return new Date(ts).toISOString().replace(/\.\d{3}Z$/, 'Z'); }
@@ -15,23 +15,48 @@
 
   // Potongan trek per zona warna. Titik dijarangkan (>= 2 detik) agar berkas ringan;
   // titik batas dipakai di dua potongan supaya garis tersambung.
-  function zoneRuns(pts, i0, i1) {
-    var kept = [], last = -1e15, lastZ = null, j, p, z;
+  // Penanda berhenti: kecepatan di bawah 1 km/j terus-menerus selama >= 60 detik
+  function stopFlags(pts, i0, i1) {
+    var fl = {}, a = -1, j;
+    function close(b) { if (a >= 0 && pts[b].t - pts[a].t >= 60000) for (var k = a; k <= b; k++) fl[k] = 1; a = -1; }
     for (j = i0; j <= i1; j++) {
-      p = pts[j]; z = T.zoneOf(p.v);
-      if (j === i0 || j === i1 || p.t - last >= 2000 || z !== lastZ) { kept.push(p); last = p.t; lastZ = z; }
+      if (pts[j].v < 1) { if (a < 0) a = j; } else close(j - 1);
+    }
+    if (a >= 0) close(i1);
+    return fl;
+  }
+  function zoneRuns(pts, i0, i1) {
+    var fl = stopFlags(pts, i0, i1);
+    function zz(j) { return fl[j] ? 's' : T.zoneOf(pts[j].v); }
+    var kept = [], kz = [], last = -1e15, lastZ = null, j, p, z;
+    for (j = i0; j <= i1; j++) {
+      p = pts[j]; z = zz(j);
+      if (j === i0 || j === i1 || p.t - last >= 2000 || z !== lastZ) { kept.push(p); kz.push(z); last = p.t; lastZ = z; }
     }
     var runs = [], cur = null;
     for (j = 1; j < kept.length; j++) {
-      z = T.zoneOf(kept[j].v);
+      z = kz[j];
       if (!cur || cur.z !== z) {
         cur = { z: z, pts: [kept[j - 1]] };
         runs.push(cur);
       }
       cur.pts.push(kept[j]);
     }
-    if (!runs.length && kept.length) runs.push({ z: T.zoneOf(kept[0].v), pts: kept.slice() });
+    if (!runs.length && kept.length) runs.push({ z: kz[0], pts: kept.slice() });
     return runs;
+  }
+  // Trek satu trip: garis berwarna per bagian + jeda antar bagian (trip gabungan)
+  function trackOf(pts, t) {
+    var parts = t.parts && t.parts.length > 1 ? t.parts : [{ i0: t.i0, i1: t.i1 }];
+    var runs = [], gaps = [];
+    parts.forEach(function (pt, k) {
+      runs = runs.concat(zoneRuns(pts, pt.i0, pt.i1));
+      if (k > 0) {
+        var a = pts[parts[k - 1].i1], b = pts[pt.i0];
+        gaps.push({ a: a, b: b, from: a.t, to: b.t });
+      }
+    });
+    return { runs: runs, gaps: gaps };
   }
 
   function sumDay(day) {
@@ -75,7 +100,7 @@
     var out = ['<?xml version="1.0" encoding="UTF-8"?>',
       '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>',
       '<name>' + xe(opts.title || 'HZ Trip') + '</name>'];
-    ['g', 'y', 'r'].forEach(function (z) {
+    ['g', 'y', 'r', 's'].forEach(function (z) {
       out.push('<Style id="z' + z + '"><LineStyle><color>' + KCOL[z] + '</color><width>5</width></LineStyle></Style>');
     });
     out.push('<Style id="pS"><IconStyle><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/grn-circle.png</href></Icon></IconStyle></Style>');
@@ -90,9 +115,14 @@
         out.push('<Folder><name>' + xe('Trip ' + no + ' | ' + range(t) + ' | ' + x.unit + ' | ' + x.label) + '</name>');
         out.push('<description>' + tripBalloon(x, no) + '</description>');
         out.push('<TimeSpan><begin>' + iso(t.start) + '</begin><end>' + iso(t.end) + '</end></TimeSpan>');
-        zoneRuns(day.pts, t.i0, t.i1).forEach(function (r) {
+        var tk = trackOf(day.pts, t);
+        tk.runs.forEach(function (r) {
           out.push('<Placemark><name>' + xe(ZNAME[r.z]) + '</name><styleUrl>#z' + r.z + '</styleUrl><LineString><tessellate>1</tessellate><coordinates>' +
             r.pts.map(function (p) { return f6(p.lng) + ',' + f6(p.lat) + ',0'; }).join(' ') + '</coordinates></LineString></Placemark>');
+        });
+        tk.gaps.forEach(function (g) {
+          out.push('<Placemark><name>' + xe('Berhenti ' + T.hm(g.from) + '-' + T.hm(g.to) + ' (' + T.durText((g.to - g.from) / 1000) + ')') + '</name><styleUrl>#zs</styleUrl><LineString><tessellate>1</tessellate><coordinates>' +
+            f6(g.a.lng) + ',' + f6(g.a.lat) + ',0 ' + f6(g.b.lng) + ',' + f6(g.b.lat) + ',0</coordinates></LineString></Placemark>');
         });
         out.push(point('Mulai ' + T.hm(t.start), t.start, t.startLat, t.startLng, 'pS', tripBalloon(x, no)));
         out.push(point('Selesai ' + T.hm(t.end), t.end, t.endLat, t.endLng, 'pE', tripBalloon(x, no)));
@@ -285,5 +315,5 @@
     return doc;
   }
 
-  return { buildKml: buildKml, buildPdf: buildPdf, zoneRuns: zoneRuns, sumDay: sumDay, KCOL: KCOL };
+  return { buildKml: buildKml, buildPdf: buildPdf, zoneRuns: zoneRuns, trackOf: trackOf, sumDay: sumDay, KCOL: KCOL };
 });

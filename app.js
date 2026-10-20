@@ -3,7 +3,7 @@
   'use strict';
   var T = window.HzTrips;
   var E = window.HzEkspor;
-  var COL = { g: '#3FD07A', y: '#F5C518', r: '#FF5B50' };
+  var COL = { g: '#3FD07A', y: '#F5C518', r: '#FF5B50', s: '#9AA3A8' };
   var HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -137,9 +137,10 @@
     $('ttl').textContent = TITLES[v];
     document.querySelectorAll('#drawer a[data-go]').forEach(function (a) { a.classList.toggle('on', a.getAttribute('data-go') === v); });
     closeDrawer();
+    if (v !== 'riwayat') closeMini(true);
     if (v === 'riwayat') { S.hMode = 'list'; loadRiwayat(); }
     if (v === 'lintasan') openMap();
-    if (v === 'set') { renderSettings(); syncStatus(); renderCacheInfo(); renderHidden(); }
+    if (v === 'set') { renderOv(); renderSettings(); syncStatus(); renderCacheInfo(); renderHidden(); }
     if (v === 'spido') { syncStatus(); renderSpido(); renderUnitCard(); }
     $('main').scrollTop = 0;
   }
@@ -382,15 +383,16 @@
   function loadHistory() {
     Plug.readDay({ date: S.hDay }).then(function (r) {
       var res = T.detectTrips(T.parseCsv(r.text), opts());
-      S.hTrips = edited(S.hDay, res).map(tripView);
+      S.hTrips = edited(S.hDay, res).map(tripView); S.hPts = res.points;
       renderHistory();
-    }).catch(function () { S.hTrips = []; renderHistory(); });
+    }).catch(function () { S.hTrips = []; S.hPts = []; renderHistory(); });
   }
   function labelChip(x) {
     var c = x.label === 'Kerja' ? 'k' : 'p';
     return '<span class="chip ' + c + '">' + x.label + '</span>' + (x.check ? '<span class="chip f">melewati batas jam</span>' : '') + (x.t.parts ? '<span class="chip m">' + x.t.parts.length + ' bagian</span>' : '');
   }
   function renderHistory() {
+    refreshMini();
     $('mergeBar').style.display = S.sel ? 'flex' : 'none';
     $('tripList').style.paddingBottom = S.sel ? '90px' : '0';
     if (S.sel) updateMergeBar();
@@ -414,7 +416,7 @@
     $('tripList').innerHTML = list.map(function (x, i) {
       var t = x.t;
       var isSel = S.sel && S.sel.indexOf(i) >= 0, dim = S.sel && !isSel && !(i === selLo() - 1 || i === selHi() + 1);
-      return '<button class="trip' + (isSel ? ' sel' : '') + (dim ? ' dim' : '') + '" data-i="' + i + '"><div class="t1">' + (S.sel ? '<span class="cbx">' + (isSel ? '✓' : '') + '</span>' : '') + '<span class="tm">' + T.hm(t.start) + ' – ' + T.hm(t.end) + (t.open ? ' ●' : '') + '</span>' + (t.manual ? '<span class="chip m">manual</span>' : '') + '<span class="chip">' + esc(x.unit) + '</span>' + labelChip(x) + '</div>' +
+      return '<button class="trip' + (isSel ? ' sel' : '') + (dim ? ' dim' : '') + (S.mini && S.mini.i === i ? ' mapped' : '') + '" data-i="' + i + '"><div class="t1">' + (S.sel ? '<span class="cbx">' + (isSel ? '✓' : '') + '</span>' : '') + '<span class="tm">' + T.hm(t.start) + ' – ' + T.hm(t.end) + (t.open ? ' ●' : '') + '</span>' + (t.manual ? '<span class="chip m">manual</span>' : '') + '<span class="chip">' + esc(x.unit) + '</span>' + labelChip(x) + '<span class="pmap" data-pm="' + i + '">' + (S.mini && S.mini.i === i ? 'Tutup' : 'Peta') + '</span></div>' +
         '<div class="t2"><div><small>DURASI</small><b style="font-size:18px">' + T.durText(t.durSec) + '</b></div><div><small>MIN</small><b>' + Math.round(t.min) + '</b></div><div><small>MAKS</small><b style="color:' + zc(t.max) + '">' + Math.round(t.max) + '</b></div><div><small>KM</small><b>' + T.km1(t.km) + '</b></div></div></button>';
     }).join('');
   }
@@ -536,7 +538,7 @@
   function afterEdit(i) {
     Plug.readDay({ date: S.hDay }).then(function (r) {
       var res = T.detectTrips(T.parseCsv(r.text), opts());
-      S.hTrips = edited(S.hDay, res).map(tripView);
+      S.hTrips = edited(S.hDay, res).map(tripView); S.hPts = res.points;
       renderHistory();
       if (i >= 0 && i < S.hTrips.length) openTrip(Math.min(i, S.hTrips.length - 1)); else closeSheet();
     });
@@ -568,7 +570,7 @@
         S.ov.trips[second.id] = c;
       }
       saveOv();
-      S.hTrips = trips.map(tripView);
+      S.hTrips = trips.map(tripView); S.hPts = res.points;
       renderHistory();
       closeSheet();
       toast('Trip dipotong di ' + hms.slice(0, 5));
@@ -933,13 +935,161 @@
     setTiles();
     return true;
   }
+  function setBase(m) {
+    if (!m) return;
+    if (m._base) { m.removeLayer(m._base); m._base = null; }
+    var md = S.settings.mapMode;
+    if (TILES[md]) m._base = new (cachedLayerClass())(TILES[md][0], { maxZoom: 19, attribution: TILES[md][1] }).addTo(m);
+  }
   function setTiles() {
     if (!map) return;
-    if (tileLayer) { map.removeLayer(tileLayer); tileLayer = null; }
-    var m = S.settings.mapMode;
-    if (TILES[m]) tileLayer = new (cachedLayerClass())(TILES[m][0], { maxZoom: 19, attribution: TILES[m][1] }).addTo(map);
-    document.querySelectorAll('#mapSeg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-map') === m); });
+    setBase(map);
+    syncOverlays(map);
+    document.querySelectorAll('#mapSeg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-map') === S.settings.mapMode); });
   }
+  function gapText(g) { return 'Berhenti ' + T.hm(g.from) + '–' + T.hm(g.to) + ' (' + T.durText((g.to - g.from) / 1000) + ')'; }
+  // Gambar trek ke satu peta. faint = trip lain pada hari itu digambar samar sebagai pembanding.
+  function drawTrips(group, pts, trips, sel, faint) {
+    var bounds = [];
+    function dot(lat, lng, col, rad, tip) { L.circleMarker([lat, lng], { radius: rad, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1 }).bindTooltip(tip).addTo(group); }
+    trips.forEach(function (x, i) {
+      var dimmed = sel >= 0 && sel !== i;
+      if (dimmed && !faint) return;
+      var t = x.t, tk = E.trackOf(pts, t);
+      tk.runs.forEach(function (r) {
+        var ll = r.pts.map(function (p) { return [p.lat, p.lng]; });
+        if (dimmed) L.polyline(ll, { color: '#7C8C94', weight: 3, opacity: 0.55, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(group);
+        else { L.polyline(ll, { color: COL[r.z], weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(group); bounds = bounds.concat(ll); }
+      });
+      if (dimmed) return;
+      tk.gaps.forEach(function (g) {
+        var la = [g.a.lat, g.a.lng], lb = [g.b.lat, g.b.lng];
+        L.polyline([la, lb], { color: COL.s, weight: 4, opacity: 0.95, dashArray: '2 9', lineCap: 'round', interactive: false }).addTo(group);
+        dot(la[0], la[1], COL.s, 6, gapText(g));
+        dot(lb[0], lb[1], COL.s, 6, gapText(g));
+      });
+      dot(t.startLat, t.startLng, '#3FD07A', 7, 'Mulai ' + T.hm(t.start));
+      dot(t.endLat, t.endLng, '#FF5B50', 7, 'Selesai ' + T.hm(t.end));
+      dot(t.maxLat, t.maxLng, '#F5C518', 8, 'Tercepat ' + Math.round(t.max) + ' km/j (' + T.hm(t.maxT) + ')');
+    });
+    return bounds;
+  }
+
+  // ---------- peta mini di Riwayat (hanya lihat) ----------
+  var mini = null;
+  function openMini(i) {
+    if (!window.L) { toast('Peta tidak tersedia'); return; }
+    S.mini = { day: S.hDay, i: i, key: '' };
+    $('miniWrap').style.display = 'block';
+    if (!mini) {
+      mini = L.map('miniMap', { zoomControl: false, preferCanvas: true, attributionControl: false }).setView([-4.95, 105.2], 14);
+      mini._tr = L.layerGroup().addTo(mini);
+    }
+    mini.invalidateSize();
+    setBase(mini);
+    syncOverlays(mini);
+    renderHistory();
+    setTimeout(function () {
+      var m = $('main'), w = $('miniWrap');
+      m.scrollTop += w.getBoundingClientRect().top - m.getBoundingClientRect().top - 4;
+      if (mini) mini.invalidateSize();
+    }, 40);
+  }
+  function refreshMini() {
+    if (!S.mini) return;
+    if (!mini || S.mini.day !== S.hDay || S.mini.i >= S.hTrips.length) { closeMini(true); return; }
+    var x = S.hTrips[S.mini.i], t = x.t, key = t.start + '-' + t.end;
+    mini._tr.clearLayers();
+    var b = drawTrips(mini._tr, S.hPts || [], S.hTrips, S.mini.i, true);
+    $('miniT').textContent = 'Trip ' + (S.mini.i + 1) + ' · ' + T.hm(t.start) + '–' + T.hm(t.end) + ' · ' + T.km1(t.km) + ' km';
+    if (b.length && S.mini.key !== key) { S.mini.key = key; mini.invalidateSize(); mini.fitBounds(b, { padding: [28, 28], maxZoom: 18 }); }
+  }
+  function closeMini(noRender) {
+    var was = !!S.mini;
+    S.mini = null;
+    $('miniWrap').style.display = 'none';
+    if (mini) { try { mini.remove(); } catch (e) {} mini = null; }
+    if (was && !noRender) renderHistory();
+  }
+
+  // ---------- peta saya (PDF ditimpa di atas peta) ----------
+  function ovList() { return S.settings.ovl || (S.settings.ovl = []); }
+  function syncOverlays(m) {
+    if (!m || !window.HzOverlay) return;
+    (m._ovl || []).forEach(function (l) { try { m.removeLayer(l); } catch (e) {} });
+    m._ovl = [];
+    ovList().forEach(function (o) {
+      if (!o.on || !o.cal) return;
+      var af = HzOverlay.affineOf(o.cal);
+      if (!af) return;
+      m._ovl.push(HzOverlay.makeLayer(o, { toLL: HzOverlay.toLLFn(af), opacity: S.settings.ovlOp == null ? 0.8 : S.settings.ovlOp }).addTo(m));
+    });
+  }
+  function syncAllOverlays() { syncOverlays(map); syncOverlays(mini); }
+  function setOvOpacity(v) {
+    S.settings.ovlOp = v;
+    [map, mini].forEach(function (m) { if (m && m._ovl) m._ovl.forEach(function (l) { l.setOpacity(v); }); });
+  }
+  function mb(n) { return (n / 1048576).toFixed(1).replace('.', ',') + ' MB'; }
+  function renderOv() {
+    var box = $('ovList'); if (!box) return;
+    var l = ovList();
+    box.innerHTML = l.length ? l.map(function (o, i) {
+      var inf = o.cal ? HzOverlay.info(o.cal) : null;
+      return '<div class="ovrow"><div class="nm">' + esc(o.name) + '<small>' + o.W + '×' + o.H + ' px · ' + mb(o.bytes || 0) + ' · ' + (inf ? 'terpasang, ± ' + inf.mpp.toFixed(2).replace('.', ',') + ' m/piksel' : 'belum dikalibrasi') + '</small></div>' +
+        '<button class="btn sm" data-cal="' + i + '">' + (o.cal ? 'Kalibrasi ulang' : 'Kalibrasi') + '</button><button class="btn sm danger" data-del="' + i + '">Hapus</button></div>';
+    }).join('') : 'Belum ada.';
+  }
+  function calibrateOv(i) {
+    var o = ovList()[i]; if (!o) return;
+    closeSheet();
+    var c = map ? map.getCenter() : null;
+    if (!c && S.todayPts && S.todayPts.length) { var p = S.todayPts[S.todayPts.length - 1]; c = { lat: p.lat, lng: p.lng }; }
+    HzOverlay.calibrate(o, {
+      base: function (m) { return new (cachedLayerClass())(TILES.sat[0], { maxZoom: 19 }).addTo(m); },
+      center: c ? [c.lat, c.lng] : null,
+      toast: toast,
+      onSave: function (cal) { o.cal = cal; o.on = true; saveSettings(); renderOv(); syncAllOverlays(); toast('Peta dipasang. Lihat di Lintasan.'); }
+    });
+  }
+  function importOv(file) {
+    var nm = file.name.replace(/\.pdf$/i, '');
+    openSheet('<div class="grab"></div><div class="st">TAMBAH PETA</div>' +
+      '<div class="muted" style="margin-bottom:8px">Berkas: ' + esc(file.name) + ' (' + mb(file.size) + ')</div>' +
+      '<label class="lbl">Nama</label><input id="ovName" value="' + esc(nm) + '" style="width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:0 12px;font-size:16px">' +
+      '<div class="pgrid" style="margin-top:10px"><div><label class="lbl">Halaman</label><input id="ovPage" type="number" min="1" value="1" style="width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:0 12px;font-size:16px"></div>' +
+      '<div><label class="lbl">Ketajaman</label><select id="ovRes" style="width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:0 8px;font-size:16px"><option value="6000">Sedang (6000 px)</option><option value="9000" selected>Tinggi (9000 px)</option><option value="13000">Sangat tinggi (13000 px)</option></select></div></div>' +
+      '<div class="muted" style="margin-top:8px">Makin tajam, makin lama diproses dan makin besar di ponsel. Nomor blok kecil butuh Tinggi atau lebih.</div>' +
+      '<div class="row" style="margin-top:14px;gap:8px"><button class="btn" id="ovNo" style="flex:1">Batal</button><button class="btn pri" id="ovGo" style="flex:1">Proses</button></div>');
+    $('ovNo').onclick = closeSheet;
+    $('ovGo').onclick = function () {
+      var name = $('ovName').value.trim() || nm, page = +$('ovPage').value || 1, ls = +$('ovRes').value;
+      openSheet('<div class="grab"></div><div class="st">MEMPROSES PDF…</div><div class="muted" id="ovMsg">Jangan tutup aplikasi sampai selesai.</div><div class="ovbar"><div id="ovBar"></div></div>');
+      HzOverlay.importPdf(file, { name: name, page: page, longSide: ls }, function (f) { var b = $('ovBar'); if (b) b.style.width = Math.round(f * 100) + '%'; }).then(function (meta) {
+        ovList().push(meta); saveSettings(); renderOv();
+        var i = ovList().length - 1;
+        calibrateOv(i);
+      }).catch(function (e) {
+        openSheet('<div class="grab"></div><div class="st">GAGAL</div><div class="muted">' + esc(e && e.message || e) + '</div><button class="btn" id="ovNo2" style="margin-top:12px;width:100%">Tutup</button>');
+        $('ovNo2').onclick = closeSheet;
+      });
+    };
+  }
+  function openOvSheet() {
+    var l = ovList();
+    var op = Math.round((S.settings.ovlOp == null ? 0.8 : S.settings.ovlOp) * 100);
+    openSheet('<div class="grab"></div><div class="st">PETA SAYA</div>' +
+      (l.length ? l.map(function (o, i) {
+        return '<div class="ovrow"><div class="nm">' + esc(o.name) + (o.cal ? '' : '<small>belum dikalibrasi (Pengaturan)</small>') + '</div>' +
+          (o.cal ? '<input type="checkbox" data-on="' + i + '"' + (o.on ? ' checked' : '') + '>' : '') + '</div>';
+      }).join('') + '<div style="margin-top:10px;font-size:14px;color:var(--tx3)">Transparansi: <span id="ovOpV">' + op + '</span>%</div><input type="range" id="ovOp" min="20" max="100" value="' + op + '" style="width:100%">'
+        : '<div class="muted">Belum ada peta. Tambahkan PDF di Pengaturan, bagian PETA SAYA (PDF).</div>'));
+    var sh = $('sheet');
+    sh.onchange = function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-on'); if (k !== null && k !== undefined) { ovList()[+k].on = e.target.checked; saveSettings(); syncAllOverlays(); } };
+    var r = $('ovOp'); if (r) r.oninput = function () { $('ovOpV').textContent = this.value; setOvOpacity(this.value / 100); };
+    if (r) r.onchange = function () { saveSettings(); };
+  }
+
   function showMap(ymd, sel) {
     S.mapDay = ymd; mapSel = sel === undefined ? -1 : sel; mapKeep = true; fitted = false;
     go('lintasan');
@@ -980,20 +1130,7 @@
         return '<button data-i="' + i + '"' + (mapSel === i ? ' class="on"' : '') + '>' + (i + 1) + ' · ' + T.hm(x.t.start) + '</button>';
       }).join('') : '';
       trackLayer.clearLayers();
-      var bounds = [];
-      trips.forEach(function (x, i) {
-        if (mapSel >= 0 && mapSel !== i) return;
-        var t = x.t;
-        E.zoneRuns(pts, t.i0, t.i1).forEach(function (r) {
-          var ll = r.pts.map(function (p) { return [p.lat, p.lng]; });
-          L.polyline(ll, { color: COL[r.z], weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(trackLayer);
-          bounds = bounds.concat(ll);
-        });
-        function dot(lat, lng, col, rad, tip) { L.circleMarker([lat, lng], { radius: rad, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1 }).bindTooltip(tip).addTo(trackLayer); }
-        dot(t.startLat, t.startLng, '#3FD07A', 7, 'Mulai ' + T.hm(t.start));
-        dot(t.endLat, t.endLng, '#FF5B50', 7, 'Selesai ' + T.hm(t.end));
-        dot(t.maxLat, t.maxLng, '#F5C518', 8, 'Tercepat ' + Math.round(t.max) + ' km/j (' + T.hm(t.maxT) + ')');
-      });
+      var bounds = drawTrips(trackLayer, pts, trips, mapSel, false);
       $('mapMsg').textContent = bounds.length ? '' : (day === S.today ? 'Belum ada lintasan hari ini. Lintasan muncul saat ada trip yang terekam.' : 'Tidak ada lintasan pada ' + T.dateLong(day) + '.');
       if (bounds.length && (fit || !fitted)) { map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 }); fitted = true; }
     });
@@ -1042,6 +1179,8 @@
       tl.addEventListener('contextmenu', function (e) { e.preventDefault(); });
       tl.addEventListener('click', function (e) {
         if (fired) { fired = false; return; }
+        var pm = e.target.closest ? e.target.closest('.pmap') : null;
+        if (pm) { e.stopPropagation(); var pi = +pm.getAttribute('data-pm'); if (S.mini && S.mini.i === pi) closeMini(); else openMini(pi); return; }
         var b = e.target.closest ? e.target.closest('.trip') : null;
         if (!b) return;
         var ii = +b.getAttribute('data-i');
@@ -1077,7 +1216,7 @@
     $('btnBg').onclick = askBackground;
     $('btnPrint').onclick = function () { openPrint({ day: S.hMode === 'list' ? T.ymd(Date.now()) : S.hDay }); };
     document.querySelectorAll('#drawer a[data-print]').forEach(function (a) { a.onclick = function () { closeDrawer(); openPrint({ day: S.hDay }); }; });
-    $('mapSeg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-map'); if (m) { S.settings.mapMode = m; saveSettings(); setTiles(); } };
+    $('mapSeg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-map'); if (m) { S.settings.mapMode = m; saveSettings(); setTiles(); if (mini) { setBase(mini); } } };
     $('mapChips').onclick = function (e) { var i = e.target.getAttribute && e.target.getAttribute('data-i'); if (i !== null && i !== undefined) { mapSel = +i; renderMap(true); } };
     $('mapKml').onclick = mapKml;
     $('mPrev').onclick = function () { shiftMap(-1); };
@@ -1086,6 +1225,20 @@
     $('mPick').onchange = function () { if (this.value && this.value <= S.today) { S.mapDay = this.value; mapSel = -1; fitted = false; renderMap(true); } };
     $('toMap').onclick = function () { showMap(S.hDay, -1); };
     $('hidList').onclick = onHidden;
+    $('mapOv').onclick = openOvSheet;
+    $('miniX').onclick = function () { closeMini(); };
+    $('ovAdd').onclick = function () { $('ovFile').value = ''; $('ovFile').click(); };
+    $('ovFile').onchange = function () { if (this.files && this.files[0]) importOv(this.files[0]); };
+    $('ovList').onclick = function (e) {
+      var c = e.target.getAttribute && e.target.getAttribute('data-cal'), d = e.target.getAttribute && e.target.getAttribute('data-del');
+      if (c !== null && c !== undefined) calibrateOv(+c);
+      if (d !== null && d !== undefined) {
+        var o = ovList()[+d];
+        askConfirm('Hapus peta "' + o.name + '"?', 'Gambar peta ini dihapus dari ponsel. File PDF asli Anda tidak terpengaruh.', 'Hapus', function () {
+          HzOverlay.delOverlay(o.id).then(function () { ovList().splice(+d, 1); saveSettings(); renderOv(); syncAllOverlays(); });
+        });
+      }
+    };
     $('tcClear').onclick = function () { askConfirm('Bersihkan cache peta?', 'Peta yang tersimpan dihapus. Peta akan diunduh lagi saat Anda melihatnya dengan internet.', 'Bersihkan', function () { TC.clear().then(function () { renderCacheInfo(); toast('Cache peta dibersihkan'); }); }); };
     $('radiusSel').onchange = function () { S.settings.radius = +this.value; saveSettings(); pushSchedule(); };
     $('driverIn').onchange = function () { S.settings.driver = this.value.trim(); saveSettings(); };
