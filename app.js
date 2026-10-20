@@ -1091,7 +1091,7 @@
     box.innerHTML = l.length ? l.map(function (o, i) {
       var af0 = o.cal ? HzOverlay.affOf(o) : null, inf = af0 ? HzOverlay.infoAff(af0, o.cal[0].lat) : null;
       return '<div class="ovrow"><div class="nm">' + esc(o.name) + '<small>' + o.W + '×' + o.H + ' px · ' + mb(o.bytes || 0) + ' · ' + (inf ? 'terpasang, ± ' + inf.mpp.toFixed(2).replace('.', ',') + ' m/piksel' : 'belum dikalibrasi') + '</small></div>' +
-        '<div style="display:flex;gap:6px;width:100%;margin-bottom:4px"><button class="btn sm" data-cal="' + i + '">' + (o.cal ? 'Kalibrasi ulang' : 'Kalibrasi') + '</button>' + (o.cal ? '<button class="btn sm" data-tune="' + i + '">Setel</button>' : '') + '<button class="btn sm danger" data-del="' + i + '">Hapus</button></div></div>';
+        '<div style="display:flex;gap:6px;width:100%;margin-bottom:4px"><button class="btn sm" data-cal="' + i + '">' + (o.cal ? 'Kalibrasi ulang' : 'Kalibrasi') + '</button>' + (o.cal ? '<button class="btn sm" data-tune="' + i + '">Setel</button>' : '') + '<button class="btn sm" data-clean="' + i + '">Bersihkan</button>' + '<button class="btn sm danger" data-del="' + i + '">Hapus</button></div></div>';
     }).join('') : 'Belum ada.';
   }
   function calibrateOv(i) {
@@ -1119,31 +1119,60 @@
       opacity: S.settings.ovlOp == null ? 0.8 : S.settings.ovlOp,
       onOpacity: function (v) { S.settings.ovlOp = v; saveSettings(); setOvOpacity(v); },
       toast: toast,
+      onClean: function () { saveSettings(); renderOv(); syncAllOverlays(); },
       onSave: function (af) { o.aff = af; saveSettings(); renderOv(); syncAllOverlays(); toast('Setelan lapisan disimpan'); }
     });
   }
   function importOv(file) {
     var nm = file.name.replace(/\.pdf$/i, '');
-    openSheet('<div class="grab"></div><div class="st">TAMBAH PETA</div>' +
-      '<div class="muted" style="margin-bottom:8px">Berkas: ' + esc(file.name) + ' (' + mb(file.size) + ')</div>' +
-      '<label class="lbl">Nama</label><input id="ovName" value="' + esc(nm) + '" style="width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:0 12px;font-size:16px">' +
-      '<div class="pgrid" style="margin-top:10px"><div><label class="lbl">Halaman</label><input id="ovPage" type="number" min="1" value="1" style="width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:0 12px;font-size:16px"></div>' +
-      '<div><label class="lbl">Ketajaman</label><select id="ovRes" style="width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:0 8px;font-size:16px"><option value="6000">Sedang (6000 px)</option><option value="9000" selected>Tinggi (9000 px)</option><option value="13000">Sangat tinggi (13000 px)</option></select></div></div>' +
-      '<div class="muted" style="margin-top:8px">Makin tajam, makin lama diproses dan makin besar di ponsel. Nomor blok kecil butuh Tinggi atau lebih.</div>' +
-      '<div class="row" style="margin-top:14px;gap:8px"><button class="btn" id="ovNo" style="flex:1">Batal</button><button class="btn pri" id="ovGo" style="flex:1">Proses</button></div>');
-    $('ovNo').onclick = closeSheet;
-    $('ovGo').onclick = function () {
-      var name = $('ovName').value.trim() || nm, page = +$('ovPage').value || 1, ls = +$('ovRes').value;
-      openSheet('<div class="grab"></div><div class="st">MEMPROSES PDF…</div><div class="muted" id="ovMsg">Jangan tutup aplikasi sampai selesai.</div><div class="ovbar"><div id="ovBar"></div></div>');
-      HzOverlay.importPdf(file, { name: name, page: page, longSide: ls }, function (f) { var b = $('ovBar'); if (b) b.style.width = Math.round(f * 100) + '%'; }).then(function (meta) {
-        ovList().push(meta); saveSettings(); renderOv();
-        var i = ovList().length - 1;
-        calibrateOv(i);
-      }).catch(function (e) {
-        openSheet('<div class="grab"></div><div class="st">GAGAL</div><div class="muted">' + esc(e && e.message || e) + '</div><button class="btn" id="ovNo2" style="margin-top:12px;width:100%">Tutup</button>');
-        $('ovNo2').onclick = closeSheet;
-      });
-    };
+    var inp = 'width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:0 12px;font-size:16px';
+    openSheet('<div class="grab"></div><div class="st">MEMBACA PDF…</div><div class="muted">' + esc(file.name) + ' (' + mb(file.size) + ')</div>');
+    HzOverlay.openPdf(file).then(function (h) {
+      var hidden = {};
+      h.layers.forEach(function (l) { if (!l.on) hidden[l.id] = true; });
+      var lay = h.layers.length ? '<label class="lbl" style="margin-top:10px">Layer PDF (hilangkan centang untuk menyembunyikan)</label><div class="lylist" id="ovLy">' +
+        h.layers.map(function (l) { return '<label><input type="checkbox" data-ly="' + esc(l.id) + '"' + (l.on ? ' checked' : '') + '> ' + esc(l.name) + '</label>'; }).join('') + '</div>' : '<div class="muted" style="margin-top:8px">PDF ini tidak punya layer. Bagian yang tidak diinginkan bisa dibuang di langkah Bersihkan.</div>';
+      openSheet('<div class="grab"></div><div class="st">TAMBAH PETA</div>' +
+        '<div class="muted" style="margin-bottom:6px">Berkas: ' + esc(file.name) + ' (' + mb(file.size) + ')</div>' +
+        '<canvas id="ovPrev" class="ovprev"></canvas>' +
+        '<label class="lbl" style="margin-top:8px">Nama</label><input id="ovName" value="' + esc(nm) + '" style="' + inp + '">' +
+        '<div class="pgrid" style="margin-top:10px"><div><label class="lbl">Halaman (1–' + h.numPages + ')</label><input id="ovPage" type="number" min="1" max="' + h.numPages + '" value="1" style="' + inp + '"></div>' +
+        '<div><label class="lbl">Ketajaman</label><select id="ovRes" style="' + inp + ';padding:0 8px"><option value="6000">Sedang (6000 px)</option><option value="9000" selected>Tinggi (9000 px)</option><option value="13000">Sangat tinggi (13000 px)</option></select></div></div>' +
+        lay +
+        '<div class="muted" style="margin-top:8px">Makin tajam, makin lama diproses dan makin besar di ponsel. Nomor blok kecil butuh Tinggi atau lebih.</div>' +
+        '<div class="row" style="margin-top:14px;gap:8px"><button class="btn" id="ovNo" style="flex:1">Batal</button><button class="btn pri" id="ovGo" style="flex:1">Proses</button></div>');
+      var tm = null;
+      function prev() { clearTimeout(tm); tm = setTimeout(function () { var c = $('ovPrev'); if (c) h.preview(c, +$('ovPage').value || 1, hidden, 700).catch(function () {}); }, 150); }
+      prev();
+      $('ovPage').onchange = prev;
+      var ly = $('ovLy');
+      if (ly) ly.onchange = function (e) { var id = e.target.getAttribute('data-ly'); if (id === null) return; if (e.target.checked) delete hidden[id]; else hidden[id] = true; prev(); };
+      $('ovNo').onclick = function () { h.close(); closeSheet(); };
+      $('ovGo').onclick = function () {
+        var name = $('ovName').value.trim() || nm, page = +$('ovPage').value || 1, ls = +$('ovRes').value;
+        openSheet('<div class="grab"></div><div class="st">MEMPROSES PDF…</div><div class="muted" id="ovMsg">Jangan tutup aplikasi sampai selesai.</div><div class="ovbar"><div id="ovBar"></div></div>');
+        h.run({ name: name, page: page, longSide: ls, hidden: hidden }, function (f) { var b = $('ovBar'); if (b) b.style.width = Math.round(f * 100) + '%'; }).then(function (meta) {
+          h.close();
+          ovList().push(meta); saveSettings(); renderOv();
+          var i = ovList().length - 1;
+          closeSheet();
+          toast('Langkah 1: bersihkan gambar (boleh langsung Selesai)');
+          cleanOv(i, function () { calibrateOv(i); });
+        }).catch(function (e) {
+          h.close();
+          openSheet('<div class="grab"></div><div class="st">GAGAL</div><div class="muted">' + esc(e && e.message || e) + '</div><button class="btn" id="ovNo2" style="margin-top:12px;width:100%">Tutup</button>');
+          $('ovNo2').onclick = closeSheet;
+        });
+      };
+    }).catch(function (e) {
+      openSheet('<div class="grab"></div><div class="st">GAGAL</div><div class="muted">' + esc(e && e.message || e) + '</div><button class="btn" id="ovNo2" style="margin-top:12px;width:100%">Tutup</button>');
+      $('ovNo2').onclick = closeSheet;
+    });
+  }
+  function cleanOv(i, next) {
+    var o = ovList()[i]; if (!o) return;
+    closeSheet();
+    HzOverlay.clean(o, { onChange: function () {}, onDone: function () { saveSettings(); renderOv(); syncAllOverlays(); if (next) next(); } });
   }
   function openOvSheet() {
     var l = ovList();
@@ -1303,6 +1332,8 @@
     $('ovFile').onchange = function () { if (this.files && this.files[0]) importOv(this.files[0]); };
     $('ovList').onclick = function (e) {
       var c = e.target.getAttribute && e.target.getAttribute('data-cal'), d = e.target.getAttribute && e.target.getAttribute('data-del');
+      var cl = e.target.getAttribute && e.target.getAttribute('data-clean');
+      if (cl !== null && cl !== undefined) cleanOv(+cl);
       var tu = e.target.getAttribute && e.target.getAttribute('data-tune');
       if (tu !== null && tu !== undefined) tuneOv(+tu);
       if (c !== null && c !== undefined) calibrateOv(+c);

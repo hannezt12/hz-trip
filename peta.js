@@ -64,47 +64,76 @@
     }
     return out;
   }
-  // opt: { name, page, longSide }
-  function importPdf(file, opt, onProg) {
-    var id = 'p' + Date.now().toString(36), bytes = 0, pdfDoc;
+  // Buka PDF: daftar layer (kalau ada), pratinjau, dan proses impor.
+  function openPdf(file) {
+    var lib0;
     return loadPdfJs().then(function (lib) {
+      lib0 = lib;
       return file.arrayBuffer().then(function (buf) { return lib.getDocument({ data: buf }).promise; });
     }).then(function (doc) {
-      pdfDoc = doc;
-      var pn = Math.min(Math.max(1, opt.page || 1), doc.numPages);
-      return doc.getPage(pn);
-    }).then(function (page) {
-      var v1 = page.getViewport({ scale: 1 });
-      var full = (opt.longSide || 9000) / Math.max(v1.width, v1.height);
-      var W = Math.round(v1.width * full), H = Math.round(v1.height * full);
-      var levels = levelsFor(W, H), total = 0, done = 0;
-      levels.forEach(function (l) { total += l.cols * l.rows; });
-      var jobs = [];
-      levels.forEach(function (l, lv) { for (var ty = 0; ty < l.rows; ty++) for (var tx = 0; tx < l.cols; tx++) jobs.push([lv, tx, ty]); });
-      var cv = document.createElement('canvas'), ctx = cv.getContext('2d');
-      function next(k) {
-        if (k >= jobs.length) return Promise.resolve();
-        var j = jobs[k], lv = j[0], tx = j[1], ty = j[2], l = levels[lv];
-        var tw = Math.min(TS, l.w - tx * TS), th = Math.min(TS, l.h - ty * TS);
-        cv.width = tw; cv.height = th;
-        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, tw, th);
-        var vp = page.getViewport({ scale: full / Math.pow(2, lv), offsetX: -tx * TS, offsetY: -ty * TS });
-        return page.render({ canvasContext: ctx, viewport: vp, background: '#ffffff' }).promise.then(function () {
-          return new Promise(function (res, rej) { cv.toBlob(function (b) { b ? res(b) : rej(new Error('Gagal membuat gambar')); }, 'image/jpeg', 0.88); });
-        }).then(function (blob) {
-          bytes += blob.size;
-          return putTile(id + '|' + lv + '|' + tx + '|' + ty, blob);
-        }).then(function () {
-          done++;
-          if (onProg) onProg(done / total);
-          return new Promise(function (r) { setTimeout(r, 0); }).then(function () { return next(k + 1); });
-        });
-      }
-      return next(0).then(function () {
-        try { pdfDoc.destroy(); } catch (e) {}
-        return { id: id, name: opt.name || 'Peta', W: W, H: H, levels: levels, cal: null, on: true, bytes: bytes };
+      return doc.getOptionalContentConfig().catch(function () { return null; }).then(function (cfg) {
+        var groups = cfg && cfg.getGroups ? cfg.getGroups() : null, layers = [];
+        if (groups) Object.keys(groups).forEach(function (id) { layers.push({ id: id, name: String(groups[id].name || id), on: groups[id].visible !== false }); });
+        function apply(hidden) { if (cfg) layers.forEach(function (l) { cfg.setVisibility(l.id, !(hidden && hidden[l.id])); }); }
+        var h = {
+          numPages: doc.numPages, layers: layers,
+          preview: function (canvas, pageNo, hidden, maxPx) {
+            apply(hidden);
+            return doc.getPage(Math.min(Math.max(1, pageNo || 1), doc.numPages)).then(function (page) {
+              var v1 = page.getViewport({ scale: 1 }), sc = maxPx / Math.max(v1.width, v1.height), vp = page.getViewport({ scale: sc });
+              canvas.width = Math.round(vp.width); canvas.height = Math.round(vp.height);
+              var cx = canvas.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, canvas.width, canvas.height);
+              return page.render({ canvasContext: cx, viewport: vp, background: '#ffffff', optionalContentConfigPromise: cfg ? Promise.resolve(cfg) : undefined }).promise;
+            });
+          },
+          close: function () { try { doc.destroy(); } catch (e) {} },
+          // opt: { name, page, longSide, hidden:{id:true} }
+          run: function (opt, onProg) {
+            var id = 'p' + Date.now().toString(36), bytes = 0;
+            apply(opt.hidden);
+            return doc.getPage(Math.min(Math.max(1, opt.page || 1), doc.numPages)).then(function (page) {
+              var v1 = page.getViewport({ scale: 1 });
+              var full = (opt.longSide || 9000) / Math.max(v1.width, v1.height);
+              var W = Math.round(v1.width * full), H = Math.round(v1.height * full);
+              var levels = levelsFor(W, H), total = 0, done = 0;
+              levels.forEach(function (l) { total += l.cols * l.rows; });
+              var jobs = [];
+              levels.forEach(function (l, lv) { for (var ty = 0; ty < l.rows; ty++) for (var tx = 0; tx < l.cols; tx++) jobs.push([lv, tx, ty]); });
+              var cv = document.createElement('canvas'), ctx = cv.getContext('2d');
+              function next(k) {
+                if (k >= jobs.length) return Promise.resolve();
+                var j = jobs[k], lv = j[0], tx = j[1], ty = j[2], l = levels[lv];
+                var tw = Math.min(TS, l.w - tx * TS), th = Math.min(TS, l.h - ty * TS);
+                cv.width = tw; cv.height = th;
+                ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, tw, th);
+                var vp = page.getViewport({ scale: full / Math.pow(2, lv), offsetX: -tx * TS, offsetY: -ty * TS });
+                return page.render({ canvasContext: ctx, viewport: vp, background: '#ffffff', optionalContentConfigPromise: cfg ? Promise.resolve(cfg) : undefined }).promise.then(function () {
+                  // PNG (tajam, cocok untuk garis); kalau terlalu besar (berisi foto) pakai JPEG
+                  return new Promise(function (res, rej) { cv.toBlob(function (b) { b ? res(b) : rej(new Error('Gagal membuat gambar')); }, 'image/png'); }).then(function (b) {
+                    if (b.size <= 700000) return b;
+                    return new Promise(function (res, rej) { cv.toBlob(function (b2) { b2 ? res(b2) : rej(new Error('Gagal membuat gambar')); }, 'image/jpeg', 0.86); });
+                  });
+                }).then(function (blob) {
+                  bytes += blob.size;
+                  return putTile(id + '|' + lv + '|' + tx + '|' + ty, blob);
+                }).then(function () {
+                  done++;
+                  if (onProg) onProg(done / total);
+                  return new Promise(function (r) { setTimeout(r, 0); }).then(function () { return next(k + 1); });
+                });
+              }
+              return next(0).then(function () {
+                return { id: id, name: opt.name || 'Peta', W: W, H: H, levels: levels, cal: null, on: true, bytes: bytes, edit: { keyBg: true, tol: 6, boost: 100, crop: null, erase: [] } };
+              });
+            }).catch(function (e) { delOverlay(id); throw e; });
+          }
+        };
+        return h;
       });
-    }).catch(function (e) { delOverlay(id); throw e; });
+    });
+  }
+  function importPdf(file, opt, onProg) {
+    return openPdf(file).then(function (h) { return h.run(opt, onProg).then(function (m) { h.close(); return m; }, function (e) { h.close(); throw e; }); });
   }
 
   // ---------- kalibrasi: gambar (u,v) -> meter proyeksi EPSG:3857 ----------
@@ -163,6 +192,26 @@
     return { mpp: sc, rot: rot };
   }
 
+  // latar kertas -> transparan: alpha = kegelapan piksel (0 = putih); warna dikembalikan seperti sebelum bercampur putih
+  var scratch = null;
+  function keyOut(bm, ed) {
+    if (!scratch) scratch = document.createElement('canvas');
+    var w = bm.width, h = bm.height;
+    scratch.width = w; scratch.height = h;
+    var c = scratch.getContext('2d', { willReadFrequently: true });
+    c.clearRect(0, 0, w, h); c.drawImage(bm, 0, 0);
+    var im = c.getImageData(0, 0, w, h), d = im.data, t = Math.min(0.9, (ed.tol || 0) / 100), inv = 1 / (1 - t), bo = (ed.boost || 100) / 100;
+    for (var i = 0; i < d.length; i += 4) {
+      var r = d[i], g = d[i + 1], b = d[i + 2], m = r < g ? (r < b ? r : b) : (g < b ? g : b), a = (255 - m) / 255;
+      if (a <= t) { d[i + 3] = 0; continue; }
+      d[i] = 255 - (255 - r) / a; d[i + 1] = 255 - (255 - g) / a; d[i + 2] = 255 - (255 - b) / a;
+      var a2 = (a - t) * inv * bo; d[i + 3] = (a2 > 1 ? 1 : a2) * 255;
+    }
+    c.putImageData(im, 0, 0);
+    bm.close();
+    return createImageBitmap(scratch);
+  }
+
   // ---------- lapisan canvas ----------
   var LayerCls = null;
   function layerClass() {
@@ -172,7 +221,12 @@
       initialize: function (meta, opts) {
         this.meta = meta; this.opts = opts || {};
         this._bm = {}; this._ord = []; this._pend = {}; this._raf = 0;
-        this._toLL = opts.toLL;
+        this._toLL = opts.toLL; this._sig = this._sigNow();
+      },
+      _sigNow: function () { var e = this.meta.edit; return e && e.keyBg ? (e.tol + '|' + (e.boost || 100)) : '0'; },
+      _flush: function () {
+        for (var k in this._bm) { try { this._bm[k].close(); } catch (e) {} }
+        this._bm = {}; this._ord = []; this._pend = {};
       },
       setToLL: function (fn) { this._toLL = fn; if (this._map) this._draw(); },
       setOpacity: function (o) { this.opts.opacity = o; if (this._canvas) this._canvas.style.opacity = o; },
@@ -215,11 +269,13 @@
         var me = this;
         if (this._pend[key]) return;
         this._pend[key] = 1;
+        var sig = this._sig, ed = this.meta.edit;
         getTile(this.meta.id + '|' + key).then(function (blob) {
           if (!blob || !me._canvas) { delete me._pend[key]; return null; }
-          return createImageBitmap(blob);
+          return createImageBitmap(blob).then(function (bm) { return sig !== '0' && ed ? keyOut(bm, ed) : bm; });
         }).then(function (bm) {
           if (!bm) return;
+          if (sig !== me._sig) { try { bm.close(); } catch (e) {} return; }
           delete me._pend[key];
           if (!me._canvas) { bm.close(); return; }
           me._bm[key] = bm; me._ord.push(key);
@@ -231,6 +287,8 @@
         var c = this._canvas, m = this._map, meta = this.meta;
         if (!c || !m || !this._toLL) return;
         var ctx = c.getContext('2d');
+        var sg = this._sigNow();
+        if (sg !== this._sig) { this._flush(); this._sig = sg; }
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, c.width, c.height);
         var min = this._min, W = meta.W, H = meta.H, me = this;
@@ -264,6 +322,20 @@
         if (lv < maxLv) drawLevel(maxLv, true);
         if (lv < maxLv - 1 || lv === maxLv) { /* tidak perlu lapis tengah */ }
         drawLevel(lv, false);
+        // pangkas & hapus kotak (koordinat piksel gambar penuh)
+        var ed = meta.edit;
+        if (ed && (ed.crop || (ed.erase && ed.erase.length))) {
+          ctx.setTransform((p1.x - p0.x) / W, (p1.y - p0.y) / W, (p2.x - p0.x) / H, (p2.y - p0.y) / H, p0.x, p0.y);
+          ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = '#000';
+          var cut = [];
+          if (ed.crop) {
+            var q = ed.crop;
+            cut.push([-2, -2, W + 4, q.y0 + 2], [-2, q.y1, W + 4, H - q.y1 + 2], [-2, q.y0, q.x0 + 2, q.y1 - q.y0], [q.x1, q.y0, W - q.x1 + 2, q.y1 - q.y0]);
+          }
+          (ed.erase || []).forEach(function (r) { cut.push([r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0]); });
+          cut.forEach(function (r) { ctx.fillRect(r[0], r[1], r[2], r[3]); });
+          ctx.globalCompositeOperation = 'source-over';
+        }
         ctx.setTransform(1, 0, 0, 1, 0, 0);
       }
     });
@@ -406,7 +478,7 @@
     var hist = [], fine = true, target = 'all', mode = 'img', op = cx.opacity == null ? 0.8 : cx.opacity;
     var el = document.createElement('div');
     el.id = 'tuneUI';
-    el.innerHTML = '<div class="cal-h"><b>Setel lapisan</b><button class="btn sm" id="tNo">Batal</button></div>' +
+    el.innerHTML = '<div class="cal-h"><b>Setel lapisan</b><span style="display:flex;gap:8px"><button class="btn sm" id="tClean">Bersihkan</button><button class="btn sm" id="tNo">Batal</button></span></div>' +
       '<div class="seg tseg" id="tMode"><button data-m="img" class="on">Geser gambar</button><button data-m="map">Geser peta</button></div>' +
       '<div class="cal-s" id="tInfo"></div>' +
       '<div class="cal-m"><div id="tMap" class="cal-map"></div><div class="cal-cross" id="tCross"><i></i><b></b></div></div>' +
@@ -514,10 +586,114 @@
     $('tReset').onclick = function () { apply(Object.assign({}, reset)); };
     function close() { try { map.remove(); } catch (e) {} el.remove(); }
     $('tNo').onclick = close;
+    $('tClean').onclick = function () { clean(meta, { onChange: function () { layer._draw(); }, onDone: function () { if (cx.onClean) cx.onClean(); } }); };
     $('tOk').onclick = function () { cx.onSave(Object.assign({}, af)); close(); };
     setMode('img');
     return { close: close };
   }
 
-  root.HzOverlay = { affOf: affOf, infoAff: infoAff, tune: tune, importPdf: importPdf, delOverlay: delOverlay, makeLayer: makeLayer, affineOf: affineOf, toLLFn: toLLFn, info: info, residual: residual, calibrate: calibrate, TS: TS };
+  // ---------- bersihkan gambar (latar, pangkas, hapus kotak) ----------
+  // cx: { onChange(), onDone(edit) }
+  function clean(meta, cx) {
+    var ed0 = JSON.stringify(meta.edit || null);
+    if (!meta.edit) meta.edit = { keyBg: false, tol: 6, boost: 100, crop: null, erase: [] };
+    var ed = meta.edit; if (!ed.erase) ed.erase = []; if (ed.boost == null) ed.boost = 100; if (ed.tol == null) ed.tol = 6;
+    var hist = [], mode = 'pan', drag = null;
+    var el = document.createElement('div');
+    el.id = 'cleanUI';
+    el.innerHTML = '<div class="cal-h"><b>Bersihkan gambar</b><button class="btn sm" id="kNo">Batal</button></div>' +
+      '<div class="seg tseg" id="kMode"><button data-m="pan" class="on">Geser</button><button data-m="crop">Pangkas</button><button data-m="erase">Hapus kotak</button></div>' +
+      '<div class="cal-s" id="kHelp"></div>' +
+      '<div class="cal-m"><div id="kMap" class="cal-map" style="background:#C9D3CF"></div></div>' +
+      '<div class="tpanel"><div class="trow"><label style="display:flex;align-items:center;gap:8px;flex:1;color:var(--tx3)"><input type="checkbox" id="kKey" style="width:20px;height:20px"> Hapus latar kertas</label></div>' +
+      '<div class="trow"><span>Toleransi</span><input type="range" id="kTol" min="0" max="40" value="6"><b id="kTolV" style="min-width:34px;color:var(--tx3)"></b></div>' +
+      '<div class="trow"><span>Tebal garis</span><input type="range" id="kBoost" min="100" max="300" step="10" value="100"><b id="kBoostV" style="min-width:34px;color:var(--tx3)"></b></div>' +
+      '<div class="trow" id="kBoxes" style="flex-wrap:wrap"></div>' +
+      '<div class="cal-b"><button class="btn" id="kUndo">Urungkan</button><button class="btn" id="kClr">Reset bersih</button><button class="btn pri" id="kOk">Selesai</button></div></div>';
+    document.body.appendChild(el);
+    function $(id) { return el.querySelector('#' + id); }
+    var map = L.map($('kMap'), { crs: L.CRS.Simple, minZoom: -8, maxZoom: 3, zoomControl: false, attributionControl: false, zoomSnap: 0.25, preferCanvas: true });
+    var layer = makeLayer(meta, { toLL: function (u, v) { return L.latLng(-v, u); } }).addTo(map);
+    map.fitBounds([[-meta.H, 0], [0, meta.W]]);
+    var shapes = L.layerGroup().addTo(map), temp = null;
+    function ll(u, v) { return L.latLng(-v, u); }
+    function rect(r, st) { return L.rectangle([ll(r.x0, r.y0), ll(r.x1, r.y1)], st); }
+    function snap() { hist.push(JSON.stringify(ed)); if (hist.length > 40) hist.shift(); }
+    function redraw() {
+      layer._draw();
+      shapes.clearLayers();
+      if (ed.crop) rect(ed.crop, { color: '#2F7CF6', weight: 2, dashArray: '8 6', fill: false, interactive: false }).addTo(shapes);
+      ed.erase.forEach(function (r) { rect(r, { color: '#FF5B50', weight: 1.5, dashArray: '5 4', fillColor: '#FF5B50', fillOpacity: 0.12, interactive: false }).addTo(shapes); });
+      $('kKey').checked = !!ed.keyBg;
+      $('kTol').value = ed.tol; $('kTolV').textContent = ed.tol + '%';
+      $('kBoost').value = ed.boost; $('kBoostV').textContent = ed.boost + '%';
+      $('kTol').disabled = $('kBoost').disabled = !ed.keyBg;
+      var h = '';
+      if (ed.crop) h += '<button class="btn sm" data-x="crop">× Pangkas</button>';
+      ed.erase.forEach(function (r, i) { h += '<button class="btn sm" data-x="' + i + '">× Kotak ' + (i + 1) + '</button>'; });
+      $('kBoxes').innerHTML = h || '<span style="color:var(--tx2)">Belum ada pangkas / kotak hapus.</span>';
+      if (cx.onChange) cx.onChange();
+    }
+    function help() {
+      $('kHelp').innerHTML = mode === 'pan' ? 'Geser dan zoom gambar untuk memeriksa. Garis biru = batas pangkas, kotak merah = bagian yang dihapus.' :
+        (mode === 'crop' ? '<b>Pangkas:</b> seret satu kotak di sekitar bagian yang <b>dipertahankan</b>. Di luar kotak dibuang (tepi, judul, legenda).' :
+          '<b>Hapus kotak:</b> seret kotak di atas teks atau gambar yang tidak diinginkan. Bisa berkali-kali.');
+    }
+    function setMode(m) {
+      mode = m;
+      $('kMode').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-m') === m); });
+      var on = m === 'pan';
+      ['dragging', 'touchZoom', 'doubleClickZoom', 'scrollWheelZoom', 'boxZoom'].forEach(function (k) { if (map[k]) on ? map[k].enable() : map[k].disable(); });
+      map.getContainer().style.touchAction = on ? '' : 'none';
+      help();
+    }
+    $('kMode').onclick = function (e) { var m = e.target.getAttribute('data-m'); if (m) setMode(m); };
+    var cont = map.getContainer();
+    function pt(e) { var r = cont.getBoundingClientRect(), c = map.containerPointToLatLng(L.point(e.clientX - r.left, e.clientY - r.top)); return { u: Math.max(0, Math.min(meta.W, c.lng)), v: Math.max(0, Math.min(meta.H, -c.lat)), x: e.clientX, y: e.clientY }; }
+    cont.addEventListener('pointerdown', function (e) {
+      if (mode === 'pan' || drag) return;
+      drag = pt(e); drag.id = e.pointerId;
+      try { cont.setPointerCapture(e.pointerId); } catch (er) {}
+      e.preventDefault();
+    });
+    cont.addEventListener('pointermove', function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var q = pt(e);
+      if (temp) { shapes.removeLayer(temp); temp = null; }
+      temp = rect({ x0: Math.min(drag.u, q.u), y0: Math.min(drag.v, q.v), x1: Math.max(drag.u, q.u), y1: Math.max(drag.v, q.v) }, { color: mode === 'crop' ? '#2F7CF6' : '#FF5B50', weight: 2, fillOpacity: 0.1, interactive: false }).addTo(shapes);
+      e.preventDefault();
+    });
+    function end(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var q = pt(e), d = drag; drag = null;
+      if (temp) { shapes.removeLayer(temp); temp = null; }
+      if (e.type === 'pointercancel') return;
+      if (Math.abs(q.x - d.x) < 10 || Math.abs(q.y - d.y) < 10) return;
+      var r = { x0: Math.round(Math.min(d.u, q.u)), y0: Math.round(Math.min(d.v, q.v)), x1: Math.round(Math.max(d.u, q.u)), y1: Math.round(Math.max(d.v, q.v)) };
+      snap();
+      if (mode === 'crop') ed.crop = r; else ed.erase.push(r);
+      redraw();
+    }
+    cont.addEventListener('pointerup', end); cont.addEventListener('pointercancel', end);
+    $('kKey').onchange = function () { snap(); ed.keyBg = this.checked; redraw(); };
+    $('kTol').oninput = function () { ed.tol = +this.value; $('kTolV').textContent = ed.tol + '%'; layer._draw(); if (cx.onChange) cx.onChange(); };
+    $('kTol').onchange = function () { snap(); };
+    $('kBoost').oninput = function () { ed.boost = +this.value; $('kBoostV').textContent = ed.boost + '%'; layer._draw(); if (cx.onChange) cx.onChange(); };
+    $('kBoost').onchange = function () { snap(); };
+    $('kBoxes').onclick = function (e) {
+      var x = e.target.getAttribute('data-x'); if (x === null) return;
+      snap();
+      if (x === 'crop') ed.crop = null; else ed.erase.splice(+x, 1);
+      redraw();
+    };
+    $('kUndo').onclick = function () { if (!hist.length) return; var o = JSON.parse(hist.pop()); ed.keyBg = o.keyBg; ed.tol = o.tol; ed.boost = o.boost; ed.crop = o.crop; ed.erase = o.erase; redraw(); };
+    $('kClr').onclick = function () { snap(); ed.keyBg = false; ed.crop = null; ed.erase = []; ed.tol = 6; ed.boost = 100; redraw(); };
+    function close() { try { map.remove(); } catch (e) {} el.remove(); }
+    $('kNo').onclick = function () { meta.edit = JSON.parse(ed0); if (cx.onChange) cx.onChange(); close(); };
+    $('kOk').onclick = function () { close(); if (cx.onDone) cx.onDone(meta.edit); };
+    setMode('pan'); redraw();
+    return { close: close };
+  }
+
+  root.HzOverlay = { openPdf: openPdf, clean: clean, affOf: affOf, infoAff: infoAff, tune: tune, importPdf: importPdf, delOverlay: delOverlay, makeLayer: makeLayer, affineOf: affineOf, toLLFn: toLLFn, info: info, residual: residual, calibrate: calibrate, TS: TS };
 })(window);

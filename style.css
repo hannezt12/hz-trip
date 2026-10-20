@@ -233,3 +233,21 @@ input[type=time]{height:46px;width:100%;border:1px solid var(--line);border-radi
 .locdot{animation:locp 2s ease-out infinite}
 @keyframes locp{0%{opacity:1}50%{opacity:.75}100%{opacity:1}}
 .ovrow{flex-wrap:wrap}.ovrow .nm{min-width:60%}
+
+.ovprev{display:block;width:100%;max-height:34vh;object-fit:contain;background:#fff;border-radius:10px}
+.lylist{max-height:150px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:4px 10px}
+.lylist label{display:flex;align-items:center;gap:10px;min-height:34px;font-size:14px}
+.lylist input{width:18px;height:18px;margin:0}
+#cleanUI{position:fixed;inset:0;z-index:92;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,24px)}
+#cleanUI .cal-h{display:flex;align-items:center;justify-content:space-between;padding:8px 16px}
+#cleanUI .cal-h b{font-family:var(--cond);font-size:24px;font-weight:600;letter-spacing:.03em}
+#cleanUI .tseg{margin:0 16px 6px;flex:none}
+#cleanUI .cal-s{padding:0 16px 6px;font-size:13px;color:var(--tx3);line-height:1.35;min-height:36px}
+#cleanUI .cal-m{position:relative;flex:1;min-height:160px}
+#cleanUI .cal-map{position:absolute;inset:0}
+#cleanUI .tpanel{padding:8px 16px 0;background:var(--card2);border-top:1px solid var(--line)}
+#cleanUI .trow{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px;color:var(--tx2)}
+#cleanUI .trow span{min-width:70px}#cleanUI .trow input[type=range]{flex:1}
+#cleanUI .cal-b{display:flex;gap:8px;padding:6px 0 calc(10px + env(safe-area-inset-bottom,0px))}
+#cleanUI .cal-b .btn{flex:1}
+#tuneUI #tClean{white-space:nowrap}
