@@ -295,6 +295,7 @@
       if (geoMap) return;
       geoMap = L.map($('calMap'), { zoomControl: false, attributionControl: false, preferCanvas: true, maxZoom: 19 });
       cx.base(geoMap);
+      if (cx.locate) cx.locate(geoMap);
       geoMap.setView(cx.center || [-4.95, 105.2], 16);
       geoMk = L.layerGroup().addTo(geoMap);
     }
@@ -377,5 +378,146 @@
     return { close: close };
   }
 
-  root.HzOverlay = { importPdf: importPdf, delOverlay: delOverlay, makeLayer: makeLayer, affineOf: affineOf, toLLFn: toLLFn, info: info, residual: residual, calibrate: calibrate, TS: TS };
+  // ---------- setel lapisan (geser/cubit/putar + tombol halus) ----------
+  function affOf(meta) { return meta.aff || affineOf(meta.cal); }
+  function infoAff(af, lat) {
+    var cu = Math.hypot(af.A, af.D), cv = Math.hypot(af.B, af.E), k = Math.cos(lat * Math.PI / 180);
+    return { mpp: (cu + cv) / 2 * k, rot: Math.atan2(af.D, af.A) * 180 / Math.PI, ratio: cu / cv };
+  }
+  function mulT(af, a0, a1, cr, ci) {
+    // dunia' = a1 + c * (dunia - a0)
+    var M = [[cr * af.A - ci * af.D, cr * af.B - ci * af.E], [ci * af.A + cr * af.D, ci * af.B + cr * af.E]];
+    var tx = af.C - a0.x, ty = af.F - a0.y;
+    return { A: M[0][0], B: M[0][1], D: M[1][0], E: M[1][1], C: a1.x + cr * tx - ci * ty, F: a1.y + ci * tx + cr * ty };
+  }
+  function scaleAxes(af, p, sx, sy) {
+    var det = af.A * af.E - af.B * af.D;
+    if (Math.abs(det) < 1e-12) return af;
+    var dx = p.x - af.C, dy = p.y - af.F;
+    var qu = (af.E * dx - af.B * dy) / det, qv = (-af.D * dx + af.A * dy) / det;
+    var n = { A: af.A * sx, B: af.B * sy, D: af.D * sx, E: af.E * sy };
+    n.C = p.x - (n.A * qu + n.B * qv); n.F = p.y - (n.D * qu + n.E * qv);
+    return n;
+  }
+  // cx: { base(map), locate(map), extra(map), center, opacity, onOpacity(v), toast, onSave(af) }
+  function tune(meta, cx) {
+    var af = Object.assign({}, affOf(meta)), initial = Object.assign({}, af);
+    var reset = meta.cal && affineOf(meta.cal) ? affineOf(meta.cal) : initial;
+    var hist = [], fine = true, target = 'all', mode = 'img', op = cx.opacity == null ? 0.8 : cx.opacity;
+    var el = document.createElement('div');
+    el.id = 'tuneUI';
+    el.innerHTML = '<div class="cal-h"><b>Setel lapisan</b><button class="btn sm" id="tNo">Batal</button></div>' +
+      '<div class="seg tseg" id="tMode"><button data-m="img" class="on">Geser gambar</button><button data-m="map">Geser peta</button></div>' +
+      '<div class="cal-s" id="tInfo"></div>' +
+      '<div class="cal-m"><div id="tMap" class="cal-map"></div><div class="cal-cross" id="tCross"><i></i><b></b></div></div>' +
+      '<div class="tpanel" id="tPanel"><button class="btn sm tfold" id="tFold">Kontrol ▾</button><div id="tCtl">' +
+      '<div class="trow"><span>Putar</span><button class="btn" data-a="rl">⟲</button><button class="btn" data-a="rr">⟳</button><span>Skala</span><button class="btn" data-a="sm">−</button><button class="btn" data-a="sp">+</button></div>' +
+      '<div class="trow"><span>Geser</span><button class="btn" data-a="gl">◀</button><button class="btn" data-a="gu">▲</button><button class="btn" data-a="gd">▼</button><button class="btn" data-a="gr">▶</button></div>' +
+      '<div class="trow"><span>Langkah</span><div class="seg" id="tStep"><button data-v="1" class="on">Halus</button><button data-v="0">Kasar</button></div><span>Skala</span><div class="seg" id="tTgt"><button data-v="all" class="on">Semua</button><button data-v="w">Lebar</button><button data-v="h">Tinggi</button></div></div>' +
+      '<div class="trow"><span>Transparansi</span><input type="range" id="tOp" min="20" max="100" value="' + Math.round(op * 100) + '"></div></div>' +
+      '<div class="cal-b"><button class="btn" id="tUndo">Urungkan</button><button class="btn" id="tReset">Reset</button><button class="btn pri" id="tOk">Simpan</button></div></div>';
+    document.body.appendChild(el);
+    function $(id) { return el.querySelector('#' + id); }
+    var map = L.map($('tMap'), { zoomControl: false, attributionControl: false, preferCanvas: true, maxZoom: 19, zoomSnap: 0.25 });
+    cx.base(map);
+    if (cx.locate) cx.locate(map);
+    var c0 = cx.center || (function () { var q = L.CRS.EPSG3857.unproject(L.point(af.A * meta.W / 2 + af.B * meta.H / 2 + af.C, af.D * meta.W / 2 + af.E * meta.H / 2 + af.F)); return [q.lat, q.lng]; })();
+    map.setView(c0, 17);
+    var layer = makeLayer(meta, { toLL: toLLFn(af), opacity: op }).addTo(map);
+    if (cx.extra) cx.extra(map);
+    var raf = 0;
+    function info() {
+      var c = map.getCenter(), i = infoAff(af, c.lat);
+      $('tInfo').innerHTML = 'Skala ' + i.mpp.toFixed(3).replace('.', ',') + ' m/piksel · putaran ' + i.rot.toFixed(2).replace('.', ',') + '° · lebar/tinggi ' + i.ratio.toFixed(4).replace('.', ',') +
+        '<br>Tanda + = pusat putar &amp; skala. ' + (mode === 'img' ? 'Seret 1 jari = geser, 2 jari = cubit &amp; putar.' : 'Mode ini hanya menggeser/zoom peta.');
+    }
+    function apply(n, noHist) {
+      if (!noHist) { hist.push(af); if (hist.length > 60) hist.shift(); }
+      af = n;
+      layer.setToLL(toLLFn(af));
+      info();
+    }
+    function sched(n) { af = n; if (!raf) raf = requestAnimationFrame(function () { raf = 0; layer.setToLL(toLLFn(af)); info(); }); }
+    function W(x, y) { var q = L.CRS.EPSG3857.project(map.containerPointToLatLng(L.point(x, y))); return { x: q.x, y: q.y }; }
+    function ctr() { var s = map.getSize(); return W(s.x / 2, s.y / 2); }
+    function k() { return 1 / Math.cos(map.getCenter().lat * Math.PI / 180); } // meter tanah -> meter dunia
+    function stepV() { return fine ? { rot: 0.1, sc: 0.001, sh: 1 } : { rot: 1, sc: 0.01, sh: 10 }; }
+    function act(a, first) {
+      var p = ctr(), v = stepV(), n;
+      if (a === 'rl' || a === 'rr') { var th = (a === 'rl' ? 1 : -1) * v.rot * Math.PI / 180; n = mulT(af, p, p, Math.cos(th), Math.sin(th)); }
+      else if (a === 'sm' || a === 'sp') {
+        var f = a === 'sp' ? 1 + v.sc : 1 / (1 + v.sc);
+        n = target === 'all' ? mulT(af, p, p, f, 0) : scaleAxes(af, p, target === 'w' ? f : 1, target === 'h' ? f : 1);
+      } else {
+        var d = v.sh * k(), dx = a === 'gl' ? -d : (a === 'gr' ? d : 0), dy = a === 'gu' ? d : (a === 'gd' ? -d : 0);
+        n = mulT(af, p, { x: p.x + dx, y: p.y + dy }, 1, 0);
+      }
+      if (first) { hist.push(af); if (hist.length > 60) hist.shift(); }
+      af = n; layer.setToLL(toLLFn(af)); info();
+    }
+    // tombol dengan ulang saat ditahan
+    $('tCtl').addEventListener('pointerdown', function (e) {
+      var b = e.target.closest('[data-a]'); if (!b) return;
+      var a = b.getAttribute('data-a'), t1, t2;
+      act(a, true);
+      t1 = setTimeout(function () { t2 = setInterval(function () { act(a, false); }, 80); }, 400);
+      function stop() { clearTimeout(t1); clearInterval(t2); window.removeEventListener('pointerup', stop); window.removeEventListener('pointercancel', stop); }
+      window.addEventListener('pointerup', stop); window.addEventListener('pointercancel', stop);
+      e.preventDefault();
+    });
+    $('tStep').onclick = function (e) { var v = e.target.getAttribute('data-v'); if (v === null) return; fine = v === '1'; this.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b === e.target); }); };
+    $('tTgt').onclick = function (e) { var v = e.target.getAttribute('data-v'); if (v === null) return; target = v; this.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b === e.target); }); };
+    $('tOp').oninput = function () { op = this.value / 100; layer.setOpacity(op); };
+    $('tOp').onchange = function () { if (cx.onOpacity) cx.onOpacity(op); };
+    $('tFold').onclick = function () { var c = $('tCtl'), h = c.style.display === 'none'; c.style.display = h ? 'block' : 'none'; this.textContent = 'Kontrol ' + (h ? '▾' : '▴'); map.invalidateSize(); };
+    // mode
+    var ptrs = {}, cont = map.getContainer();
+    function setMode(m) {
+      mode = m;
+      $('tMode').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-m') === m); });
+      var on = m === 'map';
+      ['dragging', 'touchZoom', 'doubleClickZoom', 'scrollWheelZoom', 'boxZoom'].forEach(function (h) { if (map[h]) on ? map[h].enable() : map[h].disable(); });
+      cont.style.touchAction = on ? '' : 'none';
+      info();
+    }
+    $('tMode').onclick = function (e) { var m = e.target.getAttribute('data-m'); if (m) setMode(m); };
+    function pos(e) { var r = cont.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+    cont.addEventListener('pointerdown', function (e) {
+      if (mode !== 'img' || e.target.closest('.locbtn')) return;
+      var first = !Object.keys(ptrs).length;
+      ptrs[e.pointerId] = pos(e);
+      if (first) { hist.push(af); if (hist.length > 60) hist.shift(); }
+      try { cont.setPointerCapture(e.pointerId); } catch (er) {}
+      e.preventDefault();
+    });
+    cont.addEventListener('pointermove', function (e) {
+      if (mode !== 'img' || !ptrs[e.pointerId]) return;
+      var ids = Object.keys(ptrs), old = ptrs[e.pointerId], cur = pos(e), n;
+      if (ids.length === 1) {
+        var a0 = W(old.x, old.y), a1 = W(cur.x, cur.y);
+        n = mulT(af, a0, a1, 1, 0);
+      } else {
+        var oid = ids.filter(function (i) { return +i !== e.pointerId; })[0], o = ptrs[oid];
+        var a0 = W(o.x, o.y), b0 = W(old.x, old.y), b1 = W(cur.x, cur.y);
+        var dx0 = b0.x - a0.x, dy0 = b0.y - a0.y, dx1 = b1.x - a0.x, dy1 = b1.y - a0.y, den = dx0 * dx0 + dy0 * dy0;
+        if (den < 1e-9) return;
+        var cr = (dx1 * dx0 + dy1 * dy0) / den, ci = (dy1 * dx0 - dx1 * dy0) / den;
+        n = mulT(af, a0, a0, cr, ci); // dua jari: titik jari lain tetap
+      }
+      ptrs[e.pointerId] = cur;
+      sched(n);
+      e.preventDefault();
+    });
+    function up(e) { delete ptrs[e.pointerId]; }
+    cont.addEventListener('pointerup', up); cont.addEventListener('pointercancel', up);
+    $('tUndo').onclick = function () { if (hist.length) { af = hist.pop(); layer.setToLL(toLLFn(af)); info(); } else if (cx.toast) cx.toast('Tidak ada yang diurungkan'); };
+    $('tReset').onclick = function () { apply(Object.assign({}, reset)); };
+    function close() { try { map.remove(); } catch (e) {} el.remove(); }
+    $('tNo').onclick = close;
+    $('tOk').onclick = function () { cx.onSave(Object.assign({}, af)); close(); };
+    setMode('img');
+    return { close: close };
+  }
+
+  root.HzOverlay = { affOf: affOf, infoAff: infoAff, tune: tune, importPdf: importPdf, delOverlay: delOverlay, makeLayer: makeLayer, affineOf: affineOf, toLLFn: toLLFn, info: info, residual: residual, calibrate: calibrate, TS: TS };
 })(window);

@@ -83,7 +83,7 @@
   function saveOv() { return Plug.saveJson({ name: 'overrides', data: JSON.stringify(S.ov) }).catch(function () { toast('Perubahan gagal disimpan'); }); }
   function loadMeta() {
     return Promise.all([Plug.loadJson({ name: 'settings' }), Plug.loadJson({ name: 'overrides' })]).then(function (r) {
-      try { var s = JSON.parse(r[0].data); if (s && s.units) S.settings = Object.assign(S.settings, s); } catch (e) {}
+      try { var s = JSON.parse(r[0].data); if (s && s.units) S.settings = Object.assign(S.settings, s); if (S.settings.mapMode === 'none') S.settings.mapMode = 'osm'; } catch (e) {}
       try { var o = JSON.parse(r[1].data); if (o && o.trips) { S.ov = o; if (!S.ov.days) S.ov.days = {}; } } catch (e) {}
       if (!S.ov.hidden) S.ov.hidden = [];
       var st = S.settings;
@@ -138,6 +138,7 @@
     document.querySelectorAll('#drawer a[data-go]').forEach(function (a) { a.classList.toggle('on', a.getAttribute('data-go') === v); });
     closeDrawer();
     if (v !== 'riwayat') closeMini(true);
+    if (v !== 'lintasan' && map && map._loc) locStop(map);
     if (v === 'riwayat') { S.hMode = 'list'; loadRiwayat(); }
     if (v === 'lintasan') openMap();
     if (v === 'set') { renderOv(); renderSettings(); syncStatus(); renderCacheInfo(); renderHidden(); }
@@ -933,12 +934,13 @@
     map = L.map('map', { zoomControl: true, preferCanvas: true }).setView([-4.95, 105.2], 14);
     trackLayer = L.layerGroup().addTo(map);
     setTiles();
+    makeLocate(map);
     return true;
   }
   function setBase(m) {
     if (!m) return;
     if (m._base) { m.removeLayer(m._base); m._base = null; }
-    var md = S.settings.mapMode;
+    var md = S.settings.mapMode === 'sat' ? 'sat' : 'osm';
     if (TILES[md]) m._base = new (cachedLayerClass())(TILES[md][0], { maxZoom: 19, attribution: TILES[md][1] }).addTo(m);
   }
   function setTiles() {
@@ -1012,15 +1014,67 @@
     if (was && !noRender) renderHistory();
   }
 
+  // ---------- tombol lokasi saya (tropong) ----------
+  var LOC_SVG = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg>';
+  function locStop(m) {
+    var st = m && m._loc; if (!st) return;
+    if (st.id !== null) { try { navigator.geolocation.clearWatch(st.id); } catch (e) {} st.id = null; }
+    if (st.dot) { m.removeLayer(st.dot); st.dot = null; }
+    if (st.acc) { m.removeLayer(st.acc); st.acc = null; }
+    st.follow = false; st.pos = null; if (st.btn) st.btn.classList.remove('on');
+  }
+  function locStart(m) {
+    var st = m && m._loc; if (!st || st.id !== null) return;
+    if (!navigator.geolocation) { toast('Lokasi tidak tersedia di perangkat ini'); return; }
+    st.id = navigator.geolocation.watchPosition(function (p) {
+      if (!m._container) return;
+      var ll = [p.coords.latitude, p.coords.longitude], first = !st.pos;
+      st.pos = ll;
+      if (!st.acc) st.acc = L.circle(ll, { radius: p.coords.accuracy || 20, color: '#4DA3FF', weight: 1, fillColor: '#4DA3FF', fillOpacity: 0.15, interactive: false }).addTo(m);
+      else { st.acc.setLatLng(ll); st.acc.setRadius(p.coords.accuracy || 20); }
+      if (!st.dot) st.dot = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 3, fillColor: '#4285F4', fillOpacity: 1, interactive: false, className: 'locdot' }).addTo(m);
+      else st.dot.setLatLng(ll);
+      if (st.want) { st.want = false; st.follow = true; if (st.btn) st.btn.classList.add('on'); m.setView(ll, Math.max(m.getZoom(), 17)); }
+      else if (st.follow) m.panTo(ll, { animate: true });
+    }, function (e) {
+      if (st.want) { st.want = false; toast(e && e.code === 1 ? 'Izin lokasi belum diberikan' : 'Lokasi belum didapat. Pastikan GPS menyala.'); }
+    }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 30000 });
+  }
+  function makeLocate(m) {
+    if (m._loc) return;
+    var st = m._loc = { id: null, dot: null, acc: null, pos: null, follow: false, want: false, btn: null };
+    var Ctl = L.Control.extend({
+      options: { position: 'bottomright' },
+      onAdd: function () {
+        var b = L.DomUtil.create('button', 'locbtn leaflet-control');
+        b.type = 'button'; b.setAttribute('aria-label', 'Posisi saya'); b.innerHTML = LOC_SVG;
+        L.DomEvent.disableClickPropagation(b);
+        b.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+        b.onclick = function () {
+          if (st.id === null) locStart(m);
+          if (st.pos) { st.follow = true; b.classList.add('on'); m.setView(st.pos, Math.max(m.getZoom(), 17)); }
+          else { st.want = true; toast('Mencari posisi…'); }
+        };
+        st.btn = b;
+        return b;
+      }
+    });
+    new Ctl().addTo(m);
+    m.on('dragstart', function () { st.follow = false; if (st.btn) st.btn.classList.remove('on'); });
+    m.on('unload', function () { locStop(m); });
+    locStart(m);
+  }
+
   // ---------- peta saya (PDF ditimpa di atas peta) ----------
   function ovList() { return S.settings.ovl || (S.settings.ovl = []); }
   function syncOverlays(m) {
     if (!m || !window.HzOverlay) return;
     (m._ovl || []).forEach(function (l) { try { m.removeLayer(l); } catch (e) {} });
     m._ovl = [];
+    if (S.settings.mapMode !== 'osm') return; // lapisan PDF hanya di mode Peta, tidak di Satelit
     ovList().forEach(function (o) {
       if (!o.on || !o.cal) return;
-      var af = HzOverlay.affineOf(o.cal);
+      var af = HzOverlay.affOf(o);
       if (!af) return;
       m._ovl.push(HzOverlay.makeLayer(o, { toLL: HzOverlay.toLLFn(af), opacity: S.settings.ovlOp == null ? 0.8 : S.settings.ovlOp }).addTo(m));
     });
@@ -1035,9 +1089,9 @@
     var box = $('ovList'); if (!box) return;
     var l = ovList();
     box.innerHTML = l.length ? l.map(function (o, i) {
-      var inf = o.cal ? HzOverlay.info(o.cal) : null;
+      var af0 = o.cal ? HzOverlay.affOf(o) : null, inf = af0 ? HzOverlay.infoAff(af0, o.cal[0].lat) : null;
       return '<div class="ovrow"><div class="nm">' + esc(o.name) + '<small>' + o.W + '×' + o.H + ' px · ' + mb(o.bytes || 0) + ' · ' + (inf ? 'terpasang, ± ' + inf.mpp.toFixed(2).replace('.', ',') + ' m/piksel' : 'belum dikalibrasi') + '</small></div>' +
-        '<button class="btn sm" data-cal="' + i + '">' + (o.cal ? 'Kalibrasi ulang' : 'Kalibrasi') + '</button><button class="btn sm danger" data-del="' + i + '">Hapus</button></div>';
+        '<div style="display:flex;gap:6px;width:100%;margin-bottom:4px"><button class="btn sm" data-cal="' + i + '">' + (o.cal ? 'Kalibrasi ulang' : 'Kalibrasi') + '</button>' + (o.cal ? '<button class="btn sm" data-tune="' + i + '">Setel</button>' : '') + '<button class="btn sm danger" data-del="' + i + '">Hapus</button></div></div>';
     }).join('') : 'Belum ada.';
   }
   function calibrateOv(i) {
@@ -1049,7 +1103,23 @@
       base: function (m) { return new (cachedLayerClass())(TILES.sat[0], { maxZoom: 19 }).addTo(m); },
       center: c ? [c.lat, c.lng] : null,
       toast: toast,
-      onSave: function (cal) { o.cal = cal; o.on = true; saveSettings(); renderOv(); syncAllOverlays(); toast('Peta dipasang. Lihat di Lintasan.'); }
+      locate: makeLocate,
+      onSave: function (cal) { o.cal = cal; delete o.aff; o.on = true; saveSettings(); renderOv(); syncAllOverlays(); setTimeout(function () { tuneOv(i); }, 50); }
+    });
+  }
+  function tuneOv(i) {
+    var o = ovList()[i]; if (!o || !o.cal) return;
+    closeSheet();
+    var c = map ? map.getCenter() : null;
+    HzOverlay.tune(o, {
+      base: function (m) { return new (cachedLayerClass())(TILES.sat[0], { maxZoom: 19 }).addTo(m); },
+      locate: makeLocate,
+      extra: function (m) { mapData().then(function (d) { if (m._container) drawTrips(L.layerGroup().addTo(m), d.pts, d.trips, -1, false); }).catch(function () {}); },
+      center: null,
+      opacity: S.settings.ovlOp == null ? 0.8 : S.settings.ovlOp,
+      onOpacity: function (v) { S.settings.ovlOp = v; saveSettings(); setOvOpacity(v); },
+      toast: toast,
+      onSave: function (af) { o.aff = af; saveSettings(); renderOv(); syncAllOverlays(); toast('Setelan lapisan disimpan'); }
     });
   }
   function importOv(file) {
@@ -1078,14 +1148,15 @@
   function openOvSheet() {
     var l = ovList();
     var op = Math.round((S.settings.ovlOp == null ? 0.8 : S.settings.ovlOp) * 100);
-    openSheet('<div class="grab"></div><div class="st">PETA SAYA</div>' +
+    openSheet('<div class="grab"></div><div class="st">PETA SAYA</div>' + (S.settings.mapMode !== 'osm' ? '<div class="warn" style="margin-bottom:8px">Peta saya hanya tampil di mode <b>Peta</b>, bukan Satelit. Ganti mode di atas peta.</div>' : '') +
       (l.length ? l.map(function (o, i) {
         return '<div class="ovrow"><div class="nm">' + esc(o.name) + (o.cal ? '' : '<small>belum dikalibrasi (Pengaturan)</small>') + '</div>' +
-          (o.cal ? '<input type="checkbox" data-on="' + i + '"' + (o.on ? ' checked' : '') + '>' : '') + '</div>';
+          (o.cal ? '<button class="btn sm" data-tn="' + i + '">Setel</button><input type="checkbox" data-on="' + i + '"' + (o.on ? ' checked' : '') + '>' : '') + '</div>';
       }).join('') + '<div style="margin-top:10px;font-size:14px;color:var(--tx3)">Transparansi: <span id="ovOpV">' + op + '</span>%</div><input type="range" id="ovOp" min="20" max="100" value="' + op + '" style="width:100%">'
         : '<div class="muted">Belum ada peta. Tambahkan PDF di Pengaturan, bagian PETA SAYA (PDF).</div>'));
     var sh = $('sheet');
     sh.onchange = function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-on'); if (k !== null && k !== undefined) { ovList()[+k].on = e.target.checked; saveSettings(); syncAllOverlays(); } };
+    sh.onclick = function (e) { var t = e.target.getAttribute && e.target.getAttribute('data-tn'); if (t !== null && t !== undefined) tuneOv(+t); };
     var r = $('ovOp'); if (r) r.oninput = function () { $('ovOpV').textContent = this.value; setOvOpacity(this.value / 100); };
     if (r) r.onchange = function () { saveSettings(); };
   }
@@ -1101,6 +1172,7 @@
       if (!ensureMap()) { $('mapMsg').textContent = 'Peta tidak tersedia'; return; }
       map.invalidateSize();
       setTiles();
+      locStart(map);
       renderMap(true);
     }, 60);
   }
@@ -1216,7 +1288,7 @@
     $('btnBg').onclick = askBackground;
     $('btnPrint').onclick = function () { openPrint({ day: S.hMode === 'list' ? T.ymd(Date.now()) : S.hDay }); };
     document.querySelectorAll('#drawer a[data-print]').forEach(function (a) { a.onclick = function () { closeDrawer(); openPrint({ day: S.hDay }); }; });
-    $('mapSeg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-map'); if (m) { S.settings.mapMode = m; saveSettings(); setTiles(); if (mini) { setBase(mini); } } };
+    $('mapSeg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-map'); if (m) { S.settings.mapMode = m; saveSettings(); setTiles(); if (mini) { setBase(mini); syncOverlays(mini); } } };
     $('mapChips').onclick = function (e) { var i = e.target.getAttribute && e.target.getAttribute('data-i'); if (i !== null && i !== undefined) { mapSel = +i; renderMap(true); } };
     $('mapKml').onclick = mapKml;
     $('mPrev').onclick = function () { shiftMap(-1); };
@@ -1231,6 +1303,8 @@
     $('ovFile').onchange = function () { if (this.files && this.files[0]) importOv(this.files[0]); };
     $('ovList').onclick = function (e) {
       var c = e.target.getAttribute && e.target.getAttribute('data-cal'), d = e.target.getAttribute && e.target.getAttribute('data-del');
+      var tu = e.target.getAttribute && e.target.getAttribute('data-tune');
+      if (tu !== null && tu !== undefined) tuneOv(+tu);
       if (c !== null && c !== undefined) calibrateOv(+c);
       if (d !== null && d !== undefined) {
         var o = ovList()[+d];

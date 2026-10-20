@@ -203,3 +203,33 @@ input[type=time]{height:46px;width:100%;border:1px solid var(--line);border-radi
 .trip .tm{white-space:nowrap;flex:1 1 auto}
 .trip .pmap{margin-left:auto}
 .leaflet-container{background:#0F1519}
+
+/* v0.5.3: setel lapisan + tombol lokasi */
+#tuneUI{position:fixed;inset:0;z-index:90;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,24px)}
+#tuneUI .cal-h{display:flex;align-items:center;justify-content:space-between;padding:8px 16px}
+#tuneUI .cal-h b{font-family:var(--cond);font-size:24px;font-weight:600;letter-spacing:.03em}
+#tuneUI .tseg{margin:0 16px 6px;flex:none}
+#tuneUI .cal-s{padding:0 16px 6px;font-size:13px;color:var(--tx3);line-height:1.35}
+#tuneUI .cal-m{position:relative;flex:1;min-height:160px}
+#tuneUI .cal-map{position:absolute;inset:0;background:#0F1519}
+#tuneUI .cal-cross{position:absolute;inset:0;pointer-events:none;z-index:600}
+#tuneUI .cal-cross i,#tuneUI .cal-cross b{position:absolute;background:#FF5B50;box-shadow:0 0 0 1px #fff}
+#tuneUI .cal-cross i{left:50%;top:calc(50% - 14px);width:2px;height:28px;margin-left:-1px}
+#tuneUI .cal-cross b{top:50%;left:calc(50% - 14px);height:2px;width:28px;margin-top:-1px}
+#tuneUI .tpanel{padding:6px 16px 0;background:var(--card2);border-top:1px solid var(--line)}
+#tuneUI .tfold{height:28px;font-size:13px;padding:0 10px;margin-bottom:4px}
+#tuneUI .trow{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:13px;color:var(--tx2)}
+#tuneUI .trow span{min-width:44px}
+#tuneUI .trow .btn{flex:1;height:40px;padding:0;font-size:18px;touch-action:manipulation}
+#tuneUI .trow .seg{flex:1}
+#tuneUI .trow .seg button{height:34px;font-size:13px}
+#tuneUI .trow input[type=range]{flex:1}
+#tuneUI .cal-b{padding:6px 0 calc(10px + env(safe-area-inset-bottom,0px))}
+#tuneUI .cal-b .btn{flex:1}
+.locbtn{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:rgba(19,27,32,.95);display:flex;align-items:center;justify-content:center;cursor:pointer;margin:0 10px 10px 0}
+.leaflet-bottom.leaflet-right .leaflet-control.locbtn{float:right;clear:both}
+.locbtn svg{stroke:#EAF0F2}
+.locbtn.on svg{stroke:#4DA3FF}
+.locdot{animation:locp 2s ease-out infinite}
+@keyframes locp{0%{opacity:1}50%{opacity:.75}100%{opacity:1}}
+.ovrow{flex-wrap:wrap}.ovrow .nm{min-width:60%}
