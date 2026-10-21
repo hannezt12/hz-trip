@@ -165,6 +165,13 @@ public class HzTripPlugin extends Plugin {
         o.put("paused", now < Sched.pausedUntil(ctx));
         PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
         o.put("batteryFree", pm != null && pm.isIgnoringBatteryOptimizations(ctx.getPackageName()));
+        try {
+            android.location.LocationManager lm = (android.location.LocationManager) ctx.getSystemService(Context.LOCATION_SERVICE);
+            o.put("gpsOn", lm != null && lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER));
+            android.hardware.SensorManager sm = (android.hardware.SensorManager) ctx.getSystemService(Context.SENSOR_SERVICE);
+            o.put("sigSensor", sm != null && sm.getDefaultSensor(android.hardware.Sensor.TYPE_SIGNIFICANT_MOTION) != null);
+        } catch (Exception ignored) {
+        }
         return o;
     }
 
@@ -327,6 +334,30 @@ public class HzTripPlugin extends Plugin {
         }
         o.put("removed", removed);
         call.resolve(o);
+    }
+
+    /** Catatan diagnostik pemicu (maks 200 baris terakhir). */
+    @PluginMethod
+    public void readDiag(PluginCall call) {
+        File f = new File(getContext().getFilesDir(), TripService.DIAG_FILE);
+        String t = f.exists() ? readFile(f) : "";
+        String[] ls = t.split("\n");
+        int from = Math.max(0, ls.length - 200);
+        StringBuilder sb = new StringBuilder();
+        for (int i = from; i < ls.length; i++) {
+            if (ls[i].length() > 0) {
+                sb.append(ls[i]).append('\n');
+            }
+        }
+        JSObject o = new JSObject();
+        o.put("text", sb.toString());
+        call.resolve(o);
+    }
+
+    @PluginMethod
+    public void clearDiag(PluginCall call) {
+        new File(getContext().getFilesDir(), TripService.DIAG_FILE).delete();
+        call.resolve();
     }
 
     /** Pulihkan satu hari titik GPS dari cadangan. Ditolak bila berkas hari itu sudah ada dan overwrite bukan "1". */

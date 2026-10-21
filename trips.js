@@ -284,8 +284,77 @@
     return sec + ' d';
   }
 
+
+  // ---------- merampingkan data lama ----------
+  var ARCH_KEYS = ['km', 'min', 'max', 'avg', 'movSec', 'zg', 'zy', 'zr', 'maxT', 'maxLat', 'maxLng'];
+  function bearing(a, b) {
+    var dy = b.lat - a.lat, dx = (b.lng - a.lng) * Math.cos(a.lat * Math.PI / 180);
+    return Math.atan2(dx, dy) * 180 / Math.PI;
+  }
+  function angDiff(a, b) { var d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; }
+  function sameTrips(a, b) {
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i].id !== b[i].id || a[i].start !== b[i].start || a[i].end !== b[i].end) return false;
+    return true;
+  }
+  // Satu hari titik GPS -> versi jarang. Trip hasil deteksi dijamin sama (id, awal, akhir); statistik trip diarsipkan agar tidak berubah.
+  function thinDay(text, o) {
+    var opt = {}, k;
+    for (k in DEF) opt[k] = DEF[k];
+    if (o) for (k in o) if (o[k] != null) opt[k] = o[k];
+    var lines = (text || '').split('\n'), P = [];
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i]; if (!l) continue;
+      var p = l.split(','); if (p.length < 5) continue;
+      var t = +p[0], lat = +p[1], lng = +p[2], v = +p[3] * 3.6, acc = +p[4];
+      if (!isFinite(t) || !isFinite(lat) || !isFinite(lng) || !isFinite(v)) continue;
+      P.push({ t: t, lat: lat, lng: lng, v: v, acc: isFinite(acc) ? acc : 99, m: p[5] === '1' ? 1 : 0, raw: l });
+    }
+    P.sort(function (a, b) { return a.t - b.t; });
+    var res = detectTrips(P, opt), pts = res.points;
+    var arch = {};
+    res.trips.forEach(function (tr) { var a = {}; ARCH_KEYS.forEach(function (key) { a[key] = tr[key]; }); arch[tr.id] = a; });
+    function build(mode) {
+      var prot = [];
+      res.trips.forEach(function (tr) {
+        if (mode === 'safe') prot.push([tr.start - 60000, tr.end + (opt.splitSec + 60) * 1000]);
+        else { prot.push([tr.start - 40000, tr.start + 10000]); prot.push([tr.end - 5000, tr.end + (opt.splitSec + 30) * 1000]); }
+      });
+      function isProt(t) { for (var j = 0; j < prot.length; j++) if (t >= prot[j][0] && t <= prot[j][1]) return true; return false; }
+      var keep = new Array(pts.length), last = -1, lastHead = null;
+      for (var j = 0; j < pts.length; j++) {
+        var q = pts[j], kp = false;
+        if (j === 0 || j === pts.length - 1 || isProt(q.t)) kp = true;
+        else {
+          var r = pts[last], dt = q.t - r.t, stopped = q.v < 1 && r.v < 1;
+          if (dt >= (stopped ? 30000 : 5000)) kp = true;
+          else if (Math.abs(q.v - r.v) >= 15) kp = true;
+          else if (dt >= 2000 && q.v >= 5 && r.v >= 5 && angDiff(bearing(r, q), lastHead === null ? bearing(r, q) : lastHead) >= 20) kp = true;
+        }
+        if (kp) {
+          if (last >= 0 && pts[j].v >= 5 && pts[last].v >= 5) lastHead = bearing(pts[last], pts[j]);
+          last = j;
+        }
+        keep[j] = kp;
+      }
+      for (var g = 1; g < pts.length; g++) if (pts[g].t - pts[g - 1].t > 10000) { keep[g] = true; keep[g - 1] = true; }
+      var out = [];
+      for (var m = 0; m < pts.length; m++) if (keep[m]) out.push(pts[m]);
+      return out;
+    }
+    var kept = null;
+    ['normal', 'safe'].forEach(function (mode) {
+      if (kept) return;
+      var cand = build(mode), chk = detectTrips(cand, opt);
+      if (sameTrips(res.trips, chk.trips)) kept = cand;
+    });
+    if (!kept) return { ok: false };
+    var txt = kept.map(function (x) { return x.raw; }).join('\n') + '\n';
+    return { ok: true, text: txt, before: P.length, after: kept.length, bytesBefore: (text || '').length, bytesAfter: txt.length, trips: arch };
+  }
+
   return {
-    DEF: DEF, parseCsv: parseCsv, detectTrips: detectTrips, zoneOf: zoneOf,
+    DEF: DEF, thinDay: thinDay, ARCH_KEYS: ARCH_KEYS, parseCsv: parseCsv, detectTrips: detectTrips, zoneOf: zoneOf,
     applyEdits: applyEdits, defaultSchedule: defaultSchedule, classify: classify, autoLabel: autoLabel,
     nativeDays: nativeDays, windowOn: windowOn, minOf: minOf,
     hm: hm, ymd: ymd, km1: km1, dateLong: dateLong, durText: durText, pad: pad

@@ -26,6 +26,8 @@ import android.os.PowerManager;
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -75,6 +77,12 @@ public class TripService extends Service {
     static final long REARM_DELAY_MS = 60000L;
     static final long REMIND_MS = 30L * 60000L;
     static final float MAX_ACC = 50f;
+    static final float ACC_START = 100f;   // akurasi posisi yang masih dipercaya untuk pemicu kecepatan (Doppler akurat)
+    static final float ACC_FENCE = 150f;   // akurasi terburuk untuk pemicu pagar (jarak dikurangi akurasi harus tetap di luar)
+    static final long CEK_EXTEND_MS = 30000L;
+    static final int CEK_EXTEND_MAX = 3;
+    static final String DIAG_FILE = "diag.log";
+    private static final Object DLOCK = new Object();
 
     public interface Listener {
         void onFix(long t, double lat, double lng, float speedMs, float acc, int count);
@@ -116,6 +124,10 @@ public class TripService extends Service {
     private long lastNotifMs = 0;
     private int fenceHits = 0;
     private Location anchor = null;
+    private int cekExt = 0;
+    private boolean cekGood = false;
+    private long cekStart = 0;
+    private long cekFirstFix = 0;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -193,6 +205,7 @@ public class TripService extends Service {
             if (manual) {
                 manual = false;
                 p.edit().putBoolean("manual", false).apply();
+                diag("Rekam manual diakhiri");
                 endRecording();
                 afterTrip();
             } else {
@@ -263,6 +276,7 @@ public class TripService extends Service {
         bufferT.clear();
         runStart = 0;
         mode = M_SIAGA;
+        diag("Siaga" + (anchor != null ? " (pagar " + Sched.p(this).getInt("radius", 150) + " m)" : " (belum ada titik acuan)"));
         registerPassive();
         if (sigDelayMs <= 0L) {
             armSig();
@@ -285,12 +299,12 @@ public class TripService extends Service {
         @Override
         public void run() {
             if (mode == M_SIAGA) {
-                toCek(CEK_PROBE_MS);
+                toCek(CEK_PROBE_MS, "periksa berkala");
             }
         }
     };
 
-    private void toCek(long maxMs) {
+    private void toCek(long maxMs, String why) {
         if (mode != M_SIAGA) {
             return;
         }
@@ -302,7 +316,12 @@ public class TripService extends Service {
         bufferT.clear();
         runStart = 0;
         fenceHits = 0;
-        acquireWl(maxMs + 30000L);
+        cekExt = 0;
+        cekGood = false;
+        cekFirstFix = 0;
+        cekStart = System.currentTimeMillis();
+        diag("Cek mulai (" + why + "), GPS dinyalakan " + (maxMs / 1000L) + " dtk");
+        acquireWl(maxMs + CEK_EXTEND_MS * CEK_EXTEND_MAX + 30000L);
         startGps();
         h.postDelayed(cekTimeout, maxMs);
         updateNotif();
@@ -313,6 +332,13 @@ public class TripService extends Service {
         @Override
         public void run() {
             if (mode == M_CEK) {
+                if (!cekGood && cekExt < CEK_EXTEND_MAX) {
+                    cekExt++;
+                    diag("Belum ada posisi akurat, Cek diperpanjang " + cekExt + "/" + CEK_EXTEND_MAX + " (+" + (CEK_EXTEND_MS / 1000L) + " dtk)");
+                    h.postDelayed(this, CEK_EXTEND_MS);
+                    return;
+                }
+                diag("Cek selesai tanpa pemicu (" + (cekGood ? "posisi didapat, tidak bergerak" : "tidak ada posisi akurat") + ")");
                 stopGps();
                 releaseWl();
                 if (Sched.autoPossible(TripService.this, System.currentTimeMillis())) {
@@ -331,6 +357,7 @@ public class TripService extends Service {
         cancelSig();
         long now = System.currentTimeMillis();
         mode = M_REKAM;
+        diag("Rekam mulai" + (manual ? " (manual)" : " (otomatis)"));
         everFast = false;
         sessMax = 0;
         sessMeters = 0;
@@ -375,11 +402,13 @@ public class TripService extends Service {
         }
         if (!everFast && now - startedAt >= NO_FAST_MS) {
             // Jalan kaki / tidak pernah melaju: akhiri tanpa memindahkan titik acuan.
+            diag("Rekam selesai: tidak pernah melaju (jalan kaki)");
             endRecording();
             afterTrip();
             return;
         }
         if (now - lastMove >= STOP_WAIT_MS || now - lastFast >= SLOW_WAIT_MS) {
+            diag("Rekam selesai: " + (now - lastMove >= STOP_WAIT_MS ? "berhenti lebih dari 5 menit" : "merayap di bawah 10 km/j lebih dari 10 menit"));
             endRecording();
             afterTrip();
         }
@@ -484,7 +513,7 @@ public class TripService extends Service {
                 @Override
                 public void run() {
                     if (mode == M_SIAGA) {
-                        toCek(CEK_MOTION_MS);
+                        toCek(CEK_MOTION_MS, "sensor gerak");
                     }
                 }
             });
@@ -514,11 +543,16 @@ public class TripService extends Service {
     private final LocationListener passiveListener = new LocationListener() {
         @Override
         public void onLocationChanged(Location loc) {
-            if (mode != M_SIAGA || !loc.hasAccuracy() || loc.getAccuracy() > MAX_ACC) {
+            if (mode != M_SIAGA || !loc.hasAccuracy() || loc.getAccuracy() > ACC_FENCE) {
                 return;
             }
-            if ((loc.hasSpeed() && loc.getSpeed() * 3.6 >= START_KMH) || outsideFence(loc)) {
-                toCek(CEK_MOTION_MS);
+            if (mode != M_SIAGA) {
+                return;
+            }
+            if (loc.hasSpeed() && loc.getSpeed() * 3.6 >= START_KMH) {
+                toCek(CEK_MOTION_MS, "posisi pasif: kecepatan " + Math.round(loc.getSpeed() * 3.6) + " km/j");
+            } else if (outsideFenceLoose(loc)) {
+                toCek(CEK_MOTION_MS, "posisi pasif: di luar pagar " + Math.round(loc.distanceTo(anchor)) + " m");
             }
         }
 
@@ -545,6 +579,7 @@ public class TripService extends Service {
         @Override
         public void onProviderDisabled(String provider) {
             if (LocationManager.GPS_PROVIDER.equals(provider)) {
+                diag("GPS ponsel dimatikan");
                 Sched.warn(TripService.this, "GPS ponsel mati", "Nyalakan GPS agar perjalanan terekam.");
             }
         }
@@ -585,25 +620,31 @@ public class TripService extends Service {
                 bufferT.remove(0);
             }
             boolean go = false;
-            if (acc <= MAX_ACC && kmh >= START_KMH) {
+            String why = "";
+            if (cekFirstFix == 0) {
+                cekFirstFix = System.currentTimeMillis();
+                diag("Posisi pertama setelah " + ((cekFirstFix - cekStart) / 1000L) + " dtk, akurasi " + Math.round(acc) + " m");
+            }
+            if (acc <= ACC_START) {
+                cekGood = true;
+            }
+            if (acc <= ACC_START && kmh >= START_KMH) {
                 if (runStart == 0) {
                     runStart = t;
                 }
                 if (t - runStart >= START_HOLD_MS) {
                     go = true;
+                    why = "kecepatan " + Math.round(kmh) + " km/j, akurasi " + Math.round(acc) + " m";
                 }
             } else {
                 runStart = 0;
             }
-            if (acc <= MAX_ACC && outsideFence(loc)) {
-                fenceHits++;
-                if (fenceHits >= 2) {
-                    go = true;
-                }
-            } else {
-                fenceHits = 0;
+            if (!go && outsideFenceLoose(loc)) {
+                go = true;
+                why = "keluar pagar " + Math.round(loc.distanceTo(anchor)) + " m, akurasi " + Math.round(acc) + " m";
             }
             if (go) {
+                diag("Pemicu: " + why);
                 toRekam();
             }
         } else if (mode == M_REKAM) {
@@ -669,6 +710,55 @@ public class TripService extends Service {
         }
         anchor = new Location(prev);
         Sched.p(this).edit().putString("anchor", String.format(Locale.US, "%.6f,%.6f", prev.getLatitude(), prev.getLongitude())).apply();
+    }
+
+    // ================= catatan diagnostik =================
+
+    void diag(String msg) {
+        try {
+            synchronized (DLOCK) {
+                File f = new File(getFilesDir(), DIAG_FILE);
+                String line = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date()) + " " + msg + "\n";
+                FileOutputStream o = new FileOutputStream(f, true);
+                o.write(line.getBytes("UTF-8"));
+                o.close();
+                if (f.length() > 60000L) {
+                    trimDiag(f);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void trimDiag(File f) throws Exception {
+        FileInputStream in = new FileInputStream(f);
+        byte[] b = new byte[(int) f.length()];
+        int n = in.read(b);
+        in.close();
+        String all = new String(b, 0, Math.max(n, 0), "UTF-8");
+        String[] ls = all.split("\n");
+        int from = Math.max(0, ls.length - 250);
+        StringBuilder sb = new StringBuilder();
+        for (int i = from; i < ls.length; i++) {
+            sb.append(ls[i]).append('\n');
+        }
+        FileOutputStream o = new FileOutputStream(f, false);
+        o.write(sb.toString().getBytes("UTF-8"));
+        o.close();
+    }
+
+    /** Satu titik di luar pagar cukup: jarak >= radius (akurasi baik), atau jarak dikurangi akurasi >= radius (akurasi sedang). */
+    private boolean outsideFenceLoose(Location loc) {
+        if (anchor == null || !loc.hasAccuracy()) {
+            return false;
+        }
+        int r = Sched.p(this).getInt("radius", 150);
+        float d = loc.distanceTo(anchor);
+        float a = loc.getAccuracy();
+        if (a <= MAX_ACC) {
+            return d >= r;
+        }
+        return a <= ACC_FENCE && d - a >= r;
     }
 
     private boolean outsideFence(Location loc) {

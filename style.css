@@ -253,7 +253,7 @@ input[type=time]{height:46px;width:100%;border:1px solid var(--line);border-radi
 #cleanUI .cal-b .btn{flex:1}
 #tuneUI #tClean{white-space:nowrap}
 
-/* tema terang (v0.5.5) */
+/* tema terang (v0.5.6) */
 :root[data-theme=light]{--bg:#F2F5F6;--card:#FFFFFF;--card2:#FFFFFF;--line:#C8D2D7;--tx:#0C1A21;--tx2:#4E616B;--tx3:#24343C;--sf:#E4EAED;--mapbg:#E5E9EB;--ov:rgba(255,255,255,.92);--cs:light;
 --wbg:#FFF1DC;--wbd:#E8C48A;--wtx:#7A4A00;--ckb:#D6F0E1;--ckt:#0B6B37;--cpb:#F6EBC4;--cpt:#7A5A00;--cfb:#FBE5C8;--cft:#8A4B00;--off:#8A9AA3;
 --g:#0A9A4C;--y:#B58300;--r:#D93025}

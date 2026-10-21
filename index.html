@@ -128,6 +128,13 @@
         <input type="file" id="bkFile" accept=".hztrip,application/gzip,application/octet-stream,application/json" style="display:none">
         <div class="muted" style="margin-top:8px">Satu berkas berisi semua trip, jadwal, unit, dan pengaturan. Kirim ke WhatsApp atau Drive supaya aman bila ponsel hilang. Peta saya (PDF) tidak ikut; impor ulang dari berkas PDF Anda.</div></div>
 
+      <div class="h">MERAMPINGKAN DATA LAMA</div>
+      <div class="card"><div class="muted" id="thinInfo">Memeriksa…</div>
+        <div class="row" style="margin-top:10px;gap:8px;align-items:center"><span class="muted">Data lebih lama dari</span>
+          <select id="thinSel"><option value="90">90 hari</option><option value="180">180 hari</option><option value="365">365 hari</option></select></div>
+        <button class="btn" id="thinGo" style="margin-top:10px;width:100%">Rampingkan sekarang</button>
+        <div class="muted" style="margin-top:8px">Titik GPS yang rapat pada hari lama dijarangkan (belokan, perubahan kecepatan, awal dan akhir trip tetap utuh). Daftar trip, jarak, kecepatan, dan rata-rata tidak berubah. Potong atau gabung trip pada hari yang sudah dirampingkan jadi kurang presisi. Anda akan ditawari cadangan dulu.</div></div>
+
       <div class="h">TRIP DIHAPUS</div>
       <div class="card"><div id="hidList" class="muted">Tidak ada.</div><div class="muted" style="margin-top:8px">Trip yang dihapus disembunyikan 30 hari, lalu titik GPS-nya dihapus permanen.</div></div>
       </div>
@@ -140,6 +147,10 @@
         <div class="muted" style="margin-top:8px">Pilih HZ Trip lalu "Tanpa pembatasan" agar perekaman tidak dimatikan sistem.</div>
         <div class="muted" style="margin-top:8px">Tombol cepat: geser layar dari atas dua kali, ketuk ikon pensil, lalu seret "HZ Trip" ke deretan atas. Satu ketuk untuk Mulai / Akhiri.</div>
       </div>
+      <div class="h">CATATAN PEMICU</div>
+      <div class="card"><pre id="diagBox" class="muted" style="white-space:pre-wrap;font-size:11px;max-height:260px;overflow:auto;margin:0">Memuat…</pre>
+        <div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="diagShare" style="flex:1">Bagikan</button><button class="btn" id="diagClear" style="flex:1">Hapus</button></div>
+        <div class="muted" style="margin-top:8px">Setiap kali pemicu otomatis jalan, berhenti, atau gagal, tercatat di sini. Bila rekaman terlambat mulai, kirim catatan ini agar penyebabnya bisa dilacak.</div></div>
       </div>
       <div class="spage" id="sp-tampil">
         <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Tampilan</b></div>
@@ -153,7 +164,7 @@
       <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Label Kerja / Pribadi mengikuti jenis unit yang dipakai (diatur saat unit didaftarkan). Unit tiap trip bisa diubah di Riwayat.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
 
       <div class="h">VERSI</div>
-      <div class="card muted">HZ Trip versi 0.5.5<br>Berikutnya: perbaikan pemicu otomatis, catatan diagnostik, merampingkan data lama, putar ulang lintasan.</div>
+      <div class="card muted">HZ Trip versi 0.5.6<br>Berikutnya: putar ulang lintasan (animasi).</div>
       </div>
     </section>
   </div>
@@ -167,7 +178,7 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.5.5</div>
+  <div class="ver">Versi 0.5.6</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
