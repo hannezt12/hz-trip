@@ -35,7 +35,8 @@ import java.util.regex.Pattern;
                         Manifest.permission.ACCESS_COARSE_LOCATION
                 }),
                 @Permission(alias = "notifications", strings = {"android.permission.POST_NOTIFICATIONS"}),
-                @Permission(alias = "background", strings = {"android.permission.ACCESS_BACKGROUND_LOCATION"})
+                @Permission(alias = "background", strings = {"android.permission.ACCESS_BACKGROUND_LOCATION"}),
+                @Permission(alias = "activity", strings = {"android.permission.ACTIVITY_RECOGNITION"})
         }
 )
 public class HzTripPlugin extends Plugin {
@@ -159,6 +160,7 @@ public class HzTripPlugin extends Plugin {
         o.put("startedAt", TripService.startedAt);
         o.put("permission", hasLocation());
         o.put("background", hasBackground());
+        o.put("actPerm", Trig.actGranted(ctx));
         o.put("auto", Sched.autoEnabled(ctx));
         o.put("winEnd", Sched.windowEnd(ctx, now));
         o.put("nextStart", Sched.nextStart(ctx, now));
@@ -226,6 +228,20 @@ public class HzTripPlugin extends Plugin {
         Context ctx = getContext();
         Sched.p(ctx).edit().putLong("pausedUntil", 0L).apply();
         Sched.evaluate(ctx);
+        call.resolve(statusObject());
+    }
+
+    @PluginMethod
+    public void ensureActivity(PluginCall call) {
+        if (Trig.actGranted(getContext())) {
+            call.resolve(statusObject());
+            return;
+        }
+        requestPermissionForAlias("activity", call, "actResult");
+    }
+
+    @PermissionCallback
+    private void actResult(PluginCall call) {
         call.resolve(statusObject());
     }
 

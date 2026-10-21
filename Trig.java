@@ -1,0 +1,121 @@
+package com.hz.hztrip;
+
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.location.Location;
+import android.os.Build;
+
+import com.google.android.gms.location.ActivityRecognition;
+import com.google.android.gms.location.ActivityTransition;
+import com.google.android.gms.location.ActivityTransitionRequest;
+import com.google.android.gms.location.DetectedActivity;
+import com.google.android.gms.location.Geofence;
+import com.google.android.gms.location.GeofencingRequest;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.tasks.OnFailureListener;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+/** Pemicu tambahan dari Android: "naik kendaraan" dan pagar virtual (geofence). Keduanya tanpa GPS dan tanpa internet. */
+final class Trig {
+    static final String ACT_VEH = "com.hz.hztrip.TRIG_VEH";
+    static final String ACT_FENCE = "com.hz.hztrip.TRIG_FENCE";
+    private static boolean vehOn = false;
+    private static String fenceKey = "";
+
+    private Trig() {
+    }
+
+    static boolean actGranted(Context c) {
+        return Build.VERSION.SDK_INT < 29
+                || c.checkSelfPermission("android.permission.ACTIVITY_RECOGNITION") == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private static PendingIntent pi(Context c, String action, int rc) {
+        Intent i = new Intent(c, TrigReceiver.class).setAction(action);
+        int fl = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= 31) {
+            fl |= PendingIntent.FLAG_MUTABLE;
+        }
+        return PendingIntent.getBroadcast(c, rc, i, fl);
+    }
+
+    /** Pasang (atau perbarui) pemicu. Aman dipanggil berulang. */
+    static void arm(final TripService s, Location anchor, int radius) {
+        final Context c = s.getApplicationContext();
+        if (!vehOn) {
+            if (actGranted(c)) {
+                try {
+                    List<ActivityTransition> l = new ArrayList<ActivityTransition>();
+                    l.add(new ActivityTransition.Builder()
+                            .setActivityType(DetectedActivity.IN_VEHICLE)
+                            .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
+                            .build());
+                    ActivityRecognition.getClient(c)
+                            .requestActivityTransitionUpdates(new ActivityTransitionRequest(l), pi(c, ACT_VEH, 71))
+                            .addOnFailureListener(new OnFailureListener() {
+                                @Override
+                                public void onFailure(Exception e) {
+                                    vehOn = false;
+                                    s.diag("Pemicu kendaraan gagal dipasang: " + e.getMessage());
+                                }
+                            });
+                    vehOn = true;
+                    s.diag("Pemicu kendaraan dipasang");
+                } catch (Throwable t) {
+                    s.diag("Pemicu kendaraan tidak tersedia: " + t.getMessage());
+                }
+            } else {
+                s.diag("Pemicu kendaraan dilewati: izin Aktivitas fisik belum diberikan");
+            }
+        }
+        if (anchor == null) {
+            return;
+        }
+        int r = Math.max(radius, 100);
+        String key = String.format(Locale.US, "%.5f,%.5f,%d", anchor.getLatitude(), anchor.getLongitude(), r);
+        if (key.equals(fenceKey)) {
+            return;
+        }
+        try {
+            Geofence g = new Geofence.Builder()
+                    .setRequestId("hzfence")
+                    .setCircularRegion(anchor.getLatitude(), anchor.getLongitude(), (float) r)
+                    .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                    .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_EXIT)
+                    .build();
+            GeofencingRequest req = new GeofencingRequest.Builder().addGeofence(g).build();
+            LocationServices.getGeofencingClient(c)
+                    .addGeofences(req, pi(c, ACT_FENCE, 72))
+                    .addOnFailureListener(new OnFailureListener() {
+                        @Override
+                        public void onFailure(Exception e) {
+                            fenceKey = "";
+                            s.diag("Geofence gagal dipasang: " + e.getMessage());
+                        }
+                    });
+            fenceKey = key;
+            s.diag("Geofence dipasang (" + r + " m)");
+        } catch (Throwable t) {
+            s.diag("Geofence tidak tersedia: " + t.getMessage());
+        }
+    }
+
+    static void disarm(Context ctx) {
+        Context c = ctx.getApplicationContext();
+        try {
+            ActivityRecognition.getClient(c).removeActivityTransitionUpdates(pi(c, ACT_VEH, 71));
+        } catch (Throwable ignored) {
+        }
+        try {
+            LocationServices.getGeofencingClient(c).removeGeofences(pi(c, ACT_FENCE, 72));
+        } catch (Throwable ignored) {
+        }
+        vehOn = false;
+        fenceKey = "";
+    }
+}

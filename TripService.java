@@ -56,6 +56,7 @@ public class TripService extends Service {
     public static final String ACTION_STOP = "com.hz.hztrip.STOP";     // akhiri / jeda
     public static final String ACTION_AUTO = "com.hz.hztrip.AUTO";     // masuk jendela jadwal
     public static final String ACTION_RESUME = "com.hz.hztrip.RESUME"; // lanjutkan otomatis
+    public static final String ACTION_TRIG = "com.hz.hztrip.TRIG";     // pemicu dari Android (kendaraan / geofence)
 
     static final String CHANNEL_ID = "hztrip_rec";
     static final int NOTIF_ID = 1001;
@@ -73,7 +74,7 @@ public class TripService extends Service {
     static final long SLOW_WAIT_MS = 10L * 60000L;
     static final long CEK_MOTION_MS = 180000L;
     static final long CEK_PROBE_MS = 30000L;
-    static final long PROBE_EVERY_MS = 2L * 60000L;
+    static final long PROBE_EVERY_MS = 60000L;
     static final long REARM_DELAY_MS = 60000L;
     static final long REMIND_MS = 30L * 60000L;
     static final float MAX_ACC = 50f;
@@ -154,6 +155,7 @@ public class TripService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         final String action = intent == null ? null : intent.getAction();
+        final String why = intent == null ? null : intent.getStringExtra("why");
         if (!ACTION_STOP.equals(action)) {
             // Wajib tampil sebagai foreground segera setelah startForegroundService.
             goForeground();
@@ -161,7 +163,7 @@ public class TripService extends Service {
         h.post(new Runnable() {
             @Override
             public void run() {
-                handleCommand(action);
+                handleCommand(action, why);
             }
         });
         return START_STICKY;
@@ -188,7 +190,7 @@ public class TripService extends Service {
 
     // ================= perintah =================
 
-    private void handleCommand(String action) {
+    private void handleCommand(String action, String why) {
         long now = System.currentTimeMillis();
         SharedPreferences p = Sched.p(this);
         if (ACTION_START.equals(action)) {
@@ -214,6 +216,23 @@ public class TripService extends Service {
                     p.edit().putLong("pausedUntil", we).apply();
                 }
                 shutdown();
+            }
+        } else if (ACTION_TRIG.equals(action)) {
+            if (manual || mode == M_REKAM || mode == M_CEK) {
+                return;
+            }
+            if (!Sched.autoPossible(this, now)) {
+                if (mode == M_OFF) {
+                    shutdown();
+                }
+                return;
+            }
+            if (mode == M_OFF) {
+                afterTrip();
+            }
+            if (mode == M_SIAGA) {
+                diag("Pemicu Android: " + why);
+                toCek(CEK_MOTION_MS, "pemicu " + why);
             }
         } else if (ACTION_AUTO.equals(action) || ACTION_RESUME.equals(action)) {
             if (ACTION_RESUME.equals(action)) {
@@ -278,6 +297,7 @@ public class TripService extends Service {
         mode = M_SIAGA;
         diag("Siaga" + (anchor != null ? " (pagar " + Sched.p(this).getInt("radius", 150) + " m)" : " (belum ada titik acuan)"));
         registerPassive();
+        Trig.arm(this, anchor, Sched.p(this).getInt("radius", 150));
         if (sigDelayMs <= 0L) {
             armSig();
         } else {
@@ -441,6 +461,7 @@ public class TripService extends Service {
         closeWriter();
         releaseWl();
         cancelRemind();
+        Trig.disarm(this);
         mode = M_OFF;
         manual = false;
         Sched.p(this).edit().putBoolean("manual", false).apply();

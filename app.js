@@ -29,12 +29,13 @@
   function mockPlugin() {
     var L = {}, timer = null, sec = 0, mode = 'tidur', lat = -4.9, lng = 105.2, sched = { auto: true, margin: 30 };
     function k(d) { return 'mock-pts-' + d; }
-    function st() { return { mode: mode, recording: mode === 'rekam', manual: mode === 'rekam', permission: true, background: false, batteryFree: false, auto: sched.auto, paused: false, winEnd: 0, nextStart: Date.now() + 8 * 3600000, count: sec, lastT: Date.now(), lastV: 0, lastAcc: 6, gpsOn: mode === 'rekam', sigSensor: true }; }
+    function st() { return { mode: mode, recording: mode === 'rekam', manual: mode === 'rekam', permission: true, background: false, batteryFree: false, auto: sched.auto, paused: false, winEnd: 0, nextStart: Date.now() + 8 * 3600000, count: sec, lastT: Date.now(), lastV: 0, lastAcc: 6, gpsOn: mode === 'rekam', sigSensor: true, actPerm: true }; }
     function emit(n, o) { (L[n] || []).forEach(function (f) { f(o); }); }
     return {
       addListener: function (n, f) { (L[n] = L[n] || []).push(f); return Promise.resolve({ remove: function () {} }); },
       ensurePermissions: function () { return Promise.resolve({ granted: true }); },
       ensureBackground: function () { return Promise.resolve(st()); },
+      ensureActivity: function () { return Promise.resolve(st()); },
       setSchedule: function (o) { sched = o; return Promise.resolve(st()); },
       resumeAuto: function () { return Promise.resolve(st()); },
       start: function () {
@@ -117,13 +118,14 @@
     S.mode = s.mode || (s.recording ? 'rekam' : 'tidur');
     S.manual = !!s.manual; S.paused = !!s.paused; S.auto = s.auto !== false;
     S.winEnd = s.winEnd || 0; S.nextStart = s.nextStart || 0;
-    S.gpsOn = !!s.gpsOn; S.sigSensor = s.sigSensor !== false; S.lastT = s.lastT || 0;
+    S.actPerm = s.actPerm !== false; S.gpsOn = !!s.gpsOn; S.sigSensor = s.sigSensor !== false; S.lastT = s.lastT || 0;
     S.perm = s.permission !== false; S.bg = s.background !== false; S.battFree = !!s.batteryFree;
     if (S.mode !== 'rekam') S.live.t = 0;
     else if (s.lastT) S.live = { v: s.lastV * 3.6, acc: s.lastAcc, t: S.live.t, count: s.count };
     if (S.view === 'spido') renderSpido();
     if (S.view === 'set') renderSettings();
   }
+  function askActivity() { Plug.ensureActivity().then(applyStatus).catch(function () {}); }
   function syncStatus() { return Plug.status().then(applyStatus).catch(function () {}); }
   var pushT;
   function pushSchedule() {
@@ -685,6 +687,7 @@
     if (native) {
       bits.push(S.bg ? 'Lokasi "Selalu": sudah.' : 'Lokasi "Selalu": belum (perlu untuk rekam otomatis).');
       bits.push(S.battFree ? 'Penghematan baterai: dimatikan (bagus).' : 'Penghematan baterai: belum dimatikan.');
+      bits.push(S.actPerm ? 'Aktivitas fisik (deteksi naik kendaraan): sudah.' : 'Aktivitas fisik: belum (perlu untuk deteksi naik kendaraan).');
     }
     if (native) {
       bits.push(S.gpsOn ? 'GPS: menyala.' : 'GPS: istirahat (normal saat siaga).');
@@ -965,7 +968,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.6.0'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.6.1'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1147,7 +1150,7 @@
   }
 
   // ---------- lintasan (peta) ----------
-  var map = null, tileLayer = null, trackLayer = null, fitted = false, mapSel = -1, mapKeep = false;
+  var map = null, tileLayer = null, trackLayer = null, fitted = false, mapSel = -1, mapKeep = false, mapKind = 'all';
   var TILES = {
     sat: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 'Esri World Imagery'],
     osm: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', '&copy; OpenStreetMap']
@@ -1449,11 +1452,18 @@
     $('mToday').style.visibility = day === S.today ? 'hidden' : 'visible';
     mapData().then(function (d) {
       if (day !== S.mapDay || S.view !== 'lintasan') return;
-      var trips = d.trips, pts = d.pts;
+      var pts = d.pts, items = d.trips.map(function (x, i) { return { x: x, i: i }; });
+      var nK = items.filter(function (o) { return o.x.label === 'Kerja'; }).length, nP = items.length - nK;
+      if (mapKind === 'kerja' && !nK) mapKind = 'all';
+      if (mapKind === 'pribadi' && !nP) mapKind = 'all';
+      var list = items.filter(function (o) { return mapKind === 'all' || o.x.label === (mapKind === 'kerja' ? 'Kerja' : 'Pribadi'); });
+      var trips = list.map(function (o) { return o.x; });
       if (mapSel >= trips.length) mapSel = -1;
-      PB.cur = d;
-      $('mapChips').innerHTML = trips.length > 1 ? '<button data-i="-1"' + (mapSel < 0 ? ' class="on"' : '') + '>Semua</button>' + trips.map(function (x, i) {
-        return '<button data-i="' + i + '"' + (mapSel === i ? ' class="on"' : '') + '>' + (i + 1) + ' · ' + T.hm(x.t.start) + '</button>';
+      PB.cur = { pts: pts, trips: trips };
+      S.mapCnt = { kerja: nK, pribadi: nP };
+      var kl = { all: 'Semua · ' + items.length, kerja: 'Kerja · ' + nK, pribadi: 'Pribadi · ' + nP }[mapKind];
+      $('mapChips').innerHTML = items.length > 1 ? '<button data-k="1" class="kind' + (mapSel < 0 ? ' on' : '') + '">' + kl + '</button>' + list.map(function (o, i) {
+        return '<button data-i="' + i + '"' + (mapSel === i ? ' class="on"' : '') + '>' + (o.i + 1) + ' · ' + T.hm(o.x.t.start) + '</button>';
       }).join('') : '';
       trackLayer.clearLayers();
       var bounds = drawTrips(trackLayer, pts, trips, mapSel, false);
@@ -1490,7 +1500,7 @@
     var gap = q.t - p.t > 60000;
     return { lat: p.lat + (q.lat - p.lat) * f, lng: p.lng + (q.lng - p.lng) * f, v: gap ? 0 : p.v + (q.v - p.v) * f, t: gap ? p.t : p.t + (q.t - p.t) * f };
   }
-  function pbDraw(pan) {
+  function pbDraw(pan, dt) {
     var c = pbAt(PB.pos);
     if (!c) { $('pbSpd').textContent = '0'; $('pbClk').textContent = '--.--.--'; return; }
     var ll = [c.lat, c.lng], col = pbZone(c.v);
@@ -1498,7 +1508,17 @@
       PB.ring = L.circleMarker(ll, { radius: 14, color: col, weight: 3, fillOpacity: 0.15, fillColor: col, interactive: false }).addTo(map);
       PB.mk = L.circleMarker(ll, { radius: 7, color: '#fff', weight: 3, fillColor: col, fillOpacity: 1, interactive: false }).addTo(map);
     } else { PB.mk.setLatLng(ll); PB.ring.setLatLng(ll); PB.mk.setStyle({ fillColor: col }); PB.ring.setStyle({ color: col, fillColor: col }); }
-    if (pan && PB.follow && !map.getBounds().pad(-0.25).contains(ll)) map.panTo(ll, { animate: false });
+    if (pan && PB.follow) {
+      var off = map.latLngToContainerPoint(ll).subtract(map.getSize().divideBy(2));
+      if (PB.snap || Math.abs(off.x) > map.getSize().x || Math.abs(off.y) > map.getSize().y) { map.setView(ll, map.getZoom(), { animate: false }); PB.snap = false; }
+      else {
+        // geser tanpa pembulatan piksel supaya gerak peta mulus; moveend berkala agar kanvas dan ubin menyusul
+        map._rawPanBy(off.multiplyBy(1 - Math.exp(-(dt || 16) / 220)));
+        map.fire('move');
+        PB.mv = (PB.mv || 0) + (dt || 16);
+        if (PB.mv > 400) { PB.mv = 0; map.fire('moveend'); }
+      }
+    }
     $('pbSpd').textContent = String(Math.round(c.v));
     $('pbSpd').style.color = col;
     var d = new Date(c.t);
@@ -1509,27 +1529,29 @@
     if (!PB.playing) return;
     var dt = PB.last ? Math.min(100, ts - PB.last) : 16; PB.last = ts;
     PB.pos += dt * PB.mult;
-    if (PB.pos >= PB.len) { PB.pos = PB.len; pbPlay(false); pbDraw(true); return; }
-    pbDraw(true);
+    if (PB.pos >= PB.len) { PB.pos = PB.len; pbPlay(false); pbDraw(true, dt); return; }
+    pbDraw(true, dt);
     PB.raf = requestAnimationFrame(pbTick);
   }
   function pbPlay(on) {
     PB.playing = on; PB.last = 0; cancelAnimationFrame(PB.raf);
+    if (!on && map && PB.open) map.fire('moveend');
     $('pbPlay').innerHTML = on ? '❚❚' : '▶';
-    if (on) { if (PB.pos >= PB.len) PB.pos = 0; PB.raf = requestAnimationFrame(pbTick); }
+    if (on) { if (PB.pos >= PB.len) PB.pos = 0; PB.snap = PB.snap || PB.pos === 0; PB.raf = requestAnimationFrame(pbTick); }
   }
   function pbOpen() {
     if (!map) return;
-    PB.open = true; $('pbBar').style.display = 'block'; $('pbHud').style.display = 'block';
+    PB.open = true; $('pbBar').style.display = 'block'; $('pbHud').style.display = 'block'; $('mapPlay').style.display = 'none';
     pbBuild();
     if (!PB.seq.length) { toast('Belum ada lintasan untuk diputar'); pbClose(); return; }
     var ll = PB.seq.map(function (p) { return [p.lat, p.lng]; });
+    PB.snap = true;
     setTimeout(function () { map.invalidateSize(); map.fitBounds(ll, { padding: [40, 40], maxZoom: 17 }); pbDraw(false); }, 80);
     pbSyncUi();
   }
   function pbClose() {
     PB.open = false; pbPlay(false);
-    $('pbBar').style.display = 'none'; $('pbHud').style.display = 'none';
+    $('pbBar').style.display = 'none'; $('pbHud').style.display = 'none'; $('mapPlay').style.display = '';
     if (PB.mk && map) { map.removeLayer(PB.mk); map.removeLayer(PB.ring); }
     PB.mk = PB.ring = null;
     if (map) setTimeout(function () { map.invalidateSize(); }, 50);
@@ -1540,12 +1562,21 @@
     $('pbFol').textContent = PB.follow ? 'Ikuti: ya' : 'Ikuti: tidak';
   }
   function pbInit() {
-    $('mapPlay').onclick = function () { if (PB.open) pbClose(); else pbOpen(); };
+    $('mapPlay').onclick = function () { pbOpen(); };
     $('pbX').onclick = pbClose;
     $('pbPlay').onclick = function () { pbPlay(!PB.playing); };
-    $('pbSl').oninput = function () { PB.pos = PB.len * (+this.value) / 1000; pbDraw(true); };
+    $('pbSl').oninput = function () { PB.pos = PB.len * (+this.value) / 1000; PB.snap = true; pbDraw(true); };
     $('pbMult').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-m'); if (m) { PB.mult = +m; pbSyncUi(); } };
     $('pbFol').onclick = function () { PB.follow = !PB.follow; pbSyncUi(); };
+  }
+  function openMapMenu() {
+    openSheet('<div class="grab"></div><div class="st">PETA</div>' +
+      '<button class="srow" id="mmOv" style="margin-top:10px"><div class="si"><b>Peta saya</b><small>Lapisan PDF peta (tampil di mode Peta)</small></div>' + CHEV + '</button>' +
+      '<button class="srow" id="mmKml"><div class="si"><b>Ekspor KML</b><small>Lintasan hari ini untuk Google Earth</small></div>' + CHEV + '</button>' +
+      '<button class="btn" id="mmX" style="width:100%;margin-top:10px">Tutup</button>');
+    $('mmX').onclick = closeSheet;
+    $('mmOv').onclick = function () { closeSheet(); openOvSheet(); };
+    $('mmKml').onclick = function () { closeSheet(); mapKml(); };
   }
   function mapKml() {
     var day = S.mapDay;
@@ -1626,7 +1657,8 @@
       }
     };
     $('splitSel').onchange = function () { S.settings.splitSec = +this.value; saveSettings(); recomputeLive(); toast('Batas pisah trip disimpan'); };
-    $('autoChk').onchange = function () { S.settings.auto = this.checked; saveSettings(); pushSchedule(); };
+    $('autoChk').onchange = function () { S.settings.auto = this.checked; saveSettings(); pushSchedule(); if (this.checked && native && !S.actPerm) askActivity(); };
+    $('btnAct').onclick = askActivity;
     $('marginSel').onchange = function () { S.settings.margin = +this.value; saveSettings(); renderSched(); pushSchedule(); };
     $('schedBox').onchange = onSched;
     $('schedBox').onclick = function (e) {
@@ -1643,15 +1675,24 @@
     $('btnPrint').onclick = function () { openPrint({ day: S.hMode === 'list' ? T.ymd(Date.now()) : S.hDay }); };
     document.querySelectorAll('#drawer a[data-print]').forEach(function (a) { a.onclick = function () { closeDrawer(); openPrint({ day: S.hDay }); }; });
     $('mapSeg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-map'); if (m) { S.settings.mapMode = m; saveSettings(); setTiles(); if (mini) { setBase(mini); syncOverlays(mini); } } };
-    $('mapChips').onclick = function (e) { var i = e.target.getAttribute && e.target.getAttribute('data-i'); if (i !== null && i !== undefined) { mapSel = +i; renderMap(true); } };
-    $('mapKml').onclick = mapKml;
+    $('mapChips').onclick = function (e) {
+      var t = e.target; if (!t.getAttribute) return;
+      if (t.getAttribute('data-k')) {
+        var nxt = { all: 'kerja', kerja: 'pribadi', pribadi: 'all' };
+        mapKind = nxt[mapKind]; if (!(S.mapCnt && S.mapCnt[mapKind]) && mapKind !== 'all') mapKind = nxt[mapKind]; if (!(S.mapCnt && S.mapCnt[mapKind]) && mapKind !== 'all') mapKind = 'all';
+        mapSel = -1; PB.cur = null;
+        // lewati mode yang tidak punya trip (renderMap mengembalikan ke 'all' bila kosong)
+        renderMap(true); return;
+      }
+      var i = t.getAttribute('data-i'); if (i !== null && i !== undefined) { mapSel = +i; renderMap(true); }
+    };
+    $('mapMenu').onclick = openMapMenu;
     $('mPrev').onclick = function () { shiftMap(-1); };
     $('mNext').onclick = function () { shiftMap(1); };
     $('mToday').onclick = function () { S.mapDay = S.today; mapSel = -1; fitted = false; renderMap(true); };
     $('mPick').onchange = function () { if (this.value && this.value <= S.today) { S.mapDay = this.value; mapSel = -1; fitted = false; renderMap(true); } };
     $('toMap').onclick = function () { showMap(S.hDay, -1); };
     $('hidList').onclick = onHidden;
-    $('mapOv').onclick = openOvSheet;
     $('miniX').onclick = function () { closeMini(); };
     $('ovAdd').onclick = function () { $('ovFile').value = ''; $('ovFile').click(); };
     $('ovFile').onchange = function () { if (this.files && this.files[0]) importOv(this.files[0]); };
