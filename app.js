@@ -145,6 +145,7 @@
     closeDrawer();
     if (v !== 'riwayat') closeMini(true);
     if (v !== 'lintasan' && map && map._loc) locStop(map);
+    if (v !== 'lintasan' && PB.open) pbClose();
     if (v === 'riwayat') { S.hMode = 'list'; loadRiwayat(); }
     if (v === 'lintasan') openMap();
     if (S.spPushed && v !== 'set') { S.spPushed = false; try { history.back(); } catch (e) {} }
@@ -964,7 +965,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.5.6'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.6.0'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1450,6 +1451,7 @@
       if (day !== S.mapDay || S.view !== 'lintasan') return;
       var trips = d.trips, pts = d.pts;
       if (mapSel >= trips.length) mapSel = -1;
+      PB.cur = d;
       $('mapChips').innerHTML = trips.length > 1 ? '<button data-i="-1"' + (mapSel < 0 ? ' class="on"' : '') + '>Semua</button>' + trips.map(function (x, i) {
         return '<button data-i="' + i + '"' + (mapSel === i ? ' class="on"' : '') + '>' + (i + 1) + ' · ' + T.hm(x.t.start) + '</button>';
       }).join('') : '';
@@ -1457,7 +1459,93 @@
       var bounds = drawTrips(trackLayer, pts, trips, mapSel, false);
       $('mapMsg').textContent = bounds.length ? '' : (day === S.today ? 'Belum ada lintasan hari ini. Lintasan muncul saat ada trip yang terekam.' : 'Tidak ada lintasan pada ' + T.dateLong(day) + '.');
       if (bounds.length && (fit || !fitted)) { map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 }); fitted = true; }
+      if (PB.open) { pbPlay(false); pbBuild(); if (!PB.seq.length) pbClose(); else pbDraw(false); }
     });
+  }
+  // ---------- putar ulang lintasan ----------
+  var PB = { open: false, seq: [], ax: [], pos: 0, len: 0, playing: false, mult: 10, follow: true, raf: 0, last: 0, mk: null, ring: null, cur: null };
+  function pbZone(v) { return v < 60 ? COL.g : (v < 90 ? COL.y : COL.r); }
+  function pbBuild() {
+    var d = PB.cur, seq = [], ax = [], a = 0;
+    PB.seq = seq; PB.ax = ax; PB.pos = 0; PB.len = 0;
+    if (!d) return;
+    var trips = mapSel >= 0 ? [d.trips[mapSel]] : d.trips;
+    trips.forEach(function (x) {
+      if (!x) return;
+      d.pts.forEach(function (p) {
+        if (p.t < x.t.start || p.t > x.t.end) return;
+        if (seq.length) { var dt = p.t - seq[seq.length - 1].t; a += dt > 60000 ? 2000 : Math.max(0, dt); }
+        seq.push(p); ax.push(a);
+      });
+    });
+    PB.len = a;
+  }
+  function pbAt(pos) {
+    var ax = PB.ax, seq = PB.seq, n = seq.length;
+    if (!n) return null;
+    var lo = 0, hi = n - 1;
+    while (lo < hi) { var m = (lo + hi + 1) >> 1; if (ax[m] <= pos) lo = m; else hi = m - 1; }
+    var p = seq[lo], q = seq[Math.min(lo + 1, n - 1)];
+    var span = ax[Math.min(lo + 1, n - 1)] - ax[lo], f = span > 0 ? Math.min(1, Math.max(0, (pos - ax[lo]) / span)) : 0;
+    var gap = q.t - p.t > 60000;
+    return { lat: p.lat + (q.lat - p.lat) * f, lng: p.lng + (q.lng - p.lng) * f, v: gap ? 0 : p.v + (q.v - p.v) * f, t: gap ? p.t : p.t + (q.t - p.t) * f };
+  }
+  function pbDraw(pan) {
+    var c = pbAt(PB.pos);
+    if (!c) { $('pbSpd').textContent = '0'; $('pbClk').textContent = '--.--.--'; return; }
+    var ll = [c.lat, c.lng], col = pbZone(c.v);
+    if (!PB.mk) {
+      PB.ring = L.circleMarker(ll, { radius: 14, color: col, weight: 3, fillOpacity: 0.15, fillColor: col, interactive: false }).addTo(map);
+      PB.mk = L.circleMarker(ll, { radius: 7, color: '#fff', weight: 3, fillColor: col, fillOpacity: 1, interactive: false }).addTo(map);
+    } else { PB.mk.setLatLng(ll); PB.ring.setLatLng(ll); PB.mk.setStyle({ fillColor: col }); PB.ring.setStyle({ color: col, fillColor: col }); }
+    if (pan && PB.follow && !map.getBounds().pad(-0.25).contains(ll)) map.panTo(ll, { animate: false });
+    $('pbSpd').textContent = String(Math.round(c.v));
+    $('pbSpd').style.color = col;
+    var d = new Date(c.t);
+    $('pbClk').textContent = T.pad(d.getHours()) + '.' + T.pad(d.getMinutes()) + '.' + T.pad(d.getSeconds());
+    $('pbSl').value = String(PB.len ? Math.round(PB.pos / PB.len * 1000) : 0);
+  }
+  function pbTick(ts) {
+    if (!PB.playing) return;
+    var dt = PB.last ? Math.min(100, ts - PB.last) : 16; PB.last = ts;
+    PB.pos += dt * PB.mult;
+    if (PB.pos >= PB.len) { PB.pos = PB.len; pbPlay(false); pbDraw(true); return; }
+    pbDraw(true);
+    PB.raf = requestAnimationFrame(pbTick);
+  }
+  function pbPlay(on) {
+    PB.playing = on; PB.last = 0; cancelAnimationFrame(PB.raf);
+    $('pbPlay').innerHTML = on ? '❚❚' : '▶';
+    if (on) { if (PB.pos >= PB.len) PB.pos = 0; PB.raf = requestAnimationFrame(pbTick); }
+  }
+  function pbOpen() {
+    if (!map) return;
+    PB.open = true; $('pbBar').style.display = 'block'; $('pbHud').style.display = 'block';
+    pbBuild();
+    if (!PB.seq.length) { toast('Belum ada lintasan untuk diputar'); pbClose(); return; }
+    var ll = PB.seq.map(function (p) { return [p.lat, p.lng]; });
+    setTimeout(function () { map.invalidateSize(); map.fitBounds(ll, { padding: [40, 40], maxZoom: 17 }); pbDraw(false); }, 80);
+    pbSyncUi();
+  }
+  function pbClose() {
+    PB.open = false; pbPlay(false);
+    $('pbBar').style.display = 'none'; $('pbHud').style.display = 'none';
+    if (PB.mk && map) { map.removeLayer(PB.mk); map.removeLayer(PB.ring); }
+    PB.mk = PB.ring = null;
+    if (map) setTimeout(function () { map.invalidateSize(); }, 50);
+  }
+  function pbSyncUi() {
+    document.querySelectorAll('#pbMult button').forEach(function (b) { b.classList.toggle('on', +b.getAttribute('data-m') === PB.mult); });
+    $('pbFol').classList.toggle('on', PB.follow);
+    $('pbFol').textContent = PB.follow ? 'Ikuti: ya' : 'Ikuti: tidak';
+  }
+  function pbInit() {
+    $('mapPlay').onclick = function () { if (PB.open) pbClose(); else pbOpen(); };
+    $('pbX').onclick = pbClose;
+    $('pbPlay').onclick = function () { pbPlay(!PB.playing); };
+    $('pbSl').oninput = function () { PB.pos = PB.len * (+this.value) / 1000; pbDraw(true); };
+    $('pbMult').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-m'); if (m) { PB.mult = +m; pbSyncUi(); } };
+    $('pbFol').onclick = function () { PB.follow = !PB.follow; pbSyncUi(); };
   }
   function mapKml() {
     var day = S.mapDay;
@@ -1473,6 +1561,7 @@
     $('setMenu').onclick = function (e) { var b = e.target.closest ? e.target.closest('[data-sp]') : null; if (b) openSet(b.getAttribute('data-sp')); };
     document.querySelectorAll('[data-back]').forEach(function (b) { b.onclick = backSet; });
     $('themeSeg').onclick = function (e) { var t = e.target.getAttribute && e.target.getAttribute('data-t'); if (t) { S.settings.theme = t; saveSettings(); applyTheme(); } };
+    pbInit();
     $('bkMake').onclick = function () { makeBackup(); };
     $('thinSel').onchange = function () { S.settings.thinDays = +this.value; saveSettings(); renderThinInfo(); };
     $('thinGo').onclick = function () { startThin(); };

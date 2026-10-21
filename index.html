@@ -46,10 +46,11 @@
       <div class="mapnav"><button class="ib" id="mPrev" aria-label="Hari sebelumnya"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><input type="date" id="mPick"><button class="ib" id="mNext" aria-label="Hari berikutnya"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button><button class="btn sm" id="mToday">Hari ini</button></div>
       <div class="mapbar">
         <div class="seg" id="mapSeg"><button data-map="sat">Satelit</button><button data-map="osm">Peta</button></div>
-        <button class="btn sm" id="mapOv">Peta saya</button><button class="btn sm" id="mapKml">KML</button>
+        <button class="btn sm" id="mapPlay">Putar</button><button class="btn sm" id="mapOv">Peta saya</button><button class="btn sm" id="mapKml">KML</button>
       </div>
       <div class="chips" id="mapChips"></div>
-      <div id="mapWrap"><div id="map"></div><div id="mapMsg"></div></div>
+      <div id="mapWrap"><div id="map"></div><div id="mapMsg"></div><div id="pbHud" style="display:none"><b id="pbSpd">0</b><small>km/j</small><span id="pbClk">--.--.--</span></div></div>
+      <div id="pbBar" style="display:none"><div class="pbr"><button class="btn" id="pbPlay" aria-label="Putar atau jeda">▶</button><input type="range" id="pbSl" min="0" max="1000" value="0"><button class="btn sm" id="pbX">Tutup</button></div><div class="pbr"><div class="seg" id="pbMult"><button data-m="1">×1</button><button data-m="10">×10</button><button data-m="60">×60</button></div><button class="btn sm" id="pbFol">Ikuti: ya</button></div></div>
       <div class="legend" style="margin:8px 16px 4px"><div></div><div></div><div></div></div>
       <div class="legl" style="margin:0 16px 4px"><span>0</span><span>60</span><span>90</span><span>120+</span></div>
       <div class="legnote"><i></i>Abu-abu = berhenti (0 km/j lebih dari 1 menit)</div>
@@ -164,7 +165,7 @@
       <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Label Kerja / Pribadi mengikuti jenis unit yang dipakai (diatur saat unit didaftarkan). Unit tiap trip bisa diubah di Riwayat.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
 
       <div class="h">VERSI</div>
-      <div class="card muted">HZ Trip versi 0.5.6<br>Berikutnya: putar ulang lintasan (animasi).</div>
+      <div class="card muted">HZ Trip versi 0.6.0<br>Putar ulang lintasan: tombol Putar di Lintasan.</div>
       </div>
     </section>
   </div>
@@ -178,7 +179,7 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.5.6</div>
+  <div class="ver">Versi 0.6.0</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
