@@ -125,6 +125,7 @@
       <div class="h">CADANGAN DATA</div>
       <div class="card"><div class="muted" id="bkInfo">Memeriksa…</div>
         <button class="btn pri" id="bkMake" style="margin-top:10px;width:100%">Buat cadangan sekarang</button>
+        <label class="plist" style="display:flex;align-items:center;gap:12px;margin-top:8px;font-size:15px"><input type="checkbox" id="autoBkChk" checked style="width:20px;height:20px"> Simpan cadangan otomatis tiap minggu</label>
         <button class="btn" id="bkRestore" style="margin-top:8px;width:100%">Pulihkan dari cadangan</button>
         <input type="file" id="bkFile" accept=".hztrip,application/gzip,application/octet-stream,application/json" style="display:none">
         <div class="muted" style="margin-top:8px">Satu berkas berisi semua trip, jadwal, unit, dan pengaturan. Kirim ke WhatsApp atau Drive supaya aman bila ponsel hilang. Peta saya (PDF) tidak ikut; impor ulang dari berkas PDF Anda.</div></div>
@@ -166,7 +167,7 @@
       <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Label Kerja / Pribadi mengikuti jenis unit yang dipakai (diatur saat unit didaftarkan). Unit tiap trip bisa diubah di Riwayat.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
 
       <div class="h">VERSI</div>
-      <div class="card muted">HZ Trip versi 0.6.1<br>Putar ulang lintasan: tombol Putar di Lintasan.</div>
+      <div class="card muted">HZ Trip versi 0.6.2<br>Putar ulang lintasan: tombol Putar di Lintasan.</div>
       </div>
     </section>
   </div>
@@ -180,7 +181,7 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.6.1</div>
+  <div class="ver">Versi 0.6.2</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>

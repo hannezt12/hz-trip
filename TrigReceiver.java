@@ -18,6 +18,14 @@ public class TrigReceiver extends BroadcastReceiver {
         try {
             String why = null;
             String a = i.getAction();
+            if (Trig.ACT_ALERT2.equals(a)) {
+                Alert.second(c);
+                return;
+            }
+            if (Trig.ACT_DISMISS.equals(a)) {
+                Alert.cancel(c, true);
+                return;
+            }
             if (Trig.ACT_VEH.equals(a)) {
                 if (ActivityTransitionResult.hasResult(i)) {
                     for (ActivityTransitionEvent e : ActivityTransitionResult.extractResult(i).getTransitionEvents()) {
@@ -33,7 +41,7 @@ public class TrigReceiver extends BroadcastReceiver {
                     why = "keluar pagar virtual (geofence)";
                 }
             }
-            if (why == null || !Sched.autoPossible(c, System.currentTimeMillis())) {
+            if (why == null || !(Sched.autoPossible(c, System.currentTimeMillis()) || Sched.p(c).getBoolean("notif", false))) {
                 return;
             }
             Intent s = new Intent(c, TripService.class).setAction(TripService.ACTION_TRIG).putExtra("why", why);

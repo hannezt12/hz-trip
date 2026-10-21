@@ -56,6 +56,8 @@ public class TripService extends Service {
     public static final String ACTION_STOP = "com.hz.hztrip.STOP";     // akhiri / jeda
     public static final String ACTION_AUTO = "com.hz.hztrip.AUTO";     // masuk jendela jadwal
     public static final String ACTION_RESUME = "com.hz.hztrip.RESUME"; // lanjutkan otomatis
+    public static final String ACTION_NOTIF = "com.hz.hztrip.NOTIF";   // masuk mode Notifikasi aktif
+    public static final String ACTION_OFF = "com.hz.hztrip.OFF";       // matikan semua
     public static final String ACTION_TRIG = "com.hz.hztrip.TRIG";     // pemicu dari Android (kendaraan / geofence)
 
     static final String CHANNEL_ID = "hztrip_rec";
@@ -125,6 +127,8 @@ public class TripService extends Service {
     private long lastNotifMs = 0;
     private int fenceHits = 0;
     private Location anchor = null;
+    private boolean notifOnly = false;
+    private boolean cekAndroid = false;
     private int cekExt = 0;
     private boolean cekGood = false;
     private long cekStart = 0;
@@ -206,7 +210,7 @@ public class TripService extends Service {
         } else if (ACTION_STOP.equals(action)) {
             if (manual) {
                 manual = false;
-                p.edit().putBoolean("manual", false).apply();
+                p.edit().putBoolean("manual", false).putBoolean("notif", true).apply();
                 diag("Rekam manual diakhiri");
                 endRecording();
                 afterTrip();
@@ -215,13 +219,35 @@ public class TripService extends Service {
                 if (we > 0L) {
                     p.edit().putLong("pausedUntil", we).apply();
                 }
+                p.edit().putBoolean("notif", true).apply();
+                diag("Jeda otomatis: masuk Notifikasi aktif");
                 shutdown();
             }
+        } else if (ACTION_NOTIF.equals(action) || ACTION_OFF.equals(action)) {
+            if (mode == M_REKAM) {
+                return;
+            }
+            boolean on = ACTION_NOTIF.equals(action);
+            long we = Sched.windowEnd(this, now);
+            SharedPreferences.Editor e = p.edit().putBoolean("notif", on);
+            if (we > 0L) {
+                e.putLong("pausedUntil", we);
+            }
+            e.apply();
+            diag(on ? "Notifikasi aktif dinyalakan" : "Semua dimatikan");
+            shutdown();
         } else if (ACTION_TRIG.equals(action)) {
             if (manual || mode == M_REKAM || mode == M_CEK) {
                 return;
             }
             if (!Sched.autoPossible(this, now)) {
+                if (mode == M_OFF && p.getBoolean("notif", false)) {
+                    diag("Pemicu Android (notifikasi aktif): " + why);
+                    notifOnly = true;
+                    mode = M_SIAGA;
+                    toCek(CEK_MOTION_MS, "pemicu " + why);
+                    return;
+                }
                 if (mode == M_OFF) {
                     shutdown();
                 }
@@ -232,11 +258,16 @@ public class TripService extends Service {
             }
             if (mode == M_SIAGA) {
                 diag("Pemicu Android: " + why);
+                cekAndroid = true;
                 toCek(CEK_MOTION_MS, "pemicu " + why);
             }
         } else if (ACTION_AUTO.equals(action) || ACTION_RESUME.equals(action)) {
             if (ACTION_RESUME.equals(action)) {
                 p.edit().putLong("pausedUntil", 0L).apply();
+                if (!Sched.autoPossible(this, now) && mode == M_OFF) {
+                    shutdown();
+                    return;
+                }
             }
             if (mode == M_OFF) {
                 afterTrip();
@@ -295,6 +326,7 @@ public class TripService extends Service {
         bufferT.clear();
         runStart = 0;
         mode = M_SIAGA;
+        Sched.p(this).edit().putBoolean("notif", false).apply();
         diag("Siaga" + (anchor != null ? " (pagar " + Sched.p(this).getInt("radius", 150) + " m)" : " (belum ada titik acuan)"));
         registerPassive();
         Trig.arm(this, anchor, Sched.p(this).getInt("radius", 150));
@@ -361,7 +393,13 @@ public class TripService extends Service {
                 diag("Cek selesai tanpa pemicu (" + (cekGood ? "posisi didapat, tidak bergerak" : "tidak ada posisi akurat") + ")");
                 stopGps();
                 releaseWl();
-                if (Sched.autoPossible(TripService.this, System.currentTimeMillis())) {
+                boolean na = notifOnly, ca = cekAndroid;
+                notifOnly = false;
+                cekAndroid = false;
+                if (ca && !na) {
+                    Alert.fire(TripService.this);
+                }
+                if (!na && Sched.autoPossible(TripService.this, System.currentTimeMillis())) {
                     enterSiaga(REARM_DELAY_MS);
                 } else {
                     shutdown();
@@ -371,6 +409,9 @@ public class TripService extends Service {
     };
 
     private void toRekam() {
+        Alert.cancel(this, false);
+        notifOnly = false;
+        cekAndroid = false;
         h.removeCallbacks(cekTimeout);
         h.removeCallbacks(probeRun);
         stopPassive();
@@ -461,7 +502,13 @@ public class TripService extends Service {
         closeWriter();
         releaseWl();
         cancelRemind();
-        Trig.disarm(this);
+        notifOnly = false;
+        cekAndroid = false;
+        if (Sched.p(this).getBoolean("notif", false)) {
+            Trig.enterNotif(this);
+        } else {
+            Trig.disarm(this);
+        }
         mode = M_OFF;
         manual = false;
         Sched.p(this).edit().putBoolean("manual", false).apply();
@@ -666,6 +713,17 @@ public class TripService extends Service {
             }
             if (go) {
                 diag("Pemicu: " + why);
+                if (notifOnly) {
+                    notifOnly = false;
+                    cekAndroid = false;
+                    h.removeCallbacks(cekTimeout);
+                    stopGps();
+                    releaseWl();
+                    Alert.fire(this);
+                    shutdown();
+                    return;
+                }
+                cekAndroid = false;
                 toRekam();
             }
         } else if (mode == M_REKAM) {
@@ -736,9 +794,13 @@ public class TripService extends Service {
     // ================= catatan diagnostik =================
 
     void diag(String msg) {
+        diagTo(this, msg);
+    }
+
+    static void diagTo(Context ctx, String msg) {
         try {
             synchronized (DLOCK) {
-                File f = new File(getFilesDir(), DIAG_FILE);
+                File f = new File(ctx.getFilesDir(), DIAG_FILE);
                 String line = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date()) + " " + msg + "\n";
                 FileOutputStream o = new FileOutputStream(f, true);
                 o.write(line.getBytes("UTF-8"));

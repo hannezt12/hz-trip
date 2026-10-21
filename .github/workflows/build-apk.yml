@@ -108,7 +108,7 @@ jobs:
         run: |
           DEST=android/app/src/main/java/com/hz/hztrip
           mkdir -p "$DEST"
-          cp MainActivity.java HzTripPlugin.java TripService.java Sched.java ScheduleReceiver.java HzTileService.java Trig.java TrigReceiver.java "$DEST/"
+          cp MainActivity.java HzTripPlugin.java TripService.java Sched.java ScheduleReceiver.java HzTileService.java Trig.java TrigReceiver.java Alert.java "$DEST/"
           ls -la "$DEST"
 
       - name: Ganti ikon aplikasi

@@ -27,9 +27,9 @@
   if (!Plug) { showErr('Plugin perekam tidak ditemukan'); return; }
 
   function mockPlugin() {
-    var L = {}, timer = null, sec = 0, mode = 'tidur', lat = -4.9, lng = 105.2, sched = { auto: true, margin: 30 };
+    var L = {}, timer = null, sec = 0, mode = 'tidur', lat = -4.9, lng = 105.2, sched = { auto: true, margin: 30 }, notif = false;
     function k(d) { return 'mock-pts-' + d; }
-    function st() { return { mode: mode, recording: mode === 'rekam', manual: mode === 'rekam', permission: true, background: false, batteryFree: false, auto: sched.auto, paused: false, winEnd: 0, nextStart: Date.now() + 8 * 3600000, count: sec, lastT: Date.now(), lastV: 0, lastAcc: 6, gpsOn: mode === 'rekam', sigSensor: true, actPerm: true }; }
+    function st() { return { mode: mode, recording: mode === 'rekam', manual: mode === 'rekam', permission: true, background: false, batteryFree: false, auto: sched.auto, paused: false, winEnd: 0, nextStart: Date.now() + 8 * 3600000, count: sec, lastT: Date.now(), lastV: 0, lastAcc: 6, gpsOn: mode === 'rekam', sigSensor: true, actPerm: true, notif: notif }; }
     function emit(n, o) { (L[n] || []).forEach(function (f) { f(o); }); }
     return {
       addListener: function (n, f) { (L[n] = L[n] || []).push(f); return Promise.resolve({ remove: function () {} }); },
@@ -37,7 +37,8 @@
       ensureBackground: function () { return Promise.resolve(st()); },
       ensureActivity: function () { return Promise.resolve(st()); },
       setSchedule: function (o) { sched = o; return Promise.resolve(st()); },
-      resumeAuto: function () { return Promise.resolve(st()); },
+      resumeAuto: function () { notif = false; return Promise.resolve(st()); },
+      setWatch: function (o) { notif = o.mode === 'notif'; return Promise.resolve(); },
       start: function () {
         mode = 'rekam'; sec = 0;
         timer = setInterval(function () {
@@ -52,7 +53,7 @@
         emit('state', st());
         return Promise.resolve({ recording: true });
       },
-      stop: function () { clearInterval(timer); mode = 'tidur'; emit('state', st()); return Promise.resolve({ recording: false }); },
+      stop: function () { clearInterval(timer); mode = 'tidur'; notif = true; emit('state', st()); return Promise.resolve({ recording: false }); },
       status: function () { return Promise.resolve(st()); },
       listDays: function () { var a = []; for (var i = 0; i < localStorage.length; i++) { var n = localStorage.key(i); if (n.indexOf('mock-pts-') === 0) a.push(n.slice(9)); } return Promise.resolve({ days: a.sort() }); },
       readDay: function (o) { return Promise.resolve({ text: localStorage.getItem(k(o.date)) || '' }); },
@@ -118,7 +119,7 @@
     S.mode = s.mode || (s.recording ? 'rekam' : 'tidur');
     S.manual = !!s.manual; S.paused = !!s.paused; S.auto = s.auto !== false;
     S.winEnd = s.winEnd || 0; S.nextStart = s.nextStart || 0;
-    S.actPerm = s.actPerm !== false; S.gpsOn = !!s.gpsOn; S.sigSensor = s.sigSensor !== false; S.lastT = s.lastT || 0;
+    S.notif = !!s.notif; S.actPerm = s.actPerm !== false; S.gpsOn = !!s.gpsOn; S.sigSensor = s.sigSensor !== false; S.lastT = s.lastT || 0;
     S.perm = s.permission !== false; S.bg = s.background !== false; S.battFree = !!s.batteryFree;
     if (S.mode !== 'rekam') S.live.t = 0;
     else if (s.lastT) S.live = { v: s.lastV * 3.6, acc: s.lastAcc, t: S.live.t, count: s.count };
@@ -200,12 +201,18 @@
   }
   function modeHtml() {
     if (S.mode === 'rekam') return '<div class="modebox">' + (S.manual ? '<b>Merekam manual</b>' : '<b>Merekam otomatis</b> · berhenti sendiri setelah 5 menit diam') + '</div>';
-    if (S.mode === 'siaga') return '<div class="modebox"><b>Siaga otomatis</b> · menunggu kendaraan jalan' + (S.winEnd ? '<br>jadwal sampai ' + T.hm(S.winEnd) : '') + '</div>';
-    if (S.mode === 'cek') return '<div class="modebox"><b>Memeriksa gerakan…</b> GPS menyala sebentar</div>';
-    if (!S.auto) return '<div class="modebox">Rekam otomatis dimatikan (Pengaturan).</div>';
-    if (S.paused) return '<div class="modebox"><b>Otomatis dijeda</b> sampai jadwal berikutnya<br><button class="btn sm" data-act="resume">Aktifkan lagi</button></div>';
-    if (S.nextStart) return '<div class="modebox">Tidur · di luar jadwal<br>otomatis aktif ' + whenText(S.nextStart) + '</div>';
-    return '<div class="modebox">Jadwal mingguan belum diisi.<br><button class="btn sm" data-act="sched">Isi jadwal</button></div>';
+    var txt;
+    var onAuto = S.mode === 'siaga' || S.mode === 'cek', onNotif = !onAuto && S.notif;
+    if (S.mode === 'siaga') txt = '<b>Siaga otomatis</b> · menunggu kendaraan jalan' + (S.winEnd ? '<br>jadwal sampai ' + T.hm(S.winEnd) : '');
+    else if (S.mode === 'cek') txt = '<b>Memeriksa gerakan…</b> GPS menyala sebentar';
+    else if (onNotif) txt = '<b>Notifikasi aktif</b> · GPS mati, berbunyi bila Anda mulai bergerak. Perekaman tetap Anda mulai sendiri.';
+    else if (!S.auto) txt = 'Rekam otomatis dimatikan (Pengaturan).';
+    else if (S.paused) txt = '<b>Otomatis dijeda</b> sampai jadwal berikutnya';
+    else if (S.nextStart) txt = 'Tidur · di luar jadwal<br>otomatis aktif ' + whenText(S.nextStart);
+    else txt = 'Jadwal mingguan belum diisi.';
+    return '<div class="modebox">' + txt + '<div class="mrow2"><button class="btn sm' + (onAuto ? ' on' : '') + '" data-act="auto">Aktifkan otomatis</button><button class="btn sm' + (onNotif ? ' on' : '') + '" data-act="notif">Notifikasi aktif</button></div>' +
+      (onAuto || onNotif ? '<button class="btn sm" data-act="off" style="margin-top:8px">Matikan semua</button>' : '') +
+      (!S.nextStart && !onAuto && !onNotif ? '<button class="btn sm" data-act="sched" style="margin-top:8px">Isi jadwal</button>' : '') + '</div>';
   }
   function renderSpido() {
     var rec = S.mode === 'rekam';
@@ -256,7 +263,7 @@
 
   function toggleRec() {
     if (S.mode === 'rekam') {
-      Plug.stop().then(function () { setTimeout(syncStatus, 400); toast(S.manual ? 'Perekaman diakhiri' : 'Otomatis dijeda sampai jadwal berikutnya'); });
+      Plug.stop().then(function () { setTimeout(syncStatus, 400); toast(S.manual ? 'Perekaman diakhiri. Notifikasi aktif' : 'Otomatis dijeda. Notifikasi aktif'); });
       return;
     }
     Plug.ensurePermissions().then(function (r) {
@@ -274,7 +281,12 @@
   function openBatt() { Plug.openBatterySettings().catch(function () { toast('Tidak bisa membuka pengaturan baterai'); }); }
   function onModeAction(e) {
     var a = e.target.getAttribute && e.target.getAttribute('data-act');
-    if (a === 'resume') Plug.resumeAuto().then(applyStatus);
+    if (a === 'resume' || a === 'auto') {
+      if (!S.auto) { toast('Rekam otomatis dimatikan di Pengaturan'); return; }
+      Plug.resumeAuto().then(function (st) { applyStatus(st); setTimeout(syncStatus, 500); if (S.mode !== 'siaga' && S.mode !== 'cek' && S.nextStart) toast('Di luar jadwal. Otomatis aktif ' + whenText(S.nextStart)); });
+    }
+    else if (a === 'notif') Plug.setWatch({ mode: 'notif' }).then(function () { setTimeout(syncStatus, 500); toast('Notifikasi aktif'); }).catch(function (x) { toast(String(x && x.message || x)); });
+    else if (a === 'off') Plug.setWatch({ mode: 'off' }).then(function () { setTimeout(syncStatus, 500); toast('Semua dimatikan'); });
     else if (a === 'sched') go('set');
     else if (a === 'bg') askBackground();
     else if (a === 'batt') openBatt();
@@ -968,7 +980,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.6.1'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.6.2'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1007,10 +1019,45 @@
     if (!$('bkInfo')) return;
     Plug.listDays().then(function (r) {
       var n = (r.days || []).length;
-      $('bkInfo').innerHTML = (S.settings.lastBackup ? 'Terakhir dibuat: <b>' + dtText(S.settings.lastBackup) + '</b> (' + bkAge() + ' hari lalu)' : 'Belum pernah membuat cadangan.') + '<br>Data di ponsel: ' + n + ' hari rekaman.';
+      $('bkInfo').innerHTML = (S.settings.lastBackup ? 'Terakhir dibuat: <b>' + dtText(S.settings.lastBackup) + '</b> (' + bkAge() + ' hari lalu)' : 'Belum pernah membuat cadangan.') + '<br>Data di ponsel: ' + n + ' hari rekaman.' + (S.settings.lastAuto ? '<br>Cadangan otomatis terakhir: <b>' + dtText(S.settings.lastAuto) + '</b> (' + (S.settings.autoDir === 'EXTERNAL' ? 'folder data aplikasi' : 'Dokumen/HZTrip/cadangan') + ')' : '');
+      if ($('autoBkChk')) $('autoBkChk').checked = S.settings.autoBk !== false;
     }).catch(function () {});
   }
   var bkBusy = false;
+  function buildBackup() {
+    return Plug.listDays().then(function (r) {
+      var days = r.days || [], out = {}, i = 0;
+      function next() { if (i >= days.length) return Promise.resolve(); var d = days[i++]; return Plug.readDay({ date: d }).then(function (x) { if (x.text) out[d] = x.text; return next(); }); }
+      return next().then(function () { return out; });
+    }).then(function (daysObj) {
+      var st = JSON.parse(JSON.stringify(S.settings)); delete st.ovl; delete st.bkSnooze;
+      return toGz(JSON.stringify({ app: 'hztrip', v: 1, at: Date.now(), settings: st, overrides: S.ov, days: daysObj }));
+    }).then(blobB64);
+  }
+  var autoBusy = false;
+  function pruneAuto(dir) {
+    var P = window.Capacitor.Plugins;
+    P.Filesystem.readdir({ path: 'HZTrip/cadangan', directory: dir }).then(function (r) {
+      var fs = (r.files || []).map(function (f) { return f.name || f; }).filter(function (n) { return /^HZTrip-auto-.*\.hztrip$/.test(n); }).sort();
+      fs.slice(0, Math.max(0, fs.length - 4)).forEach(function (n) { P.Filesystem.deleteFile({ path: 'HZTrip/cadangan/' + n, directory: dir }).catch(function () {}); });
+    }).catch(function () {});
+  }
+  // Cadangan otomatis mingguan ke folder Dokumen/HZTrip/cadangan (4 berkas terakhir disimpan)
+  function autoBackup() {
+    var P = window.Capacitor && window.Capacitor.Plugins;
+    if (!native || !P || !P.Filesystem || S.settings.autoBk === false || autoBusy || bkBusy) return Promise.resolve();
+    if (Date.now() - (S.settings.lastAuto || 0) < 7 * 86400000) return Promise.resolve();
+    autoBusy = true;
+    return buildBackup().then(function (b64) {
+      var path = 'HZTrip/cadangan/HZTrip-auto-' + T.ymd(Date.now()) + '.hztrip';
+      function put(dir) { return P.Filesystem.writeFile({ path: path, data: b64, directory: dir, recursive: true }).then(function () { return dir; }); }
+      return put('DOCUMENTS').catch(function () { return put('EXTERNAL'); });
+    }).then(function (dir) {
+      S.settings.lastAuto = Date.now(); S.settings.autoDir = dir; saveSettings();
+      pruneAuto(dir); renderBackupInfo(); toast('Cadangan otomatis tersimpan');
+    }).catch(function () { diagLocal('gagal'); }).then(function () { autoBusy = false; });
+  }
+  function diagLocal() {}
   function makeBackup() {
     if (bkBusy) return Promise.resolve();
     bkBusy = true; toast('Menyiapkan cadangan…');
@@ -1138,11 +1185,11 @@
   function renderBkNote(force) {
     var box = $('bkNote'); if (!box) return;
     var base = S.settings.lastBackup || S.settings.firstSeen || Date.now(), age = Math.floor((Date.now() - base) / 86400000);
-    var show = age >= 7 && Date.now() > (S.settings.bkSnooze || 0);
+    var show = age >= 30 && Date.now() > (S.settings.bkSnooze || 0);
     var key = show ? 'y' + age : 'n';
     if (!force && key === bkNoteKey) return;
     bkNoteKey = key;
-    box.innerHTML = show ? '<div class="bknote">' + (S.settings.lastBackup ? 'Sudah ' + age + ' hari sejak cadangan terakhir.' : 'Data Anda belum pernah dicadangkan.') + ' Cadangkan supaya aman bila ponsel hilang atau rusak.<div class="row"><button class="btn sm pri" id="bkNow">Cadangkan</button><button class="btn sm" id="bkLater">Nanti</button></div></div>' : '';
+    box.innerHTML = show ? '<div class="bknote">' + (S.settings.lastBackup ? 'Sudah ' + age + ' hari sejak cadangan terakhir dibagikan.' : 'Cadangan belum pernah dibagikan keluar ponsel.') + ' Bagikan salinan ke WhatsApp atau Drive supaya aman bila ponsel hilang.<div class="row"><button class="btn sm pri" id="bkNow">Cadangkan</button><button class="btn sm" id="bkLater">Nanti</button></div></div>' : '';
     if (show) {
       $('bkNow').onclick = function () { makeBackup(); };
       $('bkLater').onclick = function () { S.settings.bkSnooze = Date.now() + 3 * 86400000; saveSettings(); renderBkNote(true); };
@@ -1497,17 +1544,23 @@
     while (lo < hi) { var m = (lo + hi + 1) >> 1; if (ax[m] <= pos) lo = m; else hi = m - 1; }
     var p = seq[lo], q = seq[Math.min(lo + 1, n - 1)];
     var span = ax[Math.min(lo + 1, n - 1)] - ax[lo], f = span > 0 ? Math.min(1, Math.max(0, (pos - ax[lo]) / span)) : 0;
-    var gap = q.t - p.t > 60000;
-    return { lat: p.lat + (q.lat - p.lat) * f, lng: p.lng + (q.lng - p.lng) * f, v: gap ? 0 : p.v + (q.v - p.v) * f, t: gap ? p.t : p.t + (q.t - p.t) * f };
+    var gap = q.t - p.t > 60000, hd = null;
+    for (var k = lo + 1; k < Math.min(n, lo + 8); k++) {
+      var dy = (seq[k].lat - p.lat) * 111320, dx = (seq[k].lng - p.lng) * 111320 * Math.cos(p.lat * Math.PI / 180);
+      if (dx * dx + dy * dy >= 16) { hd = Math.atan2(dx, dy) * 180 / Math.PI; break; }
+    }
+    return { h: gap ? null : hd, lat: p.lat + (q.lat - p.lat) * f, lng: p.lng + (q.lng - p.lng) * f, v: gap ? 0 : p.v + (q.v - p.v) * f, t: gap ? p.t : p.t + (q.t - p.t) * f };
   }
   function pbDraw(pan, dt) {
     var c = pbAt(PB.pos);
     if (!c) { $('pbSpd').textContent = '0'; $('pbClk').textContent = '--.--.--'; return; }
     var ll = [c.lat, c.lng], col = pbZone(c.v);
+    if (c.h !== null) PB.hd = c.h;
     if (!PB.mk) {
-      PB.ring = L.circleMarker(ll, { radius: 14, color: col, weight: 3, fillOpacity: 0.15, fillColor: col, interactive: false }).addTo(map);
-      PB.mk = L.circleMarker(ll, { radius: 7, color: '#fff', weight: 3, fillColor: col, fillOpacity: 1, interactive: false }).addTo(map);
-    } else { PB.mk.setLatLng(ll); PB.ring.setLatLng(ll); PB.mk.setStyle({ fillColor: col }); PB.ring.setStyle({ color: col, fillColor: col }); }
+      PB.mk = L.marker(ll, { icon: L.divIcon({ className: 'pbarrow', html: '<svg viewBox="0 0 24 24" width="34" height="34"><path d="M12 1.5L21.5 22 12 17 2.5 22Z" fill="#2F80FF" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>', iconSize: [34, 34], iconAnchor: [17, 17] }), interactive: false, keyboard: false, zIndexOffset: 1000 }).addTo(map);
+    } else PB.mk.setLatLng(ll);
+    var el = PB.mk.getElement && PB.mk.getElement();
+    if (el && el.firstChild) el.firstChild.style.transform = 'rotate(' + (PB.hd || 0) + 'deg)';
     if (pan && PB.follow) {
       var off = map.latLngToContainerPoint(ll).subtract(map.getSize().divideBy(2));
       if (PB.snap || Math.abs(off.x) > map.getSize().x || Math.abs(off.y) > map.getSize().y) { map.setView(ll, map.getZoom(), { animate: false }); PB.snap = false; }
@@ -1552,8 +1605,8 @@
   function pbClose() {
     PB.open = false; pbPlay(false);
     $('pbBar').style.display = 'none'; $('pbHud').style.display = 'none'; $('mapPlay').style.display = '';
-    if (PB.mk && map) { map.removeLayer(PB.mk); map.removeLayer(PB.ring); }
-    PB.mk = PB.ring = null;
+    if (PB.mk && map) map.removeLayer(PB.mk);
+    PB.mk = null; PB.hd = 0;
     if (map) setTimeout(function () { map.invalidateSize(); }, 50);
   }
   function pbSyncUi() {
@@ -1594,6 +1647,7 @@
     $('themeSeg').onclick = function (e) { var t = e.target.getAttribute && e.target.getAttribute('data-t'); if (t) { S.settings.theme = t; saveSettings(); applyTheme(); } };
     pbInit();
     $('bkMake').onclick = function () { makeBackup(); };
+    $('autoBkChk').onchange = function () { S.settings.autoBk = this.checked; saveSettings(); if (this.checked) autoBackup(); };
     $('thinSel').onchange = function () { S.settings.thinDays = +this.value; saveSettings(); renderThinInfo(); };
     $('thinGo').onclick = function () { startThin(); };
     $('diagShare').onclick = function () { var t = S.diagText || ''; if (!t) { toast('Belum ada catatan'); return; } saveFile('HZTrip-catatan-' + T.ymd(Date.now()) + '.txt', textB64(t), 'text/plain'); };
@@ -1717,7 +1771,7 @@
     Plug.addListener('fix', onFix);
     Plug.addListener('state', applyStatus);
     document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) { syncStatus(); refreshToday().then(renderSpido); if (S.view === 'riwayat') loadRiwayat(); purgeExpired(); }
+      if (!document.hidden) { syncStatus(); refreshToday().then(renderSpido); if (S.view === 'riwayat') loadRiwayat(); purgeExpired(); autoBackup(); }
     });
     var tick = 0;
     setInterval(function () {
@@ -1730,7 +1784,7 @@
     loadMeta().then(function () {
       renderSettings();
       return Promise.all([syncStatus(), refreshToday()]);
-    }).then(function () { pushSchedule(); renderSpido(); purgeExpired(); });
+    }).then(function () { pushSchedule(); renderSpido(); purgeExpired(); setTimeout(autoBackup, 6000); });
     renderSpido();
   }
   init();

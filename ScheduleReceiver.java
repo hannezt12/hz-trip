@@ -10,6 +10,9 @@ public class ScheduleReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         try {
             Sched.evaluate(context);
+            if (Sched.p(context).getBoolean("notif", false) && TripService.mode == TripService.M_OFF) {
+                Trig.enterNotif(context);
+            }
         } catch (Exception ignored) {
         }
     }

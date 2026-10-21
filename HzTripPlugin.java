@@ -161,6 +161,7 @@ public class HzTripPlugin extends Plugin {
         o.put("permission", hasLocation());
         o.put("background", hasBackground());
         o.put("actPerm", Trig.actGranted(ctx));
+        o.put("notif", Sched.p(ctx).getBoolean("notif", false));
         o.put("auto", Sched.autoEnabled(ctx));
         o.put("winEnd", Sched.windowEnd(ctx, now));
         o.put("nextStart", Sched.nextStart(ctx, now));
@@ -229,6 +230,23 @@ public class HzTripPlugin extends Plugin {
         Sched.p(ctx).edit().putLong("pausedUntil", 0L).apply();
         Sched.evaluate(ctx);
         call.resolve(statusObject());
+    }
+
+    @PluginMethod
+    public void setWatch(PluginCall call) {
+        String m = call.getString("mode", "off");
+        Intent i = new Intent(getContext(), TripService.class).setAction("notif".equals(m) ? TripService.ACTION_NOTIF : TripService.ACTION_OFF);
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                getContext().startForegroundService(i);
+            } else {
+                getContext().startService(i);
+            }
+        } catch (Exception e) {
+            call.reject(String.valueOf(e.getMessage()));
+            return;
+        }
+        call.resolve();
     }
 
     @PluginMethod

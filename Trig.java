@@ -24,6 +24,8 @@ import java.util.Locale;
 final class Trig {
     static final String ACT_VEH = "com.hz.hztrip.TRIG_VEH";
     static final String ACT_FENCE = "com.hz.hztrip.TRIG_FENCE";
+    static final String ACT_ALERT2 = "com.hz.hztrip.ALERT2";
+    static final String ACT_DISMISS = "com.hz.hztrip.ALERT_X";
     private static boolean vehOn = false;
     private static String fenceKey = "";
 
@@ -45,8 +47,8 @@ final class Trig {
     }
 
     /** Pasang (atau perbarui) pemicu. Aman dipanggil berulang. */
-    static void arm(final TripService s, Location anchor, int radius) {
-        final Context c = s.getApplicationContext();
+    static void arm(Context ctx, Location anchor, int radius) {
+        final Context c = ctx.getApplicationContext();
         if (!vehOn) {
             if (actGranted(c)) {
                 try {
@@ -61,16 +63,16 @@ final class Trig {
                                 @Override
                                 public void onFailure(Exception e) {
                                     vehOn = false;
-                                    s.diag("Pemicu kendaraan gagal dipasang: " + e.getMessage());
+                                    TripService.diagTo(c, "Pemicu kendaraan gagal dipasang: " + e.getMessage());
                                 }
                             });
                     vehOn = true;
-                    s.diag("Pemicu kendaraan dipasang");
+                    TripService.diagTo(c, "Pemicu kendaraan dipasang");
                 } catch (Throwable t) {
-                    s.diag("Pemicu kendaraan tidak tersedia: " + t.getMessage());
+                    TripService.diagTo(c, "Pemicu kendaraan tidak tersedia: " + t.getMessage());
                 }
             } else {
-                s.diag("Pemicu kendaraan dilewati: izin Aktivitas fisik belum diberikan");
+                TripService.diagTo(c, "Pemicu kendaraan dilewati: izin Aktivitas fisik belum diberikan");
             }
         }
         if (anchor == null) {
@@ -95,13 +97,13 @@ final class Trig {
                         @Override
                         public void onFailure(Exception e) {
                             fenceKey = "";
-                            s.diag("Geofence gagal dipasang: " + e.getMessage());
+                            TripService.diagTo(c, "Geofence gagal dipasang: " + e.getMessage());
                         }
                     });
             fenceKey = key;
-            s.diag("Geofence dipasang (" + r + " m)");
+            TripService.diagTo(c, "Geofence dipasang (" + r + " m)");
         } catch (Throwable t) {
-            s.diag("Geofence tidak tersedia: " + t.getMessage());
+            TripService.diagTo(c, "Geofence tidak tersedia: " + t.getMessage());
         }
     }
 
@@ -117,5 +119,25 @@ final class Trig {
         }
         vehOn = false;
         fenceKey = "";
+    }
+
+    static Location anchorOf(Context c) {
+        try {
+            String s = Sched.p(c).getString("anchor", "");
+            if (s != null && s.indexOf(',') > 0) {
+                String[] a = s.split(",");
+                Location l = new Location("anchor");
+                l.setLatitude(Double.parseDouble(a[0]));
+                l.setLongitude(Double.parseDouble(a[1]));
+                return l;
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    /** Pasang pemicu untuk mode "Notifikasi aktif" tanpa menjalankan service. */
+    static void enterNotif(Context c) {
+        arm(c, anchorOf(c), Sched.p(c).getInt("radius", 150));
     }
 }
