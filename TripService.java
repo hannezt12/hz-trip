@@ -128,6 +128,8 @@ public class TripService extends Service {
     private int fenceHits = 0;
     private Location anchor = null;
     private boolean notifOnly = false;
+    private boolean anchorFresh = false;
+    private boolean recManual = false;
     private boolean cekAndroid = false;
     private int cekExt = 0;
     private boolean cekGood = false;
@@ -254,6 +256,7 @@ public class TripService extends Service {
                 return;
             }
             if (mode == M_OFF) {
+                anchorFresh = false;
                 afterTrip();
             }
             if (mode == M_SIAGA) {
@@ -270,6 +273,7 @@ public class TripService extends Service {
                 }
             }
             if (mode == M_OFF) {
+                anchorFresh = false;
                 afterTrip();
             } else {
                 updateNotif();
@@ -281,6 +285,7 @@ public class TripService extends Service {
                     manual = true;
                     toRekam();
                 } else {
+                    anchorFresh = false;
                     afterTrip();
                 }
             }
@@ -418,6 +423,7 @@ public class TripService extends Service {
         cancelSig();
         long now = System.currentTimeMillis();
         mode = M_REKAM;
+        recManual = manual;
         diag("Rekam mulai" + (manual ? " (manual)" : " (otomatis)"));
         everFast = false;
         sessMax = 0;
@@ -477,8 +483,11 @@ public class TripService extends Service {
 
     private void endRecording() {
         h.removeCallbacks(watchdog);
-        if (everFast) {
+        if (everFast || recManual) {
             saveAnchor();
+            anchorFresh = anchor != null;
+        } else {
+            anchorFresh = false;
         }
         stopGps();
         closeWriter();
@@ -619,7 +628,7 @@ public class TripService extends Service {
             }
             if (loc.hasSpeed() && loc.getSpeed() * 3.6 >= START_KMH) {
                 toCek(CEK_MOTION_MS, "posisi pasif: kecepatan " + Math.round(loc.getSpeed() * 3.6) + " km/j");
-            } else if (outsideFenceLoose(loc)) {
+            } else if (fenceHit(loc)) {
                 toCek(CEK_MOTION_MS, "posisi pasif: di luar pagar " + Math.round(loc.distanceTo(anchor)) + " m");
             }
         }
@@ -707,7 +716,7 @@ public class TripService extends Service {
             } else {
                 runStart = 0;
             }
-            if (!go && outsideFenceLoose(loc)) {
+            if (!go && fenceHit(loc)) {
                 go = true;
                 why = "keluar pagar " + Math.round(loc.distanceTo(anchor)) + " m, akurasi " + Math.round(acc) + " m";
             }
@@ -789,6 +798,21 @@ public class TripService extends Service {
         }
         anchor = new Location(prev);
         Sched.p(this).edit().putString("anchor", String.format(Locale.US, "%.6f,%.6f", prev.getLatitude(), prev.getLongitude())).apply();
+    }
+
+    /** Titik acuan pagar hanya dipakai bila masih segar (tempat berhenti terakhir). Bila tidak, pusat pagar dipindah ke posisi akurat pertama dan tidak memicu rekaman. */
+    private boolean fenceHit(Location loc) {
+        if (!anchorFresh) {
+            if (loc.hasAccuracy() && loc.getAccuracy() <= MAX_ACC) {
+                anchor = new Location(loc);
+                Sched.p(this).edit().putString("anchor", String.format(Locale.US, "%.6f,%.6f", loc.getLatitude(), loc.getLongitude())).apply();
+                anchorFresh = true;
+                diag("Titik acuan pagar dipindah ke posisi sekarang (acuan lama sudah tidak berlaku)");
+                Trig.arm(this, anchor, Sched.p(this).getInt("radius", 150));
+            }
+            return false;
+        }
+        return outsideFenceLoose(loc);
     }
 
     // ================= catatan diagnostik =================

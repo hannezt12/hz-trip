@@ -58,7 +58,7 @@ public class AlertActivity extends Activity {
         } else {
             w.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
         }
-        w.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        w.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
         w.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
 
@@ -139,14 +139,11 @@ public class AlertActivity extends Activity {
         lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         lp.y = dp(24);
         w.setAttributes(lp);
-        h.postDelayed(closer, AUTO_CLOSE_MS);
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        h.removeCallbacks(closer);
-        h.postDelayed(closer, AUTO_CLOSE_MS);
     }
 
     @Override
