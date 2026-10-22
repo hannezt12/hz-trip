@@ -29,13 +29,14 @@
   function mockPlugin() {
     var L = {}, timer = null, sec = 0, mode = 'tidur', lat = -4.9, lng = 105.2, sched = { auto: true, margin: 30 }, notif = false;
     function k(d) { return 'mock-pts-' + d; }
-    function st() { return { mode: mode, recording: mode === 'rekam', manual: mode === 'rekam', permission: true, background: false, batteryFree: false, auto: sched.auto, paused: false, winEnd: 0, nextStart: Date.now() + 8 * 3600000, count: sec, lastT: Date.now(), lastV: 0, lastAcc: 6, gpsOn: mode === 'rekam', sigSensor: true, actPerm: true, notif: notif }; }
+    function st() { return { mode: mode, recording: mode === 'rekam', manual: mode === 'rekam', permission: true, background: false, batteryFree: false, auto: sched.auto, paused: false, winEnd: 0, nextStart: Date.now() + 8 * 3600000, count: sec, lastT: Date.now(), lastV: 0, lastAcc: 6, gpsOn: mode === 'rekam', sigSensor: true, actPerm: true, notif: notif, overlay: true }; }
     function emit(n, o) { (L[n] || []).forEach(function (f) { f(o); }); }
     return {
       addListener: function (n, f) { (L[n] = L[n] || []).push(f); return Promise.resolve({ remove: function () {} }); },
       ensurePermissions: function () { return Promise.resolve({ granted: true }); },
       ensureBackground: function () { return Promise.resolve(st()); },
       ensureActivity: function () { return Promise.resolve(st()); },
+      openOverlaySettings: function () { return Promise.resolve(); },
       setSchedule: function (o) { sched = o; return Promise.resolve(st()); },
       resumeAuto: function () { notif = false; return Promise.resolve(st()); },
       setWatch: function (o) { notif = o.mode === 'notif'; return Promise.resolve(); },
@@ -119,7 +120,7 @@
     S.mode = s.mode || (s.recording ? 'rekam' : 'tidur');
     S.manual = !!s.manual; S.paused = !!s.paused; S.auto = s.auto !== false;
     S.winEnd = s.winEnd || 0; S.nextStart = s.nextStart || 0;
-    S.notif = !!s.notif; S.actPerm = s.actPerm !== false; S.gpsOn = !!s.gpsOn; S.sigSensor = s.sigSensor !== false; S.lastT = s.lastT || 0;
+    S.notif = !!s.notif; S.overlay = s.overlay !== false; S.actPerm = s.actPerm !== false; S.gpsOn = !!s.gpsOn; S.sigSensor = s.sigSensor !== false; S.lastT = s.lastT || 0;
     S.perm = s.permission !== false; S.bg = s.background !== false; S.battFree = !!s.batteryFree;
     if (S.mode !== 'rekam') S.live.t = 0;
     else if (s.lastT) S.live = { v: s.lastV * 3.6, acc: s.lastAcc, t: S.live.t, count: s.count };
@@ -200,19 +201,20 @@
     return HARI[d.getDay()] + ' ' + T.hm(ts);
   }
   function modeHtml() {
-    if (S.mode === 'rekam') return '<div class="modebox">' + (S.manual ? '<b>Merekam manual</b>' : '<b>Merekam otomatis</b> · berhenti sendiri setelah 5 menit diam') + '</div>';
-    var txt;
+    if (S.mode === 'rekam') return (S.manual ? '<b>Merekam manual</b>' : '<b>Merekam otomatis</b> · berhenti sendiri setelah 5 menit diam');
     var onAuto = S.mode === 'siaga' || S.mode === 'cek', onNotif = !onAuto && S.notif;
-    if (S.mode === 'siaga') txt = '<b>Siaga otomatis</b> · menunggu kendaraan jalan' + (S.winEnd ? '<br>jadwal sampai ' + T.hm(S.winEnd) : '');
-    else if (S.mode === 'cek') txt = '<b>Memeriksa gerakan…</b> GPS menyala sebentar';
-    else if (onNotif) txt = '<b>Notifikasi aktif</b> · GPS mati, berbunyi bila Anda mulai bergerak. Perekaman tetap Anda mulai sendiri.';
-    else if (!S.auto) txt = 'Rekam otomatis dimatikan (Pengaturan).';
-    else if (S.paused) txt = '<b>Otomatis dijeda</b> sampai jadwal berikutnya';
-    else if (S.nextStart) txt = 'Tidur · di luar jadwal<br>otomatis aktif ' + whenText(S.nextStart);
-    else txt = 'Jadwal mingguan belum diisi.';
-    return '<div class="modebox">' + txt + '<div class="mrow2"><button class="btn sm' + (onAuto ? ' on' : '') + '" data-act="auto">Aktifkan otomatis</button><button class="btn sm' + (onNotif ? ' on' : '') + '" data-act="notif">Notifikasi aktif</button></div>' +
-      (onAuto || onNotif ? '<button class="btn sm" data-act="off" style="margin-top:8px">Matikan semua</button>' : '') +
-      (!S.nextStart && !onAuto && !onNotif ? '<button class="btn sm" data-act="sched" style="margin-top:8px">Isi jadwal</button>' : '') + '</div>';
+    if (S.mode === 'siaga') return '<b>Siaga otomatis</b> · menunggu kendaraan jalan' + (S.winEnd ? '<br>Sampai jam ' + T.hm(S.winEnd) : '');
+    if (S.mode === 'cek') return '<b>Memeriksa gerakan…</b> GPS menyala sebentar';
+    if (onNotif) return '<b>Pengingat aktif</b> · GPS mati, popup muncul bila Anda mulai bergerak. Perekaman tetap Anda mulai sendiri.';
+    if (!S.auto) return 'Rekam otomatis dimatikan (Pengaturan).';
+    if (S.paused) return '<b>Otomatis dijeda</b> sampai jadwal berikutnya';
+    if (S.nextStart) return 'Tidur · di luar jadwal<br>otomatis aktif ' + whenText(S.nextStart);
+    return 'Jadwal mingguan belum diisi.<br><button class="btn sm" data-act="sched" style="margin-top:6px">Isi jadwal</button>';
+  }
+  function modeBtnsHtml() {
+    if (S.mode === 'rekam') return '';
+    var onAuto = S.mode === 'siaga' || S.mode === 'cek', onNotif = !onAuto && S.notif;
+    return '<div class="mrow2"><button class="btn' + (onAuto ? ' on' : '') + '" data-act="auto">Aktifkan otomatis</button><button class="btn' + (onNotif ? ' on' : '') + '" data-act="notif">Pengingat aktif</button></div>';
   }
   function renderSpido() {
     var rec = S.mode === 'rekam';
@@ -233,9 +235,11 @@
     if (rec) g = !S.live.t ? 'Menunggu sinyal GPS…' : 'GPS ±' + Math.round(S.live.acc) + ' m · ' + S.live.count + ' titik';
     $('gpsLine').textContent = g;
     $('modeBox').innerHTML = modeHtml();
+    $('modeBtns').innerHTML = modeBtnsHtml();
     var w = '';
     if (!S.perm) w += '<div class="warn">Izin lokasi belum diberikan. Tekan Mulai lalu pilih "Izinkan".</div>';
     else if (native && S.auto && !S.bg) w += '<div class="warn">Agar rekam otomatis jalan saat layar mati, izinkan lokasi "Selalu".<br><button class="btn sm" data-act="bg" style="margin-top:8px">Atur izin lokasi</button></div>';
+    if (native && S.auto && !S.overlay) w += '<div class="warn">Agar popup pengingat muncul di atas aplikasi lain, izinkan "Tampil di atas aplikasi lain".<br><button class="btn sm" data-act="over" style="margin-top:8px">Atur izin popup</button></div>';
     if (native && !S.battFree) w += '<div class="warn">Penghematan baterai belum dimatikan untuk HZ Trip.<br><button class="btn sm" data-act="batt" style="margin-top:8px">Buka pengaturan baterai</button></div>';
     $('warnBox').innerHTML = w;
   }
@@ -263,7 +267,7 @@
 
   function toggleRec() {
     if (S.mode === 'rekam') {
-      Plug.stop().then(function () { setTimeout(syncStatus, 400); toast(S.manual ? 'Perekaman diakhiri. Notifikasi aktif' : 'Otomatis dijeda. Notifikasi aktif'); });
+      Plug.stop().then(function () { setTimeout(syncStatus, 400); toast(S.manual ? 'Perekaman diakhiri. Pengingat aktif' : 'Otomatis dijeda. Pengingat aktif'); });
       return;
     }
     Plug.ensurePermissions().then(function (r) {
@@ -285,11 +289,11 @@
       if (!S.auto) { toast('Rekam otomatis dimatikan di Pengaturan'); return; }
       Plug.resumeAuto().then(function (st) { applyStatus(st); setTimeout(syncStatus, 500); if (S.mode !== 'siaga' && S.mode !== 'cek' && S.nextStart) toast('Di luar jadwal. Otomatis aktif ' + whenText(S.nextStart)); });
     }
-    else if (a === 'notif') Plug.setWatch({ mode: 'notif' }).then(function () { setTimeout(syncStatus, 500); toast('Notifikasi aktif'); }).catch(function (x) { toast(String(x && x.message || x)); });
-    else if (a === 'off') Plug.setWatch({ mode: 'off' }).then(function () { setTimeout(syncStatus, 500); toast('Semua dimatikan'); });
+    else if (a === 'notif') Plug.setWatch({ mode: 'notif' }).then(function () { setTimeout(syncStatus, 500); toast('Pengingat aktif'); }).catch(function (x) { toast(String(x && x.message || x)); });
     else if (a === 'sched') go('set');
     else if (a === 'bg') askBackground();
     else if (a === 'batt') openBatt();
+    else if (a === 'over') Plug.openOverlaySettings().catch(function () {});
   }
 
   // ---------- riwayat ----------
@@ -345,9 +349,9 @@
     var sel = $('unitSel');
     if (!sel || document.activeElement === sel) return;
     var now = Date.now(), a = unitAt(now), o = overrideAt(now);
-    sel.innerHTML = S.settings.units.map(function (u) { return '<option value="' + esc(u) + '"' + (u === a ? ' selected' : '') + '>' + esc(u) + ' · ' + typeOf(u) + '</option>'; }).join('');
+    sel.innerHTML = S.settings.units.map(function (u) { return '<option value="' + esc(u) + '"' + (u === a ? ' selected' : '') + '>' + esc(u) + '</option>'; }).join('');
     var nt = $('unitNote');
-    if (nt) nt.textContent = o ? 'Manual sampai ' + T.hm(o.until) + ', lalu kembali otomatis.' : 'Otomatis: sekarang jam ' + (kindAt(now) === 'Kerja' ? 'kerja' : 'pribadi') + '.';
+    if (nt) nt.textContent = o ? 'Manual sampai ' + T.hm(o.until) + ', lalu kembali otomatis.' : typeOf(a) + ' · otomatis sesuai jadwal';
   }
   var KEEP_MS = 30 * 24 * 3600000;
   function visible(ymd, trips) {
@@ -699,6 +703,7 @@
     if (native) {
       bits.push(S.bg ? 'Lokasi "Selalu": sudah.' : 'Lokasi "Selalu": belum (perlu untuk rekam otomatis).');
       bits.push(S.battFree ? 'Penghematan baterai: dimatikan (bagus).' : 'Penghematan baterai: belum dimatikan.');
+      bits.push(S.overlay ? 'Tampil di atas aplikasi lain (popup): sudah.' : 'Tampil di atas aplikasi lain: belum (popup tidak bisa muncul; pakai notifikasi biasa).');
       bits.push(S.actPerm ? 'Aktivitas fisik (deteksi naik kendaraan): sudah.' : 'Aktivitas fisik: belum (perlu untuk deteksi naik kendaraan).');
     }
     if (native) {
@@ -980,7 +985,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.6.2'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.6.3'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1658,6 +1663,7 @@
     document.querySelectorAll('#drawer a[data-go]').forEach(function (a) { a.onclick = function () { go(a.getAttribute('data-go')); }; });
     $('btnRec').onclick = toggleRec;
     $('modeBox').onclick = onModeAction;
+    $('modeBtns').onclick = onModeAction;
     $('warnBox').onclick = onModeAction;
     $('mergeNo').onclick = function () { exitSel(); renderHistory(); };
     $('mergeGo').onclick = doMerge;
@@ -1713,6 +1719,7 @@
     $('splitSel').onchange = function () { S.settings.splitSec = +this.value; saveSettings(); recomputeLive(); toast('Batas pisah trip disimpan'); };
     $('autoChk').onchange = function () { S.settings.auto = this.checked; saveSettings(); pushSchedule(); if (this.checked && native && !S.actPerm) askActivity(); };
     $('btnAct').onclick = askActivity;
+    $('btnOver').onclick = function () { Plug.openOverlaySettings().catch(function () { toast('Tidak bisa membuka pengaturan'); }); };
     $('marginSel').onchange = function () { S.settings.margin = +this.value; saveSettings(); renderSched(); pushSchedule(); };
     $('schedBox').onchange = onSched;
     $('schedBox').onclick = function (e) {

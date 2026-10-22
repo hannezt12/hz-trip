@@ -162,6 +162,7 @@ public class HzTripPlugin extends Plugin {
         o.put("background", hasBackground());
         o.put("actPerm", Trig.actGranted(ctx));
         o.put("notif", Sched.p(ctx).getBoolean("notif", false));
+        o.put("overlay", Alert.canPopup(ctx));
         o.put("auto", Sched.autoEnabled(ctx));
         o.put("winEnd", Sched.windowEnd(ctx, now));
         o.put("nextStart", Sched.nextStart(ctx, now));
@@ -230,6 +231,19 @@ public class HzTripPlugin extends Plugin {
         Sched.p(ctx).edit().putLong("pausedUntil", 0L).apply();
         Sched.evaluate(ctx);
         call.resolve(statusObject());
+    }
+
+    @PluginMethod
+    public void openOverlaySettings(PluginCall call) {
+        try {
+            Intent i = new Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:" + getContext().getPackageName()));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject(String.valueOf(e.getMessage()));
+        }
     }
 
     @PluginMethod

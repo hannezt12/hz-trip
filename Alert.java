@@ -11,6 +11,9 @@ import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.Settings;
 
 /** Notifikasi "Anda bergerak, rekaman belum jalan": maksimal 2 kali per kejadian, bunyi dan getar. */
 final class Alert {
@@ -89,7 +92,26 @@ final class Alert {
         }
     }
 
+    static boolean canPopup(Context c) {
+        return Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(c);
+    }
+
+    /** Popup bila izin "tampil di atas aplikasi lain" ada; bila tidak, notifikasi biasa sebagai cadangan. */
     private static void post(Context c, int n) {
+        if (canPopup(c)) {
+            try {
+                Intent i = new Intent(c, AlertActivity.class);
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                c.startActivity(i);
+                return;
+            } catch (Throwable t) {
+                TripService.diagTo(c, "Popup gagal: " + t.getMessage());
+            }
+        }
+        postNotif(c);
+    }
+
+    private static void postNotif(Context c) {
         channel(c);
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) {
@@ -125,6 +147,15 @@ final class Alert {
             NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) {
                 nm.cancel(ID);
+            }
+            final AlertActivity act = AlertActivity.cur;
+            if (act != null) {
+                new Handler(Looper.getMainLooper()).post(new Runnable() {
+                    @Override
+                    public void run() {
+                        act.finish();
+                    }
+                });
             }
             AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
             if (am != null) {

@@ -33,10 +33,10 @@
       </div>
       <div class="legend"><div></div><div></div><div></div></div>
       <div class="legl"><span>0</span><span>60</span><span>90</span><span>120+</span></div>
-      <div class="card ucard"><label for="unitSel">UNIT DIPAKAI</label><select id="unitSel"></select><div class="muted" id="unitNote" style="margin-top:6px"></div></div>
+      <div class="card ucard urow"><div class="ucol"><label for="unitSel">UNIT DIPAKAI</label><select id="unitSel"></select><div class="muted" id="unitNote"></div></div><div id="modeBox"></div></div>
       <button class="recbtn start" id="btnRec"></button>
+      <div id="modeBtns"></div>
       <div class="gps" id="gpsLine"></div>
-      <div id="modeBox"></div>
       <div id="warnBox"></div>
       <div id="bkNote"></div>
     </section>
@@ -147,6 +147,7 @@
         <button class="btn" id="btnBg" style="margin-top:10px;width:100%">Atur izin lokasi "Selalu"</button>
         <button class="btn" id="btnBatt" style="margin-top:8px;width:100%">Atur penghematan baterai</button>
         <button class="btn" id="btnAct" style="margin-top:8px;width:100%">Atur izin aktivitas fisik</button>
+        <button class="btn" id="btnOver" style="margin-top:8px;width:100%">Atur izin popup (tampil di atas aplikasi lain)</button>
         <div class="muted" style="margin-top:8px">Pilih HZ Trip lalu "Tanpa pembatasan" agar perekaman tidak dimatikan sistem.</div>
         <div class="muted" style="margin-top:8px">Tombol cepat: geser layar dari atas dua kali, ketuk ikon pensil, lalu seret "HZ Trip" ke deretan atas. Satu ketuk untuk Mulai / Akhiri.</div>
       </div>
@@ -167,7 +168,7 @@
       <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Label Kerja / Pribadi mengikuti jenis unit yang dipakai (diatur saat unit didaftarkan). Unit tiap trip bisa diubah di Riwayat.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
 
       <div class="h">VERSI</div>
-      <div class="card muted">HZ Trip versi 0.6.2<br>Putar ulang lintasan: tombol Putar di Lintasan.</div>
+      <div class="card muted">HZ Trip versi 0.6.3<br>Putar ulang lintasan: tombol Putar di Lintasan.</div>
       </div>
     </section>
   </div>
@@ -181,7 +182,7 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.6.2</div>
+  <div class="ver">Versi 0.6.3</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
