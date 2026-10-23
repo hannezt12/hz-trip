@@ -365,7 +365,29 @@
     if (a) res.trips.forEach(function (t) { var x = a[t.id]; if (x) Object.keys(x).forEach(function (k) { t[k] = x[k]; }); });
     return res;
   }
-  function edited(ymd, res) { return visible(ymd, T.applyEdits(res, S.ov.days[ymd])); }
+  // Trip pendek otomatis yang muncul lama setelah trip sebelumnya dianggap salah dan disembunyikan (bisa dipulihkan 30 hari).
+  var junkSeq = 0;
+  function autoJunk(ymd, trips) {
+    if (S.settings.junkOn === false) return;
+    var ed = S.ov.days[ymd];
+    if (ed && ed.ops && ed.ops.length) return;
+    var gapMs = (S.settings.junkGap || 30) * 60000, maxKm = (S.settings.junkM || 500) / 1000, changed = false;
+    if (!S.ov.keep) S.ov.keep = [];
+    for (var i = 1; i < trips.length; i++) {
+      var t = trips[i], p = trips[i - 1];
+      if (t.open || t.manual || t.km >= maxKm || t.start - p.end <= gapMs) continue;
+      if (S.ov.keep.indexOf(t.id) >= 0) continue;
+      if ((S.ov.hidden || []).some(function (h) { return h.day === ymd && t.start <= h.end && t.end >= h.start; })) continue;
+      S.ov.hidden.push({ day: ymd, start: t.start, end: t.end, at: Date.now() + (junkSeq++ % 1000), unit: unitAt(t.start), km: t.km, auto: true, id: t.id, gapMin: Math.round((t.start - p.end) / 60000) });
+      changed = true;
+    }
+    if (changed) saveOv();
+  }
+  function edited(ymd, res) {
+    var tr = T.applyEdits(res, S.ov.days[ymd]);
+    autoJunk(ymd, tr);
+    return visible(ymd, tr);
+  }
   function tripView(t) {
     var o = S.ov.trips[t.id] || {};
     var u = o.unit || unitAt(t.start);
@@ -633,7 +655,7 @@
     if (!hs.length) { box.textContent = 'Tidak ada.'; return; }
     box.innerHTML = hs.map(function (h) {
       var left = Math.max(0, Math.ceil((h.at + KEEP_MS - Date.now()) / 86400000));
-      return '<div class="hrow"><span>' + esc(T.dateLong(h.day)) + '<br>' + T.hm(h.start) + ' – ' + T.hm(h.end) + ' · ' + T.km1(h.km || 0) + ' km · ' + esc(h.unit || '') + '<br>Dihapus permanen dalam ' + left + ' hari</span>' +
+      return '<div class="hrow"><span>' + esc(T.dateLong(h.day)) + '<br>' + T.hm(h.start) + ' – ' + T.hm(h.end) + ' · ' + T.km1(h.km || 0) + ' km · ' + esc(h.unit || '') + (h.auto ? '<br><i>Otomatis: kurang dari ' + (S.settings.junkM || 500) + ' m, jeda ' + h.gapMin + ' menit dari trip sebelumnya</i>' : '') + '<br>Dihapus permanen dalam ' + left + ' hari</span>' +
         '<button class="btn sm" data-restore="' + h.at + '">Pulihkan</button><button class="btn sm danger" data-purge="' + h.at + '">Hapus</button></div>';
     }).join('');
   }
@@ -650,6 +672,8 @@
   function onHidden(e) {
     var r = e.target.getAttribute && e.target.getAttribute('data-restore'), g = e.target.getAttribute && e.target.getAttribute('data-purge');
     if (r) {
+      var hh = S.ov.hidden.filter(function (h) { return String(h.at) === r; })[0];
+      if (hh && hh.id) { if (!S.ov.keep) S.ov.keep = []; S.ov.keep.push(hh.id); }
       S.ov.hidden = S.ov.hidden.filter(function (h) { return String(h.at) !== r; });
       saveOv(); renderHidden(); toast('Trip dipulihkan');
     } else if (g) {
@@ -987,7 +1011,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.6.5'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.6.6'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1145,6 +1169,7 @@
   function renderThinInfo() {
     if (!$('thinInfo')) return;
     $('thinSel').value = String(S.settings.thinDays || 90);
+    $('junkChk').checked = S.settings.junkOn !== false; $('junkGap').value = String(S.settings.junkGap || 30); $('junkM').value = String(S.settings.junkM || 500);
     thinList().then(function (l) {
       var n = Object.keys(S.ov.arch || {}).length;
       $('thinInfo').innerHTML = l.length ? '<b>' + l.length + ' hari</b> lebih lama dari ' + (S.settings.thinDays || 90) + ' hari belum dirampingkan.' + (n ? '<br>Sudah dirampingkan: ' + n + ' hari.' : '') : 'Tidak ada data lama yang perlu dirampingkan.' + (n ? ' Sudah dirampingkan: ' + n + ' hari.' : '');
@@ -1655,6 +1680,9 @@
     pbInit();
     $('bkMake').onclick = function () { makeBackup(); };
     $('autoBkChk').onchange = function () { S.settings.autoBk = this.checked; saveSettings(); if (this.checked) autoBackup(); };
+    $('junkChk').onchange = function () { S.settings.junkOn = this.checked; saveSettings(); };
+    $('junkGap').onchange = function () { S.settings.junkGap = +this.value; saveSettings(); };
+    $('junkM').onchange = function () { S.settings.junkM = +this.value; saveSettings(); };
     $('thinSel').onchange = function () { S.settings.thinDays = +this.value; saveSettings(); renderThinInfo(); };
     $('thinGo').onclick = function () { startThin(); };
     $('diagShare').onclick = function () { var t = S.diagText || ''; if (!t) { toast('Belum ada catatan'); return; } saveFile('HZTrip-catatan-' + T.ymd(Date.now()) + '.txt', textB64(t), 'text/plain'); };

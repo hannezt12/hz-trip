@@ -137,6 +137,14 @@
         <button class="btn" id="thinGo" style="margin-top:10px;width:100%">Rampingkan sekarang</button>
         <div class="muted" style="margin-top:8px">Titik GPS yang rapat pada hari lama dijarangkan (belokan, perubahan kecepatan, awal dan akhir trip tetap utuh). Daftar trip, jarak, kecepatan, dan rata-rata tidak berubah. Potong atau gabung trip pada hari yang sudah dirampingkan jadi kurang presisi. Anda akan ditawari cadangan dulu.</div></div>
 
+      <div class="h">TRIP PENDEK YANG SALAH</div>
+      <div class="card"><label class="plist" style="display:flex;align-items:center;gap:12px;font-size:15px"><input type="checkbox" id="junkChk" checked style="width:20px;height:20px"> Sembunyikan otomatis trip pendek yang salah</label>
+        <div class="row" style="margin-top:10px;gap:8px;align-items:center;flex-wrap:wrap"><span class="muted">Jarak kurang dari</span>
+          <select id="junkM"><option value="300">300 m</option><option value="500">500 m</option><option value="800">800 m</option></select>
+          <span class="muted">dan jeda dari trip sebelumnya lebih dari</span>
+          <select id="junkGap"><option value="20">20 menit</option><option value="30">30 menit</option><option value="45">45 menit</option><option value="60">60 menit</option></select></div>
+        <div class="muted" style="margin-top:8px">Trip pertama hari itu, rekam manual, dan hari yang Anda potong atau gabung sendiri tidak disentuh. Trip yang disembunyikan masuk daftar di bawah dan bisa dipulihkan selama 30 hari.</div></div>
+
       <div class="h">TRIP DIHAPUS</div>
       <div class="card"><div id="hidList" class="muted">Tidak ada.</div><div class="muted" style="margin-top:8px">Trip yang dihapus disembunyikan 30 hari, lalu titik GPS-nya dihapus permanen.</div></div>
       </div>
@@ -171,7 +179,7 @@
       <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Label Kerja / Pribadi mengikuti jenis unit yang dipakai (diatur saat unit didaftarkan). Unit tiap trip bisa diubah di Riwayat.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
 
       <div class="h">VERSI</div>
-      <div class="card muted">HZ Trip versi 0.6.5<br>Putar ulang lintasan: tombol Putar di Lintasan.</div>
+      <div class="card muted">HZ Trip versi 0.6.6<br>Putar ulang lintasan: tombol Putar di Lintasan.</div>
       </div>
     </section>
   </div>
@@ -185,7 +193,7 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.6.5</div>
+  <div class="ver">Versi 0.6.6</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
