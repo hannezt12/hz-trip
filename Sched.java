@@ -20,7 +20,7 @@ import java.util.Calendar;
 final class Sched {
     static final String PREFS = "hztrip";
     static final String ACTION_TICK = "com.hz.hztrip.TICK";
-    static final String WARN_CHANNEL = "hztrip_warn";
+    static final String WARN_CHANNEL = "hztrip_warn2";
 
     private Sched() {
     }
@@ -189,7 +189,7 @@ final class Sched {
             Notification.Builder b;
             if (Build.VERSION.SDK_INT >= 26) {
                 if (nm.getNotificationChannel(WARN_CHANNEL) == null) {
-                    nm.createNotificationChannel(new NotificationChannel(WARN_CHANNEL, "Peringatan HZ Trip", NotificationManager.IMPORTANCE_DEFAULT));
+                    nm.createNotificationChannel(new NotificationChannel(WARN_CHANNEL, "Peringatan HZ Trip (senyap)", NotificationManager.IMPORTANCE_LOW));
                 }
                 b = new Notification.Builder(c, WARN_CHANNEL);
             } else {

@@ -133,6 +133,7 @@ public class AlertActivity extends Activity {
         });
 
         setContentView(box);
+        Alert.beep(this);
         WindowManager.LayoutParams lp = w.getAttributes();
         lp.width = (int) (getResources().getDisplayMetrics().widthPixels * 0.96f);
         lp.height = WindowManager.LayoutParams.WRAP_CONTENT;
@@ -144,6 +145,7 @@ public class AlertActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        Alert.beep(this);
     }
 
     @Override

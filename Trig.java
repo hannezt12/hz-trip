@@ -57,6 +57,10 @@ final class Trig {
                             .setActivityType(DetectedActivity.IN_VEHICLE)
                             .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
                             .build());
+                    l.add(new ActivityTransition.Builder()
+                            .setActivityType(DetectedActivity.IN_VEHICLE)
+                            .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_EXIT)
+                            .build());
                     ActivityRecognition.getClient(c)
                             .requestActivityTransitionUpdates(new ActivityTransitionRequest(l), pi(c, ACT_VEH, 71))
                             .addOnFailureListener(new OnFailureListener() {

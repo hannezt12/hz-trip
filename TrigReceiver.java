@@ -33,6 +33,11 @@ public class TrigReceiver extends BroadcastReceiver {
                                 && e.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_ENTER) {
                             why = "naik kendaraan";
                         }
+                        if (e.getActivityType() == DetectedActivity.IN_VEHICLE
+                                && e.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_EXIT) {
+                            // Turun dari kendaraan: popup boleh muncul lagi pada perjalanan berikutnya.
+                            Sched.p(c).edit().putLong("alertUntil", 0L).apply();
+                        }
                     }
                 }
             } else if (Trig.ACT_FENCE.equals(a)) {

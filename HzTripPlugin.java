@@ -163,6 +163,7 @@ public class HzTripPlugin extends Plugin {
         o.put("actPerm", Trig.actGranted(ctx));
         o.put("notif", Sched.p(ctx).getBoolean("notif", false));
         o.put("overlay", Alert.canPopup(ctx));
+        o.put("popupSound", Sched.p(ctx).getString("popupSound", "alarm"));
         o.put("auto", Sched.autoEnabled(ctx));
         o.put("winEnd", Sched.windowEnd(ctx, now));
         o.put("nextStart", Sched.nextStart(ctx, now));
@@ -231,6 +232,16 @@ public class HzTripPlugin extends Plugin {
         Sched.p(ctx).edit().putLong("pausedUntil", 0L).apply();
         Sched.evaluate(ctx);
         call.resolve(statusObject());
+    }
+
+    @PluginMethod
+    public void setPopupSound(PluginCall call) {
+        String m = call.getString("mode", "alarm");
+        if (!"alarm".equals(m) && !"notif".equals(m) && !"off".equals(m)) {
+            m = "alarm";
+        }
+        Sched.p(getContext()).edit().putString("popupSound", m).apply();
+        call.resolve();
     }
 
     @PluginMethod

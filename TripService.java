@@ -130,6 +130,9 @@ public class TripService extends Service {
     private boolean notifOnly = false;
     private boolean anchorFresh = false;
     private boolean recManual = false;
+    private boolean pending = false;
+    private long recFirstT = 0L;
+    static final long PENDING_MS = 120000L;
     private boolean cekAndroid = false;
     private int cekExt = 0;
     private boolean cekGood = false;
@@ -244,6 +247,10 @@ public class TripService extends Service {
             }
             if (!Sched.autoPossible(this, now)) {
                 if (mode == M_OFF && p.getBoolean("notif", false)) {
+                    if (now < p.getLong("alertUntil", 0L)) {
+                        shutdown();
+                        return;
+                    }
                     diag("Pemicu Android (notifikasi aktif): " + why);
                     notifOnly = true;
                     mode = M_SIAGA;
@@ -413,7 +420,42 @@ public class TripService extends Service {
         }
     };
 
+    private final Runnable autoRec = new Runnable() {
+        @Override
+        public void run() {
+            if (pending && mode == M_CEK) {
+                pending = false;
+                diag("Popup tidak ditutup: rekam otomatis");
+                toRekam();
+            }
+        }
+    };
+
+    /** Dipanggil saat tombol Tutup pada popup ditekan: tidak merekam, titik yang ditampung dibuang. */
+    void dismissPending() {
+        if (h == null) {
+            return;
+        }
+        h.post(new Runnable() {
+            @Override
+            public void run() {
+                if (pending) {
+                    pending = false;
+                    h.removeCallbacks(autoRec);
+                    stopGps();
+                    releaseWl();
+                    buffer.clear();
+                    bufferT.clear();
+                    diag("Popup ditutup: tidak merekam");
+                    shutdown();
+                }
+            }
+        });
+    }
+
     private void toRekam() {
+        pending = false;
+        h.removeCallbacks(autoRec);
         Alert.cancel(this, false);
         notifOnly = false;
         cekAndroid = false;
@@ -424,6 +466,7 @@ public class TripService extends Service {
         long now = System.currentTimeMillis();
         mode = M_REKAM;
         recManual = manual;
+        recFirstT = bufferT.isEmpty() ? now : bufferT.get(0);
         diag("Rekam mulai" + (manual ? " (manual)" : " (otomatis)"));
         everFast = false;
         sessMax = 0;
@@ -483,7 +526,9 @@ public class TripService extends Service {
 
     private void endRecording() {
         h.removeCallbacks(watchdog);
-        if (everFast || recManual) {
+        long durMs = System.currentTimeMillis() - startedAt;
+        boolean falseRec = !recManual && durMs > 30L * 60000L && sessMeters < 500.0;
+        if (!falseRec && (everFast || recManual)) {
             saveAnchor();
             anchorFresh = anchor != null;
         } else {
@@ -491,9 +536,56 @@ public class TripService extends Service {
         }
         stopGps();
         closeWriter();
+        if (falseRec) {
+            dropSince(recFirstT);
+            diag("Rekaman dibuang: " + (durMs / 60000L) + " menit tetapi hanya " + Math.round(sessMeters) + " m (kurang dari 500 m dalam lebih dari 30 menit)");
+        }
         releaseWl();
         mode = M_OFF;
         cancelRemind();
+    }
+
+    /** Hapus titik dari waktu t sampai sekarang (rekaman otomatis yang salah). */
+    private void dropSince(long fromT) {
+        try {
+            File dir = new File(getFilesDir(), "points");
+            long now = System.currentTimeMillis();
+            Calendar c = Calendar.getInstance();
+            c.setTimeInMillis(fromT);
+            while (c.getTimeInMillis() <= now) {
+                String day = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(c.getTime());
+                File f = new File(dir, "points-" + day + ".csv");
+                if (f.exists()) {
+                    File tmp = new File(dir, "points-" + day + ".csv.tmp");
+                    java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(new FileInputStream(f), "UTF-8"));
+                    java.io.BufferedWriter out = new java.io.BufferedWriter(new java.io.OutputStreamWriter(new FileOutputStream(tmp), "UTF-8"));
+                    String line;
+                    while ((line = in.readLine()) != null) {
+                        int k = line.indexOf(',');
+                        boolean drop = false;
+                        if (k > 0) {
+                            try {
+                                drop = Long.parseLong(line.substring(0, k)) >= fromT;
+                            } catch (NumberFormatException ignored) {
+                            }
+                        }
+                        if (!drop) {
+                            out.write(line);
+                            out.write('\n');
+                        }
+                    }
+                    in.close();
+                    out.flush();
+                    out.close();
+                    if (!tmp.renameTo(f)) {
+                        f.delete();
+                        tmp.renameTo(f);
+                    }
+                }
+                c.add(Calendar.DAY_OF_MONTH, 1);
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     private void leaveWatching() {
@@ -513,6 +605,7 @@ public class TripService extends Service {
         cancelRemind();
         notifOnly = false;
         cekAndroid = false;
+        pending = false;
         if (Sched.p(this).getBoolean("notif", false)) {
             Trig.enterNotif(this);
         } else {
@@ -692,9 +785,12 @@ public class TripService extends Service {
         if (mode == M_CEK) {
             buffer.add(line);
             bufferT.add(t);
-            while (buffer.size() > 150) {
+            while (buffer.size() > (pending ? 600 : 150)) {
                 buffer.remove(0);
                 bufferT.remove(0);
+            }
+            if (pending) {
+                return;
             }
             boolean go = false;
             String why = "";
@@ -723,13 +819,14 @@ public class TripService extends Service {
             if (go) {
                 diag("Pemicu: " + why);
                 if (notifOnly) {
+                    // Gerakan terkonfirmasi: GPS tetap menyala menampung titik sementara popup menunggu keputusan.
                     notifOnly = false;
                     cekAndroid = false;
                     h.removeCallbacks(cekTimeout);
-                    stopGps();
-                    releaseWl();
+                    pending = true;
                     Alert.fire(this);
-                    shutdown();
+                    h.postDelayed(autoRec, PENDING_MS);
+                    diag("Menunggu keputusan: rekam otomatis bila popup tidak ditutup dalam " + (PENDING_MS / 1000L) + " dtk");
                     return;
                 }
                 cekAndroid = false;

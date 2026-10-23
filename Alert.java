@@ -19,9 +19,9 @@ import android.provider.Settings;
 final class Alert {
     static final String CHANNEL = "hztrip_alert";
     static final int ID = 77;
-    static final long REPEAT_MS = 2L * 60000L;
+    static final long REPEAT_MS = 60000L;
     static final long EVENT_MS = 10L * 60000L;
-    static final long QUIET_MS = 5L * 60000L;
+    static final long QUIET_MS = 2L * 3600000L;
 
     private Alert() {
     }
@@ -88,6 +88,53 @@ final class Alert {
             p.edit().putInt("alertCount", 2).putLong("alertAt", System.currentTimeMillis()).apply();
             post(c, 2);
             TripService.diagTo(c, "Notifikasi pengingat ke-2 ditampilkan");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** Bunyi popup lewat aliran alarm (tetap berbunyi walau ponsel senyap) atau aliran notifikasi, sesuai pilihan; plus getar. */
+    static void beep(final Context c) {
+        try {
+            String mode = Sched.p(c).getString("popupSound", "alarm");
+            if ("off".equals(mode)) {
+                return;
+            }
+            final boolean alarm = !"notif".equals(mode);
+            android.os.Vibrator vb = (android.os.Vibrator) c.getSystemService(Context.VIBRATOR_SERVICE);
+            if (vb != null) {
+                vb.vibrate(new long[]{0, 400, 200, 400}, -1);
+            }
+            final Handler hh = new Handler(Looper.getMainLooper());
+            Runnable play = new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        android.media.Ringtone r = RingtoneManager.getRingtone(c, RingtoneManager.getDefaultUri(alarm ? RingtoneManager.TYPE_ALARM : RingtoneManager.TYPE_NOTIFICATION));
+                        if (r == null) {
+                            return;
+                        }
+                        AudioAttributes aa = new AudioAttributes.Builder().setUsage(alarm ? AudioAttributes.USAGE_ALARM : AudioAttributes.USAGE_NOTIFICATION).build();
+                        if (Build.VERSION.SDK_INT >= 28) {
+                            r.setAudioAttributes(aa);
+                        } else {
+                            r.setStreamType(alarm ? android.media.AudioManager.STREAM_ALARM : android.media.AudioManager.STREAM_NOTIFICATION);
+                        }
+                        r.play();
+                        final android.media.Ringtone rr = r;
+                        hh.postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    rr.stop();
+                                } catch (Throwable ignored) {
+                                }
+                            }
+                        }, 2500L);
+                    } catch (Throwable ignored) {
+                    }
+                }
+            };
+            hh.post(play);
         } catch (Throwable ignored) {
         }
     }
@@ -166,6 +213,12 @@ final class Alert {
                 e.putLong("alertUntil", System.currentTimeMillis() + QUIET_MS);
             }
             e.apply();
+            if (quiet) {
+                TripService s = TripService.instance;
+                if (s != null) {
+                    s.dismissPending();
+                }
+            }
         } catch (Throwable ignored) {
         }
     }
