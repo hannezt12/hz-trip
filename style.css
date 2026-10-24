@@ -316,3 +316,31 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 #modeBox{flex:2 1 0;min-width:0;overflow-y:auto;font-size:14px;line-height:1.4;padding-left:10px;border-left:1px solid var(--line);overscroll-behavior:contain}
 #modeBox b{color:var(--tx)}
 #modeBtns .mrow2{margin-top:10px}
+
+/* v0.7.0: SpidoMap (halaman peta di kiri Spidometer) */
+#main.pg{padding:0;overflow:hidden}
+#v-spido.on{height:100%;position:relative}
+#spPager{display:flex;height:100%;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
+#spPager::-webkit-scrollbar{display:none}
+#spMapPage,#spMain{flex:0 0 100%;width:100%;height:100%;scroll-snap-align:start;scroll-snap-stop:always}
+#spMain{overflow-y:auto;padding:0 16px calc(30px + env(safe-area-inset-bottom,0px));overscroll-behavior-y:contain}
+#spMapPage{display:flex;flex-direction:column}
+#spMapWrap{position:relative;flex:1;min-height:200px}
+#spMap{position:absolute;inset:0;z-index:0;background:var(--mapbg)}
+#spHud{position:absolute;left:10px;right:10px;top:10px;z-index:600;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}
+#spHud .btn{pointer-events:auto;background:var(--ov);height:40px}
+#spHud .spv{background:var(--ov);border-radius:14px;padding:4px 14px 6px;line-height:1;pointer-events:none}
+#spHud .spv b{font-family:var(--cond);font-weight:700;font-size:56px}
+#spHud .spv small{font-size:14px;color:var(--tx2);margin-left:5px}
+#spNote{position:absolute;left:10px;bottom:10px;z-index:600;background:var(--ov);border-radius:10px;padding:6px 10px;font-size:13px;color:var(--tx2);pointer-events:none;display:none}
+#spLoc{position:absolute;right:10px;bottom:10px;z-index:600;margin:0}
+#spBar{display:flex;gap:6px;padding:8px 10px 2px;flex-shrink:0}
+#spBar .btn{flex:1;padding:0 4px;font-size:13px;height:40px;min-width:0}
+#spBar .btn.on{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+:root[data-theme=light] #spBar .btn.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+#spStrip{flex-shrink:0;height:42px;padding-top:6px;text-align:center;font-size:11px;color:var(--tx2);border-top:1px solid var(--line);margin-top:6px;touch-action:pan-x}
+#spDots{position:absolute;left:0;right:0;bottom:calc(6px + env(safe-area-inset-bottom,0px));display:flex;justify-content:center;gap:7px;pointer-events:none;z-index:5}
+#spDots i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+#spDots i.on{background:var(--tx2)}
+.spar{background:transparent;border:0}
+.spar svg{display:block;transition:transform .4s linear;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5))}

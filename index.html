@@ -19,6 +19,17 @@
 
     <!-- A. Spidometer -->
     <section class="view on" id="v-spido">
+      <div id="spPager">
+      <div id="spMapPage">
+        <div id="spMapWrap"><div id="spMap"></div>
+          <div id="spHud"><button class="btn sm" id="spBack">‹ Spidometer</button><div class="spv"><b id="spSpd">–</b><small>km/j</small></div></div>
+          <div id="spNote"></div>
+          <button class="locbtn" id="spLoc" aria-label="Posisi saya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>
+        </div>
+        <div id="spBar"><button class="btn sm on" id="spFol">Ikuti: ya</button><button class="btn sm on" id="spZoom">Zoom otomatis: ya</button><button class="btn sm" id="spAwake">Layar menyala: tidak</button></div>
+        <div id="spStrip">geser di sini ke kiri untuk kembali ke Spidometer ›</div>
+      </div>
+      <div id="spMain">
       <div class="gwrap">
         <svg viewBox="0 0 360 300" aria-hidden="true">
           <path id="gTrack" fill="none" style="stroke:var(--sf)" stroke-width="22" stroke-linecap="round"/>
@@ -39,6 +50,9 @@
       <div class="gps" id="gpsLine"></div>
       <div id="warnBox"></div>
       <div id="bkNote"></div>
+      </div>
+      </div>
+      <div id="spDots"><i id="spD0"></i><i id="spD1" class="on"></i></div>
     </section>
 
     <!-- B. Lintasan -->
@@ -179,7 +193,7 @@
       <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Label Kerja / Pribadi mengikuti jenis unit yang dipakai (diatur saat unit didaftarkan). Unit tiap trip bisa diubah di Riwayat.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
 
       <div class="h">VERSI</div>
-      <div class="card muted">HZ Trip versi 0.6.6<br>Putar ulang lintasan: tombol Putar di Lintasan.</div>
+      <div class="card muted">HZ Trip versi 0.7.0<br>Putar ulang lintasan: tombol Putar di Lintasan.</div>
       </div>
     </section>
   </div>
@@ -193,7 +207,7 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.6.6</div>
+  <div class="ver">Versi 0.7.0</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>

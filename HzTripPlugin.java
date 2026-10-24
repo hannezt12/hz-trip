@@ -235,6 +235,26 @@ public class HzTripPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void keepScreen(PluginCall call) {
+        final boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
+        try {
+            getActivity().runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    android.view.Window w = getActivity().getWindow();
+                    if (on) {
+                        w.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    } else {
+                        w.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    }
+                }
+            });
+        } catch (Exception ignored) {
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
     public void setPopupSound(PluginCall call) {
         String m = call.getString("mode", "alarm");
         if (!"alarm".equals(m) && !"notif".equals(m) && !"off".equals(m)) {

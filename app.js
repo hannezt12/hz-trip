@@ -37,6 +37,7 @@
       ensureBackground: function () { return Promise.resolve(st()); },
       ensureActivity: function () { return Promise.resolve(st()); },
       openOverlaySettings: function () { return Promise.resolve(); },
+      keepScreen: function () { return Promise.resolve(); },
       setPopupSound: function (o) { localStorage.setItem('mock-popsnd', o.mode); return Promise.resolve(); },
       setSchedule: function (o) { sched = o; return Promise.resolve(st()); },
       resumeAuto: function () { notif = false; return Promise.resolve(st()); },
@@ -144,6 +145,8 @@
     S.view = v;
     ['spido', 'lintasan', 'riwayat', 'set'].forEach(function (n) { $('v-' + n).classList.toggle('on', n === v); });
     $('main').classList.toggle('map', v === 'lintasan');
+    $('main').classList.toggle('pg', v === 'spido');
+    if (v !== 'spido') spSetActive(false); else spResetMain();
     if (S.sel) exitSel();
     $('ttl').textContent = TITLES[v];
     document.querySelectorAll('#drawer a[data-go]').forEach(function (a) { a.classList.toggle('on', a.getAttribute('data-go') === v); });
@@ -176,6 +179,7 @@
     if (S.sel) { exitSel(); renderHistory(); return true; }
     if (S.view === 'riwayat' && S.hMode === 'day') { S.hMode = 'list'; loadRiwayat(); return true; }
     if (S.view !== 'spido') { go('spido'); return true; }
+    if (SP.active) { spShow('main'); return true; }
     return false;
   };
 
@@ -256,6 +260,7 @@
     S.live = { v: f.v * 3.6, acc: f.acc, t: Date.now(), count: f.count };
     S.todayPts.push({ t: f.t, lat: f.lat, lng: f.lng, v: f.v * 3.6, acc: f.acc, m: 0 });
     if (f.count % 5 === 0 || !S.liveTrip) recomputeLive();
+    if (SP.active) spOnFix(f);
     if (S.view === 'spido') renderSpido();
   }
   function refreshToday() {
@@ -1011,7 +1016,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.6.6'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.7.0'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1243,10 +1248,10 @@
     makeLocate(map);
     return true;
   }
-  function setBase(m) {
+  function setBase(m, force) {
     if (!m) return;
     if (m._base) { m.removeLayer(m._base); m._base = null; }
-    var md = S.settings.mapMode === 'sat' ? 'sat' : 'osm';
+    var md = force || (S.settings.mapMode === 'sat' ? 'sat' : 'osm');
     if (TILES[md]) m._base = new (cachedLayerClass())(TILES[md][0], { maxZoom: 19, attribution: TILES[md][1] }).addTo(m);
   }
   function setTiles() {
@@ -1551,6 +1556,166 @@
       if (PB.open) { pbPlay(false); pbBuild(); if (!PB.seq.length) pbClose(); else pbDraw(false); }
     });
   }
+  // ---------- SpidoMap: peta langsung di kiri Spidometer ----------
+  var SP = { map: null, lay: null, mk: null, active: false, follow: true, zoomAuto: true, autoPaused: false, zoomBusy: false, hdAcc: 0, hdLL: null, cur: null, from: null, to: null, t0: 0, raf: 0, lastTs: 0, hudT: 0, band: -1, pendBand: -1, pendT: 0, mv: 0, lastSeg: null, rec: null, wl: null };
+  function spIdx() { var p = $('spPager'); return p && p.scrollLeft < p.clientWidth / 2 ? 0 : 1; }
+  function spShow(which) { var p = $('spPager'); p.scrollTo({ left: which === 'map' ? 0 : p.clientWidth, behavior: 'smooth' }); }
+  function spResetMain() { var p = $('spPager'); if (p) { p.scrollLeft = p.clientWidth; $('spMain').scrollTop = 0; } }
+  function spBtns() {
+    $('spFol').textContent = 'Ikuti: ' + (SP.follow ? 'ya' : 'tidak'); $('spFol').classList.toggle('on', SP.follow);
+    $('spZoom').textContent = 'Zoom otomatis: ' + (SP.zoomAuto ? 'ya' : 'tidak'); $('spZoom').classList.toggle('on', SP.zoomAuto);
+    var aw = !!S.settings.spAwake;
+    $('spAwake').textContent = 'Layar menyala: ' + (aw ? 'ya' : 'tidak'); $('spAwake').classList.toggle('on', aw);
+  }
+  function spAwake(on) {
+    var want = on && SP.active && !!S.settings.spAwake;
+    try { Plug.keepScreen({ on: want }).catch(function () {}); } catch (e) {}
+    if (navigator.wakeLock && !native) {
+      if (want && !SP.wl) navigator.wakeLock.request('screen').then(function (l) { SP.wl = l; }).catch(function () {});
+      else if (!want && SP.wl) { try { SP.wl.release(); } catch (e) {} SP.wl = null; }
+    }
+  }
+  function spEnsureMap() {
+    if (SP.map) return true;
+    if (!window.L) return false;
+    SP.map = L.map('spMap', { zoomControl: false, preferCanvas: true, attributionControl: true }).setView([-4.95, 105.2], 17);
+    setBase(SP.map, 'sat');
+    SP.lay = L.layerGroup().addTo(SP.map);
+    SP.map.on('dragstart', function () { if (SP.follow) { SP.follow = false; spBtns(); } });
+    SP.map.on('zoomstart', function () { if (!SP.zoomBusy && !SP.autoPaused) { SP.autoPaused = true; } });
+    SP.map.on('zoomend', function () { SP.zoomBusy = false; });
+    return true;
+  }
+  function spArrow(ll) {
+    if (!SP.mk) {
+      SP.mk = L.marker(ll, { icon: L.divIcon({ className: 'spar', html: '<svg viewBox="0 0 24 24" width="38" height="38"><path d="M12 1.5L21.5 22 12 17 2.5 22Z" fill="#8A97A0" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>', iconSize: [38, 38], iconAnchor: [19, 19] }), interactive: false, keyboard: false, zIndexOffset: 1000 }).addTo(SP.map);
+    } else SP.mk.setLatLng(ll);
+    var el = SP.mk.getElement && SP.mk.getElement();
+    if (el && el.firstChild) {
+      el.firstChild.style.transform = 'rotate(' + SP.hdAcc + 'deg)';
+      var p = el.querySelector('path'), col = S.mode === 'rekam' ? '#2F80FF' : '#8A97A0';
+      if (p && p.getAttribute('fill') !== col) p.setAttribute('fill', col);
+    }
+  }
+  function spHeading(a, b) {
+    var dy = (b[0] - a[0]) * 111320, dx = (b[1] - a[1]) * 111320 * Math.cos(a[0] * Math.PI / 180);
+    if (dx * dx + dy * dy < 16) return false;
+    var deg = Math.atan2(dx, dy) * 180 / Math.PI, d = ((deg - SP.hdAcc + 540) % 360 + 360) % 360 - 180;
+    SP.hdAcc += d; return true;
+  }
+  function spRebuild() {
+    if (!SP.map) return;
+    SP.lay.clearLayers(); SP.lastSeg = null;
+    var pts = S.todayPts || [], res = T.detectTrips(pts, opts()), rec = S.mode === 'rekam', trips = res.trips, curT = rec && trips.length ? trips[trips.length - 1] : null;
+    trips.forEach(function (t) {
+      var tk = E.trackOf(res.points, t);
+      tk.runs.forEach(function (r) {
+        var ll = r.pts.map(function (p) { return [p.lat, p.lng]; });
+        if (t === curT) L.polyline(ll, { color: COL[r.z], weight: 6, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(SP.lay);
+        else L.polyline(ll, { color: '#9AA3A8', weight: 4, opacity: 0.55, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(SP.lay);
+      });
+      if (t === curT) L.circleMarker([t.startLat, t.startLng], { radius: 7, color: '#fff', weight: 2, fillColor: '#3FD07A', fillOpacity: 1, interactive: false }).addTo(SP.lay);
+    });
+    var last = pts.length ? pts[pts.length - 1] : null;
+    if (last) {
+      var ll2 = [last.lat, last.lng];
+      SP.cur = SP.cur || ll2; SP.from = SP.to = ll2; SP.lastSeg = ll2;
+      if (pts.length > 1) { var pv = pts[pts.length - 2]; spHeading([pv.lat, pv.lng], ll2); }
+      SP.cur = ll2; spArrow(ll2);
+    }
+    spNote();
+  }
+  function spNote() {
+    var n = $('spNote'), rec = S.mode === 'rekam', pts = S.todayPts || [];
+    if (rec) { n.style.display = 'none'; return; }
+    n.style.display = 'block';
+    n.textContent = pts.length ? 'Posisi terakhir ' + T.hm(pts[pts.length - 1].t) : 'Belum ada posisi. Ketuk ◎ untuk mencari.';
+  }
+  function spOnFix(f) {
+    var ll = [f.lat, f.lng];
+    if (SP.lastSeg) {
+      L.polyline([SP.lastSeg, ll], { color: pbZone(f.v * 3.6), weight: 6, opacity: 0.95, lineCap: 'round', interactive: false }).addTo(SP.lay);
+      spHeading(SP.lastSeg, ll);
+    }
+    SP.lastSeg = ll; SP.from = SP.cur || ll; SP.to = ll; SP.t0 = performance.now();
+  }
+  function spLoop(ts) {
+    if (!SP.active) return;
+    var dt = SP.lastTs ? Math.min(100, ts - SP.lastTs) : 16; SP.lastTs = ts;
+    var rec = S.mode === 'rekam';
+    if (SP.to && SP.from) {
+      var f = Math.min(1, (ts - SP.t0) / 1000);
+      SP.cur = [SP.from[0] + (SP.to[0] - SP.from[0]) * f, SP.from[1] + (SP.to[1] - SP.from[1]) * f];
+      spArrow(SP.cur);
+      if (rec && SP.follow) {
+        var off = SP.map.latLngToContainerPoint(SP.cur).subtract(SP.map.getSize().divideBy(2));
+        if (Math.abs(off.x) > SP.map.getSize().x || Math.abs(off.y) > SP.map.getSize().y) SP.map.setView(SP.cur, SP.map.getZoom(), { animate: false });
+        else {
+          SP.map._rawPanBy(off.multiplyBy(1 - Math.exp(-dt / 220))); SP.map.fire('move');
+          SP.mv += dt; if (SP.mv > 400) { SP.mv = 0; SP.map.fire('moveend'); }
+        }
+      }
+    }
+    if (ts - SP.hudT > 250) {
+      SP.hudT = ts;
+      var fresh = rec && S.live.t && (Date.now() - S.live.t) < 5000, v = fresh ? S.live.v : 0;
+      $('spSpd').textContent = fresh ? String(Math.round(v)) : '–';
+      $('spSpd').style.color = fresh ? zc(v) : '';
+      if (rec && SP.follow && SP.zoomAuto && !SP.autoPaused && fresh) {
+        var band = v < 20 ? 18 : (v < 50 ? 17 : (v < 80 ? 16 : 15));
+        if (band !== SP.map.getZoom()) {
+          if (band !== SP.pendBand) { SP.pendBand = band; SP.pendT = ts; }
+          else if (ts - SP.pendT >= 5000) { SP.zoomBusy = true; SP.map.setZoom(band, { animate: true }); SP.pendBand = -1; }
+        } else SP.pendBand = -1;
+      }
+      spNote();
+    }
+    SP.raf = requestAnimationFrame(spLoop);
+  }
+  function spSetActive(on) {
+    if (on === SP.active) return;
+    SP.active = on;
+    $('spD0').classList.toggle('on', on); $('spD1').classList.toggle('on', !on);
+    if (on) {
+      if (!spEnsureMap()) { $('spNote').style.display = 'block'; $('spNote').textContent = 'Peta tidak tersedia'; SP.active = false; return; }
+      spBtns();
+      setTimeout(function () { if (!SP.active) return; SP.map.invalidateSize(); spRebuild(); if (SP.cur) SP.map.setView(SP.cur, S.mode === 'rekam' ? 17 : 17, { animate: false }); }, 60);
+      SP.lastTs = 0; SP.raf = requestAnimationFrame(spLoop);
+      spAwake(true);
+    } else {
+      cancelAnimationFrame(SP.raf); spAwake(false);
+    }
+  }
+  function spLocate() {
+    SP.follow = true; SP.autoPaused = false; spBtns();
+    if (S.mode === 'rekam' && SP.cur) { SP.map.setView(SP.cur, SP.map.getZoom(), { animate: true }); return; }
+    if (!navigator.geolocation) { toast('Lokasi tidak tersedia'); return; }
+    toast('Mencari posisi…');
+    navigator.geolocation.getCurrentPosition(function (p) {
+      var ll = [p.coords.latitude, p.coords.longitude];
+      SP.from = SP.to = SP.cur = ll; spArrow(ll); SP.map.setView(ll, 17, { animate: true });
+      $('spNote').style.display = 'block'; $('spNote').textContent = 'Posisi sekarang (belum merekam)';
+    }, function () { toast('Posisi belum ditemukan'); }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 });
+  }
+  function spInit() {
+    var pg = $('spPager'), tm = null;
+    pg.addEventListener('scroll', function () {
+      clearTimeout(tm);
+      tm = setTimeout(function () { spSetActive(S.view === 'spido' && !document.hidden && spIdx() === 0); }, 120);
+    });
+    $('spBack').onclick = function () { spShow('main'); };
+    $('spLoc').onclick = spLocate;
+    $('spFol').onclick = function () { SP.follow = !SP.follow; if (SP.follow && SP.cur) SP.map.setView(SP.cur, SP.map.getZoom(), { animate: true }); spBtns(); };
+    $('spZoom').onclick = function () { SP.zoomAuto = !SP.zoomAuto; if (SP.zoomAuto) SP.autoPaused = false; spBtns(); };
+    $('spAwake').onclick = function () { S.settings.spAwake = !S.settings.spAwake; saveSettings(); spBtns(); spAwake(true); };
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) { if (SP.active) { SP.active = false; cancelAnimationFrame(SP.raf); spAwake(false); SP.resume = true; } }
+      else if (SP.resume) { SP.resume = false; spSetActive(S.view === 'spido' && spIdx() === 0); }
+    });
+    window.addEventListener('resize', function () { if (S.view === 'spido' && !SP.active) spResetMain(); });
+    spResetMain();
+  }
+
   // ---------- putar ulang lintasan ----------
   var PB = { open: false, seq: [], ax: [], pos: 0, len: 0, playing: false, mult: 10, follow: true, raf: 0, last: 0, mk: null, ring: null, cur: null };
   function pbZone(v) { return v < 60 ? COL.g : (v < 90 ? COL.y : COL.r); }
@@ -1678,6 +1843,7 @@
     document.querySelectorAll('[data-back]').forEach(function (b) { b.onclick = backSet; });
     $('themeSeg').onclick = function (e) { var t = e.target.getAttribute && e.target.getAttribute('data-t'); if (t) { S.settings.theme = t; saveSettings(); applyTheme(); } };
     pbInit();
+    spInit();
     $('bkMake').onclick = function () { makeBackup(); };
     $('autoBkChk').onchange = function () { S.settings.autoBk = this.checked; saveSettings(); if (this.checked) autoBackup(); };
     $('junkChk').onchange = function () { S.settings.junkOn = this.checked; saveSettings(); };
