@@ -212,7 +212,7 @@
                 });
               }
               return next(0).then(function () {
-                return { id: id, name: opt.name || 'Peta', W: W, H: H, levels: levels, cal: null, on: true, bytes: bytes, edit: { keyBg: true, tol: 6, boost: 100, solid: true, sharp: 60, crop: null, erase: [] } };
+                return { id: id, name: opt.name || 'Peta', W: W, H: H, levels: levels, cal: null, on: true, bytes: bytes, edit: { keyBg: false, tol: 6, boost: 100, crop: null, erase: [] } };
               });
             }).catch(function (e) { delOverlay(id); throw e; });
           }
@@ -430,13 +430,17 @@
         if (ed && (ed.crop || (ed.erase && ed.erase.length))) {
           ctx.setTransform((p1.x - p0.x) / W, (p1.y - p0.y) / W, (p2.x - p0.x) / H, (p2.y - p0.y) / H, p0.x, p0.y);
           ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = '#000';
-          var cut = [];
-          if (ed.crop) {
-            var q = ed.crop;
-            cut.push([-2, -2, W + 4, q.y0 + 2], [-2, q.y1, W + 4, H - q.y1 + 2], [-2, q.y0, q.x0 + 2, q.y1 - q.y0], [q.x1, q.y0, W - q.x1 + 2, q.y1 - q.y0]);
+          function pathOf(r) {
+            var P = r.poly || [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]];
+            ctx.moveTo(P[0][0], P[0][1]);
+            for (var n = 1; n < P.length; n++) ctx.lineTo(P[n][0], P[n][1]);
+            ctx.closePath();
           }
-          (ed.erase || []).forEach(function (r) { cut.push([r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0]); });
-          cut.forEach(function (r) { ctx.fillRect(r[0], r[1], r[2], r[3]); });
+          if (ed.crop) {
+            // di luar poligon dibuang: kotak besar + poligon dengan aturan evenodd
+            ctx.beginPath(); ctx.rect(-4, -4, W + 8, H + 8); pathOf(ed.crop); ctx.fill('evenodd');
+          }
+          (ed.erase || []).forEach(function (r) { ctx.beginPath(); pathOf(r); ctx.fill(); });
           ctx.globalCompositeOperation = 'source-over';
         }
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -695,24 +699,23 @@
     return { close: close };
   }
 
-  // ---------- bersihkan gambar (latar, pangkas, hapus kotak) ----------
+  // ---------- bersihkan gambar (pangkas dan hapus area dengan poligon) ----------
   // cx: { onChange(), onDone(edit) }
+  // edit.crop = {poly:[[u,v],...]} (bagian di luar dibuang) atau kotak lama {x0,y0,x1,y1}
+  // edit.erase = [{poly:[[u,v],...]} | kotak lama]
   function clean(meta, cx) {
     var ed0 = JSON.stringify(meta.edit || null);
-    if (!meta.edit) meta.edit = { keyBg: false, tol: 6, boost: 100, solid: false, sharp: 60, crop: null, erase: [] };
-    var ed = meta.edit; if (!ed.erase) ed.erase = []; if (ed.boost == null) ed.boost = 100; if (ed.tol == null) ed.tol = 6; if (ed.sharp == null) ed.sharp = 60;
-    var hist = [], mode = 'pan', drag = null;
+    if (!meta.edit) meta.edit = { keyBg: false, tol: 6, boost: 100, crop: null, erase: [] };
+    var ed = meta.edit; if (!ed.erase) ed.erase = [];
+    ed.keyBg = false; ed.solid = false; // hapus latar otomatis dimatikan; diganti poligon
+    var hist = [], mode = 'pan', pts = [];
     var el = document.createElement('div');
     el.id = 'cleanUI';
     el.innerHTML = '<div class="cal-h"><b>Bersihkan gambar</b><button class="btn sm" id="kNo">Batal</button></div>' +
-      '<div class="seg tseg" id="kMode"><button data-m="pan" class="on">Geser</button><button data-m="crop">Pangkas</button><button data-m="erase">Hapus kotak</button></div>' +
+      '<div class="seg tseg" id="kMode"><button data-m="pan" class="on">Geser</button><button data-m="crop">Pangkas</button><button data-m="erase">Hapus area</button></div>' +
       '<div class="cal-s" id="kHelp"></div>' +
       '<div class="cal-m"><div id="kMap" class="cal-map" style="background:#C9D3CF"></div></div>' +
-      '<div class="tpanel"><div class="trow"><label style="display:flex;align-items:center;gap:8px;flex:1;color:var(--tx3)"><input type="checkbox" id="kKey" style="width:20px;height:20px"> Hapus latar kertas</label></div>' +
-      '<div class="trow"><label style="display:flex;align-items:center;gap:8px;flex:1;color:var(--tx3)"><input type="checkbox" id="kSolid" style="width:20px;height:20px"> Garis hitam pekat</label></div>' +
-      '<div class="trow"><span>Bersihkan noda</span><input type="range" id="kSharp" min="0" max="100" step="5" value="60"><b id="kSharpV" style="min-width:34px;color:var(--tx3)"></b></div>' +
-      '<div class="trow"><span>Toleransi</span><input type="range" id="kTol" min="0" max="40" value="6"><b id="kTolV" style="min-width:34px;color:var(--tx3)"></b></div>' +
-      '<div class="trow"><span>Tebal garis</span><input type="range" id="kBoost" min="100" max="300" step="10" value="100"><b id="kBoostV" style="min-width:34px;color:var(--tx3)"></b></div>' +
+      '<div class="tpanel"><div class="trow" id="kPoly" style="display:none;gap:6px"><button class="btn sm pri" id="kClose" style="flex:1">Selesai poligon</button><button class="btn sm" id="kPop" style="flex:1">Titik −</button><button class="btn sm" id="kCancel" style="flex:1">Batal</button></div>' +
       '<div class="trow" id="kBoxes" style="flex-wrap:wrap"></div>' +
       '<div class="cal-b"><button class="btn" id="kUndo">Urungkan</button><button class="btn" id="kClr">Reset bersih</button><button class="btn pri" id="kOk">Selesai</button></div></div>';
     document.body.appendChild(el);
@@ -720,94 +723,72 @@
     var map = L.map($('kMap'), { crs: L.CRS.Simple, minZoom: -8, maxZoom: 5, zoomControl: true, attributionControl: false, zoomSnap: 0.25, preferCanvas: true });
     var layer = makeLayer(meta, { toLL: function (u, v) { return L.latLng(-v, u); } }).addTo(map);
     map.fitBounds([[-meta.H, 0], [0, meta.W]]);
-    var shapes = L.layerGroup().addTo(map), temp = null;
+    var shapes = L.layerGroup().addTo(map), tmpG = L.layerGroup().addTo(map);
     function ll(u, v) { return L.latLng(-v, u); }
-    function rect(r, st) { return L.rectangle([ll(r.x0, r.y0), ll(r.x1, r.y1)], st); }
-    function snap() { hist.push(JSON.stringify(ed)); if (hist.length > 40) hist.shift(); }
+    function polyOf(r) { return r.poly || [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]]; }
+    function poly(r, st) { return L.polygon(polyOf(r).map(function (p) { return ll(p[0], p[1]); }), st); }
+    function snap() { hist.push(JSON.stringify({ crop: ed.crop, erase: ed.erase })); if (hist.length > 40) hist.shift(); }
     function redraw() {
       layer._draw();
       shapes.clearLayers();
-      if (ed.crop) rect(ed.crop, { color: '#2F7CF6', weight: 2, dashArray: '8 6', fill: false, interactive: false }).addTo(shapes);
-      ed.erase.forEach(function (r) { rect(r, { color: '#FF5B50', weight: 1.5, dashArray: '5 4', fillColor: '#FF5B50', fillOpacity: 0.12, interactive: false }).addTo(shapes); });
-      $('kKey').checked = !!ed.keyBg;
-      $('kTol').value = ed.tol; $('kTolV').textContent = ed.tol + '%';
-      $('kBoost').value = ed.boost; $('kBoostV').textContent = ed.boost + '%';
-      $('kSolid').checked = !!ed.solid; $('kSharp').value = ed.sharp; $('kSharpV').textContent = ed.sharp + '%';
-      $('kTol').disabled = $('kBoost').disabled = $('kSolid').disabled = !ed.keyBg;
-      $('kSharp').disabled = !ed.keyBg || !ed.solid;
+      if (ed.crop) poly(ed.crop, { color: '#2F7CF6', weight: 2, dashArray: '8 6', fill: false, interactive: false }).addTo(shapes);
+      ed.erase.forEach(function (r) { poly(r, { color: '#FF5B50', weight: 1.5, dashArray: '5 4', fillColor: '#FF5B50', fillOpacity: 0.15, interactive: false }).addTo(shapes); });
       var h = '';
       if (ed.crop) h += '<button class="btn sm" data-x="crop">× Pangkas</button>';
-      ed.erase.forEach(function (r, i) { h += '<button class="btn sm" data-x="' + i + '">× Kotak ' + (i + 1) + '</button>'; });
-      $('kBoxes').innerHTML = h || '<span style="color:var(--tx2)">Belum ada pangkas / kotak hapus.</span>';
+      ed.erase.forEach(function (r, i) { h += '<button class="btn sm" data-x="' + i + '">× Area ' + (i + 1) + '</button>'; });
+      $('kBoxes').innerHTML = h || '<span style="color:var(--tx2)">Belum ada pangkas / area hapus.</span>';
       if (cx.onChange) cx.onChange();
     }
-    function help() {
-      $('kHelp').innerHTML = mode === 'pan' ? 'Geser dan zoom gambar untuk memeriksa. Garis biru = batas pangkas, kotak merah = bagian yang dihapus.' :
-        (mode === 'crop' ? '<b>Pangkas:</b> seret satu kotak di sekitar bagian yang <b>dipertahankan</b>. Di luar kotak dibuang (tepi, judul, legenda).' :
-          '<b>Hapus kotak:</b> seret kotak di atas teks atau gambar yang tidak diinginkan. Bisa berkali-kali.');
-    }
-    function setMode(m) {
-      mode = m;
-      $('kMode').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-m') === m); });
-      var on = m === 'pan';
-      // saat pangkas / hapus kotak: satu jari menggambar, dua jari (cubit) tetap bisa zoom dan menggeser
-      ['dragging', 'doubleClickZoom', 'boxZoom'].forEach(function (k) { if (map[k]) on ? map[k].enable() : map[k].disable(); });
-      ['touchZoom', 'scrollWheelZoom'].forEach(function (k) { if (map[k]) map[k].enable(); });
-      map.getContainer().style.touchAction = on ? '' : 'none';
+    function drawTmp() {
+      tmpG.clearLayers();
+      var col = mode === 'crop' ? '#2F7CF6' : '#FF5B50';
+      if (pts.length > 1) L.polyline(pts.map(function (p) { return ll(p[0], p[1]); }), { color: col, weight: 2.5, interactive: false }).addTo(tmpG);
+      pts.forEach(function (p, i) { L.circleMarker(ll(p[0], p[1]), { radius: i === 0 ? 8 : 5, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1, interactive: false }).addTo(tmpG); });
+      $('kPoly').style.display = mode === 'pan' ? 'none' : 'flex';
+      $('kClose').disabled = pts.length < 3;
       help();
     }
-    $('kMode').onclick = function (e) { var m = e.target.getAttribute('data-m'); if (m) setMode(m); };
-    var cont = map.getContainer();
-    function pt(e) { var r = cont.getBoundingClientRect(), c = map.containerPointToLatLng(L.point(e.clientX - r.left, e.clientY - r.top)); return { u: Math.max(0, Math.min(meta.W, c.lng)), v: Math.max(0, Math.min(meta.H, -c.lat)), x: e.clientX, y: e.clientY }; }
-    var downN = {};
-    function dropDrag() { drag = null; if (temp) { shapes.removeLayer(temp); temp = null; } }
-    cont.addEventListener('pointerdown', function (e) {
-      if (e.target.closest && e.target.closest('.leaflet-control')) return;
-      downN[e.pointerId] = 1;
-      if (Object.keys(downN).length > 1) { dropDrag(); return; }
-      if (mode === 'pan' || drag) return;
-      drag = pt(e); drag.id = e.pointerId;
-      try { cont.setPointerCapture(e.pointerId); } catch (er) {}
-      e.preventDefault();
-    });
-    cont.addEventListener('pointermove', function (e) {
-      if (!drag || e.pointerId !== drag.id) return;
-      var q = pt(e);
-      if (temp) { shapes.removeLayer(temp); temp = null; }
-      temp = rect({ x0: Math.min(drag.u, q.u), y0: Math.min(drag.v, q.v), x1: Math.max(drag.u, q.u), y1: Math.max(drag.v, q.v) }, { color: mode === 'crop' ? '#2F7CF6' : '#FF5B50', weight: 2, fillOpacity: 0.1, interactive: false }).addTo(shapes);
-      e.preventDefault();
-    });
-    function end(e) {
-      if (!drag || e.pointerId !== drag.id) return;
-      var q = pt(e), d = drag; drag = null;
-      if (temp) { shapes.removeLayer(temp); temp = null; }
-      if (e.type === 'pointercancel') return;
-      if (Math.abs(q.x - d.x) < 10 || Math.abs(q.y - d.y) < 10) return;
-      var r = { x0: Math.round(Math.min(d.u, q.u)), y0: Math.round(Math.min(d.v, q.v)), x1: Math.round(Math.max(d.u, q.u)), y1: Math.round(Math.max(d.v, q.v)) };
-      snap();
-      if (mode === 'crop') ed.crop = r; else ed.erase.push(r);
-      redraw();
+    function help() {
+      var n = pts.length;
+      $('kHelp').innerHTML = mode === 'pan' ? 'Geser dan zoom gambar untuk memeriksa. Garis biru = batas pangkas, area merah = bagian yang dihapus.' :
+        (mode === 'crop' ? '<b>Pangkas:</b> ketuk titik demi titik <b>mengelilingi bagian yang dipertahankan</b>. Di luar poligon dibuang. Titik: ' + n + '. Ketuk titik pertama atau Selesai poligon untuk menutup.' :
+          '<b>Hapus area:</b> ketuk titik demi titik mengelilingi bagian yang dibuang (mis. latar kertas, noda, teks). Titik: ' + n + '. Ketuk titik pertama atau Selesai poligon untuk menutup.');
     }
-    cont.addEventListener('pointerup', function (e) { var multi = Object.keys(downN).length > 1; delete downN[e.pointerId]; if (multi) { dropDrag(); return; } end(e); });
-    cont.addEventListener('pointercancel', function (e) { delete downN[e.pointerId]; end(e); });
-    $('kSolid').onchange = function () { snap(); ed.solid = this.checked; redraw(); };
-    $('kSharp').oninput = function () { ed.sharp = +this.value; $('kSharpV').textContent = ed.sharp + '%'; layer._draw(); if (cx.onChange) cx.onChange(); };
-    $('kSharp').onchange = function () { snap(); };
-    $('kKey').onchange = function () { snap(); ed.keyBg = this.checked; redraw(); };
-    $('kTol').oninput = function () { ed.tol = +this.value; $('kTolV').textContent = ed.tol + '%'; layer._draw(); if (cx.onChange) cx.onChange(); };
-    $('kTol').onchange = function () { snap(); };
-    $('kBoost').oninput = function () { ed.boost = +this.value; $('kBoostV').textContent = ed.boost + '%'; layer._draw(); if (cx.onChange) cx.onChange(); };
-    $('kBoost').onchange = function () { snap(); };
+    function setMode(m) {
+      mode = m; pts = [];
+      $('kMode').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-m') === m); });
+      drawTmp();
+    }
+    $('kMode').onclick = function (e) { var m = e.target.getAttribute('data-m'); if (m) setMode(m); };
+    function finish() {
+      if (pts.length < 3) return;
+      snap();
+      var r = { poly: pts.map(function (p) { return [Math.round(p[0]), Math.round(p[1])]; }) };
+      if (mode === 'crop') ed.crop = r; else ed.erase.push(r);
+      pts = []; drawTmp(); redraw();
+    }
+    map.on('click', function (e) {
+      if (mode === 'pan') return;
+      var p = [Math.max(0, Math.min(meta.W, e.latlng.lng)), Math.max(0, Math.min(meta.H, -e.latlng.lat))];
+      if (pts.length >= 3) {
+        var a = map.latLngToContainerPoint(ll(pts[0][0], pts[0][1])), b = map.latLngToContainerPoint(ll(p[0], p[1]));
+        if (a.distanceTo(b) < 20) { finish(); return; }
+      }
+      pts.push(p); drawTmp();
+    });
+    $('kClose').onclick = finish;
+    $('kPop').onclick = function () { pts.pop(); drawTmp(); };
+    $('kCancel').onclick = function () { pts = []; drawTmp(); };
     $('kBoxes').onclick = function (e) {
       var x = e.target.getAttribute('data-x'); if (x === null) return;
-      cfm(x === 'crop' ? 'Hapus pangkas?' : 'Hapus kotak ' + (+x + 1) + '?', x === 'crop' ? 'Batas pangkas dibuang; seluruh gambar tampil lagi.' : 'Bagian yang tadi dihapus tampil lagi.', 'Hapus', function () {
+      cfm(x === 'crop' ? 'Hapus pangkas?' : 'Hapus area ' + (+x + 1) + '?', x === 'crop' ? 'Batas pangkas dibuang; seluruh gambar tampil lagi.' : 'Bagian yang tadi dihapus tampil lagi.', 'Hapus', function () {
         snap();
         if (x === 'crop') ed.crop = null; else ed.erase.splice(+x, 1);
         redraw();
       });
     };
-    $('kUndo').onclick = function () { if (!hist.length) return; var o = JSON.parse(hist.pop()); ed.keyBg = o.keyBg; ed.tol = o.tol; ed.boost = o.boost; ed.solid = o.solid; ed.sharp = o.sharp == null ? 60 : o.sharp; ed.crop = o.crop; ed.erase = o.erase; redraw(); };
-    $('kClr').onclick = function () { cfm('Reset bersih?', 'Hapus latar, garis pekat, pangkas, dan semua kotak hapus dibatalkan.', 'Reset', function () { snap(); ed.keyBg = false; ed.solid = false; ed.sharp = 60; ed.crop = null; ed.erase = []; ed.tol = 6; ed.boost = 100; redraw(); }); };
+    $('kUndo').onclick = function () { if (pts.length) { pts.pop(); drawTmp(); return; } if (!hist.length) return; var o = JSON.parse(hist.pop()); ed.crop = o.crop; ed.erase = o.erase; redraw(); };
+    $('kClr').onclick = function () { cfm('Reset bersih?', 'Pangkas dan semua area hapus dibatalkan.', 'Reset', function () { snap(); ed.crop = null; ed.erase = []; pts = []; drawTmp(); redraw(); }); };
     function close() { try { map.remove(); } catch (e) {} el.remove(); }
     $('kNo').onclick = function () { meta.edit = JSON.parse(ed0); if (cx.onChange) cx.onChange(); close(); };
     $('kOk').onclick = function () { close(); if (cx.onDone) cx.onDone(meta.edit); };

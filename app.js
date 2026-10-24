@@ -1016,7 +1016,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.7.1'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.7.2'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1438,13 +1438,13 @@
   function carryOver(o, n) {
     var k = n.W / o.W;
     if (!(k > 0) || Math.abs(n.H / o.H - k) > 0.02 * k) return false;
-    function sc(r) { return { x0: Math.round(r.x0 * k), y0: Math.round(r.y0 * k), x1: Math.round(r.x1 * k), y1: Math.round(r.y1 * k) }; }
+    function sc(r) { return r.poly ? { poly: r.poly.map(function (p) { return [Math.round(p[0] * k), Math.round(p[1] * k)]; }) } : { x0: Math.round(r.x0 * k), y0: Math.round(r.y0 * k), x1: Math.round(r.x1 * k), y1: Math.round(r.y1 * k) }; }
     if (o.cal) n.cal = o.cal.map(function (c) { var d = Object.assign({}, c); d.u = c.u * k; d.v = c.v * k; return d; });
     if (o.aff) n.aff = { A: o.aff.A / k, B: o.aff.B / k, C: o.aff.C, D: o.aff.D / k, E: o.aff.E / k, F: o.aff.F };
     if (o.edit) {
       var e = Object.assign({}, o.edit);
       e.crop = o.edit.crop ? sc(o.edit.crop) : null; e.erase = (o.edit.erase || []).map(sc);
-      if (e.keyBg) { e.solid = true; if (e.sharp == null) e.sharp = 60; }
+      e.keyBg = false; e.solid = false;
       n.edit = e;
     }
     n.on = o.on; return true;
