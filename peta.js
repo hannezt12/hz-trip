@@ -99,6 +99,82 @@
               return page.render({ canvasContext: cx, viewport: vp, background: '#ffffff', optionalContentConfigPromise: cfg ? Promise.resolve(cfg) : undefined }).promise;
             });
           },
+          // penampil layar penuh: cubit / seret / ketuk dua kali; dirender ulang tajam di zoom saat ini
+          viewer: function (pageNo, hidden, title) {
+            apply(hidden);
+            return doc.getPage(Math.min(Math.max(1, pageNo || 1), doc.numPages)).then(function (page) {
+              var v1 = page.getViewport({ scale: 1 }), el = document.createElement('div');
+              el.id = 'pdfZoom';
+              el.innerHTML = '<div class="cal-h"><b>' + (title || 'Periksa gambar') + '</b><button class="btn sm" id="pzOk">Tutup</button></div><div class="pzs"><canvas></canvas></div><div class="pzh">Cubit untuk zoom · seret untuk geser · ketuk dua kali untuk perbesar</div>';
+              document.body.appendChild(el);
+              var st = el.querySelector('.pzs'), cv = el.querySelector('canvas'), dpr = Math.min(2, window.devicePixelRatio || 1);
+              var SW = st.clientWidth, SH = st.clientHeight, fit = Math.min(SW / v1.width, SH / v1.height);
+              var V = { z: fit, x: (SW - v1.width * fit) / 2, y: (SH - v1.height * fit) / 2 }, R = null, task = null, tm = null, ptr = {}, lastTap = 0, dead = false;
+              function clamp() {
+                V.z = Math.max(fit * 0.8, Math.min(fit * 80, V.z));
+                var pw = v1.width * V.z, ph = v1.height * V.z;
+                V.x = pw <= SW ? (SW - pw) / 2 : Math.min(SW * 0.5, Math.max(SW * 0.5 - pw, V.x));
+                V.y = ph <= SH ? (SH - ph) / 2 : Math.min(SH * 0.5, Math.max(SH * 0.5 - ph, V.y));
+              }
+              function css() {
+                if (!R) return;
+                var k = V.z / R.z;
+                cv.style.transform = 'translate(' + (V.x - R.x * k) + 'px,' + (V.y - R.y * k) + 'px) scale(' + k + ')';
+              }
+              function render() {
+                if (dead) return;
+                if (task) { try { task.cancel(); } catch (e) {} task = null; }
+                apply(hidden);
+                var off = document.createElement('canvas'); off.width = Math.round(SW * dpr); off.height = Math.round(SH * dpr);
+                var cx = off.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, off.width, off.height);
+                var snap = { z: V.z, x: V.x, y: V.y };
+                var vp = page.getViewport({ scale: snap.z * dpr, offsetX: snap.x * dpr, offsetY: snap.y * dpr });
+                task = page.render({ canvasContext: cx, viewport: vp, background: '#ffffff', optionalContentConfigPromise: cfg ? Promise.resolve(cfg) : undefined });
+                var tk = task;
+                tk.promise.then(function () {
+                  if (dead || task !== tk) return;
+                  cv.width = off.width; cv.height = off.height; cv.getContext('2d').drawImage(off, 0, 0);
+                  cv.style.width = SW + 'px'; cv.style.height = SH + 'px';
+                  R = snap; css();
+                }, function () {});
+              }
+              function later() { clearTimeout(tm); tm = setTimeout(function () { if (!Object.keys(ptr).length) render(); }, 180); }
+              function pos(e) { var r = st.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+              function zoomAt(px, py, nz) {
+                nz = Math.max(fit * 0.8, Math.min(fit * 80, nz));
+                V.x = px - (px - V.x) * nz / V.z; V.y = py - (py - V.y) * nz / V.z; V.z = nz; clamp(); css();
+              }
+              st.addEventListener('pointerdown', function (e) {
+                try { st.setPointerCapture(e.pointerId); } catch (er) {}
+                ptr[e.pointerId] = pos(e);
+                if (Object.keys(ptr).length === 1) {
+                  var now = Date.now();
+                  if (now - lastTap < 300) { var p = pos(e); zoomAt(p.x, p.y, V.z > fit * 1.5 ? fit : V.z * 3); later(); lastTap = 0; } else lastTap = now;
+                }
+                e.preventDefault();
+              });
+              st.addEventListener('pointermove', function (e) {
+                if (!ptr[e.pointerId]) return;
+                var o = ptr[e.pointerId], n = pos(e), ids = Object.keys(ptr);
+                if (ids.length === 1) { V.x += n.x - o.x; V.y += n.y - o.y; clamp(); css(); }
+                else {
+                  var oid = ids.filter(function (k) { return +k !== e.pointerId; })[0], q = ptr[oid];
+                  var d0 = Math.hypot(o.x - q.x, o.y - q.y), d1 = Math.hypot(n.x - q.x, n.y - q.y);
+                  var mx0 = (o.x + q.x) / 2, my0 = (o.y + q.y) / 2, mx1 = (n.x + q.x) / 2, my1 = (n.y + q.y) / 2;
+                  if (d0 > 8) zoomAt(mx0, my0, V.z * d1 / d0);
+                  V.x += mx1 - mx0; V.y += my1 - my0; clamp(); css();
+                }
+                ptr[e.pointerId] = n; e.preventDefault();
+              });
+              function up(e) { delete ptr[e.pointerId]; later(); }
+              st.addEventListener('pointerup', up); st.addEventListener('pointercancel', up);
+              st.addEventListener('wheel', function (e) { var p = pos(e); zoomAt(p.x, p.y, V.z * (e.deltaY < 0 ? 1.25 : 0.8)); later(); e.preventDefault(); }, { passive: false });
+              function close() { dead = true; clearTimeout(tm); if (task) { try { task.cancel(); } catch (e) {} } el.remove(); }
+              el.querySelector('#pzOk').onclick = close;
+              render();
+              return { close: close };
+            });
+          },
           close: function () { try { doc.destroy(); } catch (e) {} },
           // opt: { name, page, longSide, hidden:{id:true} }
           run: function (opt, onProg) {
@@ -136,7 +212,7 @@
                 });
               }
               return next(0).then(function () {
-                return { id: id, name: opt.name || 'Peta', W: W, H: H, levels: levels, cal: null, on: true, bytes: bytes, edit: { keyBg: true, tol: 6, boost: 100, crop: null, erase: [] } };
+                return { id: id, name: opt.name || 'Peta', W: W, H: H, levels: levels, cal: null, on: true, bytes: bytes, edit: { keyBg: true, tol: 6, boost: 100, solid: true, sharp: 60, crop: null, erase: [] } };
               });
             }).catch(function (e) { delOverlay(id); throw e; });
           }
@@ -214,6 +290,20 @@
     var c = scratch.getContext('2d', { willReadFrequently: true });
     c.clearRect(0, 0, w, h); c.drawImage(bm, 0, 0);
     var im = c.getImageData(0, 0, w, h), d = im.data, t = Math.min(0.9, (ed.tol || 0) / 100), inv = 1 / (1 - t), bo = (ed.boost || 100) / 100;
+    if (ed.solid) {
+      // garis hitam pekat: kegelapan dipertegas jadi satu warna (hitam); tepi halus tipis, bayangan abu-abu hilang
+      var sh = ed.sharp == null ? 60 : ed.sharp, ww = 0.6 * (1 - sh / 100) + 0.06, mid = Math.max(0.15, 0.5 - (bo - 1) * 0.15);
+      var lo = Math.max(t, mid - ww / 2), hi = Math.max(lo + 0.02, lo + ww);
+      for (var j = 0; j < d.length; j += 4) {
+        var r2 = d[j], g2 = d[j + 1], b2 = d[j + 2], m2 = r2 < g2 ? (r2 < b2 ? r2 : b2) : (g2 < b2 ? g2 : b2), a0 = (255 - m2) / 255;
+        if (a0 <= lo) { d[j + 3] = 0; continue; }
+        var q = (a0 - lo) / (hi - lo); if (q > 1) q = 1;
+        d[j] = d[j + 1] = d[j + 2] = 0; d[j + 3] = q * q * (3 - 2 * q) * 255;
+      }
+      c.putImageData(im, 0, 0);
+      bm.close();
+      return createImageBitmap(scratch);
+    }
     for (var i = 0; i < d.length; i += 4) {
       var r = d[i], g = d[i + 1], b = d[i + 2], m = r < g ? (r < b ? r : b) : (g < b ? g : b), a = (255 - m) / 255;
       if (a <= t) { d[i + 3] = 0; continue; }
@@ -236,7 +326,7 @@
         this._bm = {}; this._ord = []; this._pend = {}; this._raf = 0;
         this._toLL = opts.toLL; this._sig = this._sigNow();
       },
-      _sigNow: function () { var e = this.meta.edit; return e && e.keyBg ? (e.tol + '|' + (e.boost || 100)) : '0'; },
+      _sigNow: function () { var e = this.meta.edit; return e && e.keyBg ? (e.tol + '|' + (e.boost || 100) + '|' + (e.solid ? 's' + (e.sharp == null ? 60 : e.sharp) : 'n')) : '0'; },
       _flush: function () {
         for (var k in this._bm) { try { this._bm[k].close(); } catch (e) {} }
         this._bm = {}; this._ord = []; this._pend = {};
@@ -609,8 +699,8 @@
   // cx: { onChange(), onDone(edit) }
   function clean(meta, cx) {
     var ed0 = JSON.stringify(meta.edit || null);
-    if (!meta.edit) meta.edit = { keyBg: false, tol: 6, boost: 100, crop: null, erase: [] };
-    var ed = meta.edit; if (!ed.erase) ed.erase = []; if (ed.boost == null) ed.boost = 100; if (ed.tol == null) ed.tol = 6;
+    if (!meta.edit) meta.edit = { keyBg: false, tol: 6, boost: 100, solid: false, sharp: 60, crop: null, erase: [] };
+    var ed = meta.edit; if (!ed.erase) ed.erase = []; if (ed.boost == null) ed.boost = 100; if (ed.tol == null) ed.tol = 6; if (ed.sharp == null) ed.sharp = 60;
     var hist = [], mode = 'pan', drag = null;
     var el = document.createElement('div');
     el.id = 'cleanUI';
@@ -619,13 +709,15 @@
       '<div class="cal-s" id="kHelp"></div>' +
       '<div class="cal-m"><div id="kMap" class="cal-map" style="background:#C9D3CF"></div></div>' +
       '<div class="tpanel"><div class="trow"><label style="display:flex;align-items:center;gap:8px;flex:1;color:var(--tx3)"><input type="checkbox" id="kKey" style="width:20px;height:20px"> Hapus latar kertas</label></div>' +
+      '<div class="trow"><label style="display:flex;align-items:center;gap:8px;flex:1;color:var(--tx3)"><input type="checkbox" id="kSolid" style="width:20px;height:20px"> Garis hitam pekat</label></div>' +
+      '<div class="trow"><span>Bersihkan noda</span><input type="range" id="kSharp" min="0" max="100" step="5" value="60"><b id="kSharpV" style="min-width:34px;color:var(--tx3)"></b></div>' +
       '<div class="trow"><span>Toleransi</span><input type="range" id="kTol" min="0" max="40" value="6"><b id="kTolV" style="min-width:34px;color:var(--tx3)"></b></div>' +
       '<div class="trow"><span>Tebal garis</span><input type="range" id="kBoost" min="100" max="300" step="10" value="100"><b id="kBoostV" style="min-width:34px;color:var(--tx3)"></b></div>' +
       '<div class="trow" id="kBoxes" style="flex-wrap:wrap"></div>' +
       '<div class="cal-b"><button class="btn" id="kUndo">Urungkan</button><button class="btn" id="kClr">Reset bersih</button><button class="btn pri" id="kOk">Selesai</button></div></div>';
     document.body.appendChild(el);
     function $(id) { return el.querySelector('#' + id); }
-    var map = L.map($('kMap'), { crs: L.CRS.Simple, minZoom: -8, maxZoom: 3, zoomControl: false, attributionControl: false, zoomSnap: 0.25, preferCanvas: true });
+    var map = L.map($('kMap'), { crs: L.CRS.Simple, minZoom: -8, maxZoom: 5, zoomControl: true, attributionControl: false, zoomSnap: 0.25, preferCanvas: true });
     var layer = makeLayer(meta, { toLL: function (u, v) { return L.latLng(-v, u); } }).addTo(map);
     map.fitBounds([[-meta.H, 0], [0, meta.W]]);
     var shapes = L.layerGroup().addTo(map), temp = null;
@@ -640,7 +732,9 @@
       $('kKey').checked = !!ed.keyBg;
       $('kTol').value = ed.tol; $('kTolV').textContent = ed.tol + '%';
       $('kBoost').value = ed.boost; $('kBoostV').textContent = ed.boost + '%';
-      $('kTol').disabled = $('kBoost').disabled = !ed.keyBg;
+      $('kSolid').checked = !!ed.solid; $('kSharp').value = ed.sharp; $('kSharpV').textContent = ed.sharp + '%';
+      $('kTol').disabled = $('kBoost').disabled = $('kSolid').disabled = !ed.keyBg;
+      $('kSharp').disabled = !ed.keyBg || !ed.solid;
       var h = '';
       if (ed.crop) h += '<button class="btn sm" data-x="crop">× Pangkas</button>';
       ed.erase.forEach(function (r, i) { h += '<button class="btn sm" data-x="' + i + '">× Kotak ' + (i + 1) + '</button>'; });
@@ -656,14 +750,21 @@
       mode = m;
       $('kMode').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-m') === m); });
       var on = m === 'pan';
-      ['dragging', 'touchZoom', 'doubleClickZoom', 'scrollWheelZoom', 'boxZoom'].forEach(function (k) { if (map[k]) on ? map[k].enable() : map[k].disable(); });
+      // saat pangkas / hapus kotak: satu jari menggambar, dua jari (cubit) tetap bisa zoom dan menggeser
+      ['dragging', 'doubleClickZoom', 'boxZoom'].forEach(function (k) { if (map[k]) on ? map[k].enable() : map[k].disable(); });
+      ['touchZoom', 'scrollWheelZoom'].forEach(function (k) { if (map[k]) map[k].enable(); });
       map.getContainer().style.touchAction = on ? '' : 'none';
       help();
     }
     $('kMode').onclick = function (e) { var m = e.target.getAttribute('data-m'); if (m) setMode(m); };
     var cont = map.getContainer();
     function pt(e) { var r = cont.getBoundingClientRect(), c = map.containerPointToLatLng(L.point(e.clientX - r.left, e.clientY - r.top)); return { u: Math.max(0, Math.min(meta.W, c.lng)), v: Math.max(0, Math.min(meta.H, -c.lat)), x: e.clientX, y: e.clientY }; }
+    var downN = {};
+    function dropDrag() { drag = null; if (temp) { shapes.removeLayer(temp); temp = null; } }
     cont.addEventListener('pointerdown', function (e) {
+      if (e.target.closest && e.target.closest('.leaflet-control')) return;
+      downN[e.pointerId] = 1;
+      if (Object.keys(downN).length > 1) { dropDrag(); return; }
       if (mode === 'pan' || drag) return;
       drag = pt(e); drag.id = e.pointerId;
       try { cont.setPointerCapture(e.pointerId); } catch (er) {}
@@ -687,7 +788,11 @@
       if (mode === 'crop') ed.crop = r; else ed.erase.push(r);
       redraw();
     }
-    cont.addEventListener('pointerup', end); cont.addEventListener('pointercancel', end);
+    cont.addEventListener('pointerup', function (e) { var multi = Object.keys(downN).length > 1; delete downN[e.pointerId]; if (multi) { dropDrag(); return; } end(e); });
+    cont.addEventListener('pointercancel', function (e) { delete downN[e.pointerId]; end(e); });
+    $('kSolid').onchange = function () { snap(); ed.solid = this.checked; redraw(); };
+    $('kSharp').oninput = function () { ed.sharp = +this.value; $('kSharpV').textContent = ed.sharp + '%'; layer._draw(); if (cx.onChange) cx.onChange(); };
+    $('kSharp').onchange = function () { snap(); };
     $('kKey').onchange = function () { snap(); ed.keyBg = this.checked; redraw(); };
     $('kTol').oninput = function () { ed.tol = +this.value; $('kTolV').textContent = ed.tol + '%'; layer._draw(); if (cx.onChange) cx.onChange(); };
     $('kTol').onchange = function () { snap(); };
@@ -701,8 +806,8 @@
         redraw();
       });
     };
-    $('kUndo').onclick = function () { if (!hist.length) return; var o = JSON.parse(hist.pop()); ed.keyBg = o.keyBg; ed.tol = o.tol; ed.boost = o.boost; ed.crop = o.crop; ed.erase = o.erase; redraw(); };
-    $('kClr').onclick = function () { cfm('Reset bersih?', 'Hapus latar, pangkas, dan semua kotak hapus dibatalkan.', 'Reset', function () { snap(); ed.keyBg = false; ed.crop = null; ed.erase = []; ed.tol = 6; ed.boost = 100; redraw(); }); };
+    $('kUndo').onclick = function () { if (!hist.length) return; var o = JSON.parse(hist.pop()); ed.keyBg = o.keyBg; ed.tol = o.tol; ed.boost = o.boost; ed.solid = o.solid; ed.sharp = o.sharp == null ? 60 : o.sharp; ed.crop = o.crop; ed.erase = o.erase; redraw(); };
+    $('kClr').onclick = function () { cfm('Reset bersih?', 'Hapus latar, garis pekat, pangkas, dan semua kotak hapus dibatalkan.', 'Reset', function () { snap(); ed.keyBg = false; ed.solid = false; ed.sharp = 60; ed.crop = null; ed.erase = []; ed.tol = 6; ed.boost = 100; redraw(); }); };
     function close() { try { map.remove(); } catch (e) {} el.remove(); }
     $('kNo').onclick = function () { meta.edit = JSON.parse(ed0); if (cx.onChange) cx.onChange(); close(); };
     $('kOk').onclick = function () { close(); if (cx.onDone) cx.onDone(meta.edit); };

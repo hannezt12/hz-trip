@@ -1016,7 +1016,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.7.0'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.7.1'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1434,6 +1434,21 @@
       onSave: function (af) { o.aff = af; saveSettings(); renderOv(); syncAllOverlays(); toast('Setelan lapisan disimpan'); }
     });
   }
+  // pindahkan kalibrasi, setelan, dan kotak hapus/pangkas dari peta lama ke hasil impor baru (skala piksel berbeda)
+  function carryOver(o, n) {
+    var k = n.W / o.W;
+    if (!(k > 0) || Math.abs(n.H / o.H - k) > 0.02 * k) return false;
+    function sc(r) { return { x0: Math.round(r.x0 * k), y0: Math.round(r.y0 * k), x1: Math.round(r.x1 * k), y1: Math.round(r.y1 * k) }; }
+    if (o.cal) n.cal = o.cal.map(function (c) { var d = Object.assign({}, c); d.u = c.u * k; d.v = c.v * k; return d; });
+    if (o.aff) n.aff = { A: o.aff.A / k, B: o.aff.B / k, C: o.aff.C, D: o.aff.D / k, E: o.aff.E / k, F: o.aff.F };
+    if (o.edit) {
+      var e = Object.assign({}, o.edit);
+      e.crop = o.edit.crop ? sc(o.edit.crop) : null; e.erase = (o.edit.erase || []).map(sc);
+      if (e.keyBg) { e.solid = true; if (e.sharp == null) e.sharp = 60; }
+      n.edit = e;
+    }
+    n.on = o.on; return true;
+  }
   function importOv(file) {
     var nm = file.name.replace(/\.pdf$/i, '');
     var inp = 'width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:0 12px;font-size:16px';
@@ -1445,25 +1460,38 @@
         h.layers.map(function (l) { return '<label><input type="checkbox" data-ly="' + esc(l.id) + '"' + (l.on ? ' checked' : '') + '> ' + esc(l.name) + '</label>'; }).join('') + '</div>' : '<div class="muted" style="margin-top:8px">PDF ini tidak punya layer. Bagian yang tidak diinginkan bisa dibuang di langkah Bersihkan.</div>';
       openSheet('<div class="grab"></div><div class="st">TAMBAH PETA</div>' +
         '<div class="muted" style="margin-bottom:6px">Berkas: ' + esc(file.name) + ' (' + mb(file.size) + ')</div>' +
-        '<canvas id="ovPrev" class="ovprev"></canvas>' +
+        '<canvas id="ovPrev" class="ovprev"></canvas><button class="btn sm" id="ovZoom" style="margin-top:6px;width:100%">Perbesar dan periksa gambar</button>' +
         '<label class="lbl" style="margin-top:8px">Nama</label><input id="ovName" value="' + esc(nm) + '" style="' + inp + '">' +
         '<div class="pgrid" style="margin-top:10px"><div><label class="lbl">Halaman (1–' + h.numPages + ')</label><input id="ovPage" type="number" min="1" max="' + h.numPages + '" value="1" style="' + inp + '"></div>' +
-        '<div><label class="lbl">Ketajaman</label><select id="ovRes" style="' + inp + ';padding:0 8px"><option value="6000">Sedang (6000 px)</option><option value="9000" selected>Tinggi (9000 px)</option><option value="13000">Sangat tinggi (13000 px)</option></select></div></div>' +
+        '<div><label class="lbl">Ketajaman</label><select id="ovRes" style="' + inp + ';padding:0 8px"><option value="9000">Normal (9000 px)</option><option value="16000" selected>Tajam (16000 px)</option><option value="24000">Maksimal (24000 px)</option></select></div></div>' +
+        (ovList().length ? '<label class="lbl" style="margin-top:10px">Gantikan peta lama (kalibrasi dan editan dipindahkan)</label><select id="ovRep" style="' + inp + ';padding:0 8px"><option value="-1">Tidak, tambah sebagai peta baru</option>' + ovList().map(function (o, k) { return '<option value="' + k + '">' + esc(o.name) + '</option>'; }).join('') + '</select>' : '') +
         lay +
-        '<div class="muted" style="margin-top:8px">Makin tajam, makin lama diproses dan makin besar di ponsel. Nomor blok kecil butuh Tinggi atau lebih.</div>' +
+        '<div class="muted" style="margin-top:8px">Makin tajam, makin lama diproses dan makin besar di ponsel (Tajam bisa beberapa menit, Maksimal belasan menit). Pilih Tajam atau Maksimal bila peta akan di-zoom dekat. Setelah dikalibrasi, ukuran m/piksel tampil di daftar peta.</div>' +
         '<div class="row" style="margin-top:14px;gap:8px"><button class="btn" id="ovNo" style="flex:1">Batal</button><button class="btn pri" id="ovGo" style="flex:1">Proses</button></div>');
       var tm = null;
       function prev() { clearTimeout(tm); tm = setTimeout(function () { var c = $('ovPrev'); if (c) h.preview(c, +$('ovPage').value || 1, hidden, 700).catch(function () {}); }, 150); }
       prev();
+      var zv = null;
+      $('ovZoom').onclick = function () { if (zv) zv.close(); h.viewer(+$('ovPage').value || 1, hidden, 'Periksa gambar').then(function (v) { zv = v; }).catch(function () { toast('Gagal membuka penampil'); }); };
       $('ovPage').onchange = prev;
       var ly = $('ovLy');
       if (ly) ly.onchange = function (e) { var id = e.target.getAttribute('data-ly'); if (id === null) return; if (e.target.checked) delete hidden[id]; else hidden[id] = true; prev(); };
       $('ovNo').onclick = function () { h.close(); closeSheet(); };
       $('ovGo').onclick = function () {
-        var name = $('ovName').value.trim() || nm, page = +$('ovPage').value || 1, ls = +$('ovRes').value;
+        if (zv) { zv.close(); zv = null; }
+        var name = $('ovName').value.trim() || nm, page = +$('ovPage').value || 1, ls = +$('ovRes').value, repIdx = $('ovRep') ? +$('ovRep').value : -1, repO = repIdx >= 0 ? ovList()[repIdx] : null;
         openSheet('<div class="grab"></div><div class="st">MEMPROSES PDF…</div><div class="muted" id="ovMsg">Jangan tutup aplikasi sampai selesai.</div><div class="ovbar"><div id="ovBar"></div></div>');
         h.run({ name: name, page: page, longSide: ls, hidden: hidden }, function (f) { var b = $('ovBar'); if (b) b.style.width = Math.round(f * 100) + '%'; }).then(function (meta) {
           h.close();
+          if (repO && carryOver(repO, meta)) {
+            var ix = ovList().indexOf(repO);
+            if (ix >= 0) ovList()[ix] = meta; else ovList().push(meta);
+            HzOverlay.delOverlay(repO.id);
+            saveSettings(); renderOv(); syncAllOverlays(); closeSheet();
+            toast('Peta diganti. Kalibrasi dan editan dipindahkan, mohon periksa hasilnya');
+            return;
+          }
+          if (repO) toast('Ukuran halaman berbeda: kalibrasi tidak bisa dipindahkan');
           ovList().push(meta); saveSettings(); renderOv();
           var i = ovList().length - 1;
           closeSheet();

@@ -317,7 +317,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 #modeBox b{color:var(--tx)}
 #modeBtns .mrow2{margin-top:10px}
 
-/* v0.7.0: SpidoMap (halaman peta di kiri Spidometer) */
+/* v0.7.1: SpidoMap (halaman peta di kiri Spidometer) */
 #main.pg{padding:0;overflow:hidden}
 #v-spido.on{height:100%;position:relative}
 #spPager{display:flex;height:100%;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
@@ -344,3 +344,12 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 #spDots i.on{background:var(--tx2)}
 .spar{background:transparent;border:0}
 .spar svg{display:block;transition:transform .4s linear;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5))}
+
+/* v0.7.1: penampil zoom PDF */
+#pdfZoom{position:fixed;inset:0;z-index:95;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,24px)}
+#pdfZoom .cal-h{display:flex;align-items:center;justify-content:space-between;padding:8px 16px}
+#pdfZoom .cal-h b{font-family:var(--cond);font-size:24px;font-weight:600;letter-spacing:.03em}
+#pdfZoom .pzs{position:relative;flex:1;overflow:hidden;background:#fff;touch-action:none}
+#pdfZoom canvas{position:absolute;left:0;top:0;transform-origin:0 0}
+#pdfZoom .pzh{padding:8px 16px calc(10px + env(safe-area-inset-bottom,0px));font-size:12px;color:var(--tx2);text-align:center}
+#cleanUI .leaflet-control-zoom{margin:10px}
