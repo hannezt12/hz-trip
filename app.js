@@ -1028,7 +1028,42 @@
     });
     return CachedLayer;
   }
+  function fmtMB(b) { return (b / 1048576).toFixed(1).replace('.', ','); }
+  function renderDemInfo() {
+    if (!$('demInfo') || !window.HzDem) return;
+    HzDem.localInfo().then(function (r) {
+      if (!r.sheets.length) { $('demInfo').textContent = 'Belum ada data. Kontur memakai data gratis (±30 m, perlu internet).'; $('demDel').style.display = 'none'; return; }
+      var b = r.bbox;
+      $('demInfo').innerHTML = '<b>' + r.sheets.length + ' lembar</b> · ' + r.tiles + ' kotak · ' + fmtMB(r.bytes) + ' MB<br>' + r.sheets.map(function (q) { return esc(q.name); }).join('<br>') + '<br>Area: ' + b[1].toFixed(3) + '…' + b[3].toFixed(3) + '°, ' + b[0].toFixed(3) + '…' + b[2].toFixed(3) + '°';
+      $('demDel').style.display = '';
+    });
+  }
+  function demAfter() {
+    if (window.HzDem) HzDem.resetMem();
+    CL.clear();
+    if (DM.layer) DM.layer.redraw();
+    renderDemInfo();
+  }
+  function demImport(files) {
+    var list = Array.prototype.slice.call(files || []);
+    if (!list.length) return;
+    var bar = $('demProg'), i = 0, okN = 0, errs = [];
+    bar.style.display = '';
+    function nx() {
+      if (i >= list.length) {
+        bar.style.display = 'none'; $('demAdd').disabled = false; demAfter();
+        toast(okN ? ('Data ketinggian dimuat: ' + okN + ' berkas' + (errs.length ? ', ' + errs.length + ' gagal' : '')) : 'Tidak ada yang berhasil');
+        if (errs.length) $('demErr').textContent = errs.join('\n'); else $('demErr').textContent = '';
+        return;
+      }
+      var f = list[i++];
+      return HzDem.importTiff(f, function (p, t) { bar.textContent = '(' + i + '/' + list.length + ') ' + t + ' · ' + p + '%'; }).then(function () { okN++; }).catch(function (e) { errs.push(f.name + ': ' + (e && e.message || e)); }).then(nx);
+    }
+    $('demAdd').disabled = true; $('demErr').textContent = '';
+    nx();
+  }
   function renderCacheInfo() {
+    renderDemInfo();
     if (!$('tcInfo')) return;
     TC.stats().then(function (s) { $('tcInfo').textContent = 'Cache peta: ' + (s.bytes / 1048576).toFixed(1).replace('.', ',') + ' MB · ' + s.n + ' kotak peta'; });
   }
@@ -1062,7 +1097,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.8.0'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.8.1'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1489,7 +1524,10 @@
   function contourStep(z) {
     var s = S.settings.contourStep || 'auto';
     if (s !== 'auto') return +s;
-    return z <= 15 ? 10 : (z === 16 ? 5 : 2);
+    var loc = false;
+    try { var c = map && map.getCenter(); loc = !!(c && window.HzDem && HzDem.hasLocal(c.lat, c.lng)); } catch (e) {}
+    if (loc) return z <= 15 ? 10 : (z === 16 ? 5 : 2);
+    return z <= 16 ? 10 : 5;
   }
   function contourColor() {
     return S.settings.mapMode === 'osm' ? ['rgba(150,90,30,.75)', 'rgba(125,65,10,1)', 'rgba(255,255,255,.9)'] : ['rgba(255,214,128,.85)', 'rgba(255,190,70,1)', 'rgba(0,0,0,.7)'];
@@ -1551,7 +1589,7 @@
   var CL = (function () {
     var c = null;
     function load() { if (c) return c; try { c = JSON.parse(localStorage.getItem('hzclimb') || '{}'); } catch (e) { c = {}; } return c; }
-    return { get: function (k) { return load()[k]; }, set: function (k, v) { load()[k] = v; try { localStorage.setItem('hzclimb', JSON.stringify(c)); } catch (e) {} } };
+    return { clear: function () { c = {}; try { localStorage.removeItem('hzclimb'); } catch (e) {} }, get: function (k) { return load()[k]; }, set: function (k, v) { load()[k] = v; try { localStorage.setItem('hzclimb', JSON.stringify(c)); } catch (e) {} } };
   })();
   function climbOfTrip(t, pts) {
     var k = t.start + '-' + t.end, c = CL.get(k);
@@ -2308,6 +2346,9 @@
         });
       }
     };
+    $('demAdd').onclick = function () { $('demFile').value = ''; $('demFile').click(); };
+    $('demFile').onchange = function () { demImport($('demFile').files); };
+    $('demDel').onclick = function () { askConfirm('Hapus data ketinggian?', 'Data DEMNAS di ponsel dihapus. Berkas .tif asli Anda tidak terpengaruh dan bisa diimpor lagi.', 'Hapus', function () { HzDem.clearLocal().then(function () { demAfter(); toast('Data ketinggian dihapus'); }); }); };
     $('tcClear').onclick = function () { askConfirm('Bersihkan cache peta?', 'Peta yang tersimpan dihapus. Peta akan diunduh lagi saat Anda melihatnya dengan internet.', 'Bersihkan', function () { TC.clear().then(function () { renderCacheInfo(); toast('Cache peta dibersihkan'); }); }); };
     $('radiusSel').onchange = function () { S.settings.radius = +this.value; saveSettings(); pushSchedule(); };
     $('driverIn').onchange = function () { S.settings.driver = this.value.trim(); saveSettings(); };

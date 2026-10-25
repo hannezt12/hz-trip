@@ -16,9 +16,22 @@
       var cx = cv.getContext('2d', { willReadFrequently: true });
       cx.drawImage(bm, 0, 0); if (bm.close) bm.close();
       var d = cx.getImageData(0, 0, 256, 256).data, out = new Float32Array(65536), i;
-      for (i = 0; i < 65536; i++) out[i] = d[i * 4] * 256 + d[i * 4 + 1] + d[i * 4 + 2] / 256 - 32768;
+      for (i = 0; i < 65536; i++) { var v = d[i * 4] * 256 + d[i * 4 + 1] + d[i * 4 + 2] / 256 - 32768; out[i] = v <= -32000 ? NaN : v; }
       return out;
     });
+  }
+  function netBlob(u) {
+    return (store ? store.get(u) : Promise.resolve(null)).then(function (blob) {
+      if (blob) return blob;
+      return fetch(u, { mode: 'cors' }).then(function (r) { if (!r.ok) throw new Error('http'); return r.blob(); }).then(function (b) { if (store) store.put(u, b); return b; });
+    });
+  }
+  // kotak lokal di tepi cakupan punya piksel kosong: isi dari data gratis bila ada
+  function fillHoles(arr, u) {
+    var i, holes = 0;
+    for (i = 0; i < 65536; i++) if (arr[i] !== arr[i]) { holes++; break; }
+    if (!holes) return arr;
+    return netBlob(u).then(decode).then(function (n) { for (i = 0; i < 65536; i++) if (arr[i] !== arr[i]) arr[i] = n[i]; return arr; }).catch(function () { return arr; });
   }
   function loadTile(z, x, y) {
     var n = Math.pow(2, z);
@@ -29,10 +42,10 @@
     if (pend[k]) return pend[k];
     if (fail[k] && Date.now() - fail[k] < 60000) return Promise.resolve(null);
     var u = urlOf(z, x, y);
-    var p = (store ? store.get(u) : Promise.resolve(null)).then(function (blob) {
-      if (blob) return blob;
-      return fetch(u, { mode: 'cors' }).then(function (r) { if (!r.ok) throw new Error('http'); return r.blob(); }).then(function (b) { if (store) store.put(u, b); return b; });
-    }).then(decode).then(function (arr) {
+    var p = localGet(z, x, y).then(function (lb) {
+      if (lb) return decode(lb).then(function (arr) { return fillHoles(arr, u); });
+      return netBlob(u).then(decode);
+    }).then(function (arr) {
       mem.set(k, arr);
       while (mem.size > MAXMEM) mem.delete(mem.keys().next().value);
       delete pend[k]; return arr;
@@ -81,6 +94,165 @@
     for (var w = 0; w < Math.min(6, list.length); w++) ws.push(worker());
     return Promise.all(ws).then(function () { return { total: list.length, ok: ok }; });
   }
+
+
+  // ---------- data lokal (DEMNAS dari berkas .tif) ----------
+  var LDB = null, cov = [];
+  function ldb() {
+    if (LDB) return LDB;
+    LDB = new Promise(function (res, rej) {
+      var r = indexedDB.open('hzdem', 1);
+      r.onupgradeneeded = function () { var d = r.result; d.createObjectStore('tiles'); d.createObjectStore('meta'); };
+      r.onsuccess = function () { res(r.result); };
+      r.onerror = function () { rej(r.error); };
+    });
+    return LDB;
+  }
+  function lreq(st, mode, fn) {
+    return ldb().then(function (db) {
+      return new Promise(function (res, rej) {
+        var tx = db.transaction(st, mode), q = fn(tx.objectStore(st));
+        tx.oncomplete = function () { res(q && q.result); };
+        tx.onerror = tx.onabort = function () { rej(tx.error); };
+      });
+    });
+  }
+  function localGet(z, x, y) {
+    if (!cov.length) return Promise.resolve(null);
+    return lreq('tiles', 'readonly', function (s) { return s.get(z + '/' + x + '/' + y); }).catch(function () { return null; });
+  }
+  function loadCov() {
+    return lreq('meta', 'readonly', function (s) { return s.get('sheets'); }).then(function (v) { cov = v || []; return cov; }).catch(function () { cov = []; return cov; });
+  }
+  function hasLocal(lat, lng) {
+    for (var i = 0; i < cov.length; i++) { var b = cov[i].bbox; if (lng >= b[0] && lng <= b[2] && lat >= b[1] && lat <= b[3]) return true; }
+    return false;
+  }
+  function localInfo() {
+    return loadCov().then(function (sh) {
+      if (!sh.length) return { sheets: [], tiles: 0, bytes: 0, bbox: null };
+      var tiles = 0, bytes = 0;
+      return ldb().then(function (db) {
+        return new Promise(function (res) {
+          var c = db.transaction('tiles', 'readonly').objectStore('tiles').openCursor();
+          c.onsuccess = function () { var cu = c.result; if (cu) { tiles++; bytes += (cu.value && cu.value.size) || 0; cu.continue(); } else res(); };
+          c.onerror = function () { res(); };
+        });
+      }).then(function () {
+        var bb = [Infinity, Infinity, -Infinity, -Infinity];
+        sh.forEach(function (q) { bb = [Math.min(bb[0], q.bbox[0]), Math.min(bb[1], q.bbox[1]), Math.max(bb[2], q.bbox[2]), Math.max(bb[3], q.bbox[3])]; });
+        return { sheets: sh, tiles: tiles, bytes: bytes, bbox: bb };
+      });
+    });
+  }
+  function resetMem() { mem.clear(); fail = {}; }
+  function clearLocal() {
+    return lreq('tiles', 'readwrite', function (s) { return s.clear(); }).then(function () {
+      return lreq('meta', 'readwrite', function (s) { return s.clear(); });
+    }).then(function () { cov = []; resetMem(); });
+  }
+  function loadLib() {
+    if (root.GeoTIFF) return Promise.resolve(root.GeoTIFF);
+    return new Promise(function (res, rej) {
+      var sc = document.createElement('script');
+      sc.src = 'vendor/geotiff.js';
+      sc.onload = function () { root.GeoTIFF ? res(root.GeoTIFF) : rej(new Error('Pustaka GeoTIFF tidak termuat')); };
+      sc.onerror = function () { rej(new Error('Pustaka GeoTIFF tidak ditemukan')); };
+      document.head.appendChild(sc);
+    });
+  }
+  function tick() { return new Promise(function (r) { setTimeout(r, 0); }); }
+  function encodeTile(arr) {
+    var cv = document.createElement('canvas'); cv.width = cv.height = 256;
+    var cx = cv.getContext('2d'), im = cx.createImageData(256, 256), d = im.data, i, e, R, G;
+    for (i = 0; i < 65536; i++) {
+      var v = arr[i];
+      if (v !== v) { d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = 0; d[i * 4 + 3] = 255; continue; }
+      e = v + 32768; if (e < 1) e = 1;
+      R = Math.floor(e / 256); G = Math.floor(e - R * 256);
+      d[i * 4] = R; d[i * 4 + 1] = G; d[i * 4 + 2] = Math.min(255, Math.floor((e - Math.floor(e)) * 256)); d[i * 4 + 3] = 255;
+    }
+    cx.putImageData(im, 0, 0);
+    return new Promise(function (res, rej) { cv.toBlob(function (b) { b ? res(b) : rej(new Error('Gagal membuat kotak')); }, 'image/png'); });
+  }
+  function tileLat(ty, n256) { var yy = ty / n256; return Math.atan(Math.sinh(Math.PI * (1 - 2 * yy))) * 180 / Math.PI; }
+  function latTile(lat, z) { var s = Math.sin(Math.max(-85, Math.min(85, lat)) * Math.PI / 180); return Math.floor((0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * Math.pow(2, z)); }
+
+  // baca satu berkas GeoTIFF ketinggian (EPSG:4326) dan simpan sebagai kotak lokal z11-14
+  function importTiff(file, onProg) {
+    var prog = onProg || function () {}, G, img, W, H, bbox, nod, data, Z0 = 11, Z1 = 14;
+    return loadLib().then(function (g) { G = g; return G.fromBlob(file).then(function (t) { return t.getImage(); }).catch(function (e) { throw new Error('Bukan berkas GeoTIFF yang bisa dibaca (' + (e && e.message || e) + ')'); }); }).then(function (im) {
+      img = im; W = img.getWidth(); H = img.getHeight();
+      var gk = {}; try { gk = img.getGeoKeys() || {}; } catch (e) {}
+      if (gk.ProjectedCSTypeGeoKey && gk.ProjectedCSTypeGeoKey !== 32767) throw new Error('Berkas memakai koordinat proyeksi (EPSG:' + gk.ProjectedCSTypeGeoKey + '). Saat ini hanya yang berkoordinat derajat (EPSG:4326) yang didukung.');
+      try { bbox = img.getBoundingBox(); } catch (e) { throw new Error('Berkas tidak punya data lokasi (georeferensi).'); }
+      if (!bbox || Math.abs(bbox[0]) > 180 || Math.abs(bbox[2]) > 180 || Math.abs(bbox[1]) > 90 || Math.abs(bbox[3]) > 90) throw new Error('Koordinat berkas bukan derajat (kemungkinan proyeksi). Saat ini hanya EPSG:4326 yang didukung.');
+      if (img.getSamplesPerPixel() < 1) throw new Error('Berkas tidak berisi data ketinggian.');
+      nod = null; try { nod = img.getGDALNoData(); } catch (e) {}
+      data = new Float32Array(W * H); var y = 0, STEP = 256;
+      function rd() {
+        if (y >= H) return Promise.resolve();
+        var y1 = Math.min(H, y + STEP);
+        return img.readRasters({ window: [0, y, W, y1], samples: [0], interleave: false }).then(function (r) {
+          var a = r[0], o = y * W, i, n = a.length, v;
+          for (i = 0; i < n; i++) { v = a[i]; data[o + i] = (v !== v || v < -1000 || v > 9000 || (nod !== null && v === nod)) ? NaN : v; }
+          y = y1; prog(Math.round(y / H * 30), 'Membaca ' + file.name);
+          return tick().then(rd);
+        }, function (e) { throw new Error('Gagal membaca data (kompresi/format belum didukung?): ' + (e && e.message || e)); });
+      }
+      return rd();
+    }).then(function () {
+      var rx = (bbox[2] - bbox[0]) / W, ry = (bbox[3] - bbox[1]) / H, jobs = [], z;
+      for (z = Z0; z <= Z1; z++) {
+        var n = Math.pow(2, z), x0 = Math.floor((bbox[0] + 180) / 360 * n), x1 = Math.floor((bbox[2] + 180) / 360 * n), y0 = latTile(bbox[3], z), y1 = latTile(bbox[1], z), tx, ty;
+        for (tx = x0; tx <= x1; tx++) for (ty = y0; ty <= y1; ty++) jobs.push([z, tx, ty]);
+      }
+      var done = 0, made = 0;
+      function sample(lat, lng) {
+        var c = (lng - bbox[0]) / rx - 0.5, r = (bbox[3] - lat) / ry - 0.5;
+        if (c < -0.5 || r < -0.5 || c > W - 0.5 || r > H - 0.5) return NaN;
+        var c0 = Math.max(0, Math.min(W - 2, Math.floor(c))), r0 = Math.max(0, Math.min(H - 2, Math.floor(r)));
+        var fx = Math.max(0, Math.min(1, c - c0)), fy = Math.max(0, Math.min(1, r - r0));
+        var a = data[r0 * W + c0], b = data[r0 * W + c0 + 1], cc = data[(r0 + 1) * W + c0], d = data[(r0 + 1) * W + c0 + 1];
+        if (a === a && b === b && cc === cc && d === d) return (a * (1 - fx) + b * fx) * (1 - fy) + (cc * (1 - fx) + d * fx) * fy;
+        var best = NaN, bd = 9; // ada piksel kosong: pakai yang terdekat
+        [[a, 0, 0], [b, 1, 0], [cc, 0, 1], [d, 1, 1]].forEach(function (q) { if (q[0] === q[0]) { var dd = Math.abs(fx - q[1]) + Math.abs(fy - q[2]); if (dd < bd) { bd = dd; best = q[0]; } } });
+        return best;
+      }
+      function one(j) {
+        var z = j[0], tx = j[1], ty = j[2], n256 = 256 * Math.pow(2, z), k = Math.max(1, Math.min(4, Math.round((360 / n256) / rx)));
+        return lreq('tiles', 'readonly', function (s) { return s.get(z + '/' + tx + '/' + ty); }).catch(function () { return null; }).then(function (lb) {
+          return lb ? decode(lb) : new Float32Array(65536).fill(NaN);
+        }).then(function (arr) {
+          var lats = new Float64Array(256 * k), lngs = new Float64Array(256 * k), i, jj, a, b, valid = 0;
+          for (i = 0; i < 256 * k; i++) { lngs[i] = (tx * 256 + (i + 0.5) / k) / n256 * 360 - 180; lats[i] = tileLat(ty * 256 + (i + 0.5) / k, n256); }
+          for (jj = 0; jj < 256; jj++) {
+            if (lats[jj * k + k - 1] > bbox[3] + ry || lats[jj * k] < bbox[1] - ry) continue;
+            for (i = 0; i < 256; i++) {
+              var s = 0, c = 0, v;
+              if (k === 1) { v = sample(lats[jj], lngs[i]); if (v === v) { s = v; c = 1; } }
+              else for (a = 0; a < k; a++) for (b = 0; b < k; b++) { v = sample(lats[jj * k + a], lngs[i * k + b]); if (v === v) { s += v; c++; } }
+              if (c) { arr[jj * 256 + i] = s / c; valid++; }
+            }
+          }
+          if (!valid) return null;
+          return encodeTile(arr).then(function (bl) { return lreq('tiles', 'readwrite', function (st) { return st.put(bl, z + '/' + tx + '/' + ty); }); }).then(function () { made++; });
+        });
+      }
+      function loop(q) {
+        if (q >= jobs.length) return Promise.resolve();
+        return one(jobs[q]).then(function () { done++; prog(30 + Math.round(done / jobs.length * 70), 'Membuat kotak ' + done + '/' + jobs.length); return tick(); }).then(function () { return loop(q + 1); });
+      }
+      return loop(0).then(function () {
+        return loadCov().then(function (sh) {
+          sh = sh.filter(function (q) { return q.name !== file.name; });
+          sh.push({ name: file.name, bbox: bbox.slice(), at: Date.now(), res: Math.round(rx * 111320) });
+          return lreq('meta', 'readwrite', function (s) { return s.put(sh, 'sheets'); });
+        }).then(loadCov).then(function () { resetMem(); return { tiles: made, bbox: bbox, name: file.name, w: W, h: H }; });
+      });
+    });
+  }
+  loadCov();
 
   // ---------- info lereng di satu titik ----------
   function info(lat, lng) {
@@ -272,5 +444,5 @@
   }
   function contours(o) { return new (layerClass())(o); }
 
-  root.HzDem = { setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
+  root.HzDem = { importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
 })(window);
