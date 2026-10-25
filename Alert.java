@@ -109,7 +109,18 @@ final class Alert {
                 @Override
                 public void run() {
                     try {
-                        android.media.Ringtone r = RingtoneManager.getRingtone(c, RingtoneManager.getDefaultUri(alarm ? RingtoneManager.TYPE_ALARM : RingtoneManager.TYPE_NOTIFICATION));
+                        android.media.Ringtone r = null;
+                        String cu = Sched.p(c).getString("popupUri", "");
+                        if (cu != null && cu.length() > 0) {
+                            try {
+                                r = RingtoneManager.getRingtone(c, android.net.Uri.parse(cu));
+                            } catch (Throwable ignored2) {
+                                r = null;
+                            }
+                        }
+                        if (r == null) {
+                            r = RingtoneManager.getRingtone(c, RingtoneManager.getDefaultUri(alarm ? RingtoneManager.TYPE_ALARM : RingtoneManager.TYPE_NOTIFICATION));
+                        }
                         if (r == null) {
                             return;
                         }

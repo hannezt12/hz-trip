@@ -436,7 +436,23 @@
             for (var n = 1; n < P.length; n++) ctx.lineTo(P[n][0], P[n][1]);
             ctx.closePath();
           }
-          if (ed.crop) {
+          if (ed.crop && ed.crop.mask) {
+            // pangkas otomatis: topeng resolusi rendah (hitam = dibuang) digambar sebesar gambar penuh
+            var cm = ed.crop.mid;
+            if (me._cropKey !== cm && me._cropLoad !== cm) {
+              me._cropLoad = cm;
+              var im = new Image();
+              im.onload = function () {
+                createImageBitmap(im).then(function (bm) {
+                  if (me._cropLoad !== cm) { try { bm.close(); } catch (e) {} return; }
+                  if (me._cropBm) { try { me._cropBm.close(); } catch (e) {} }
+                  me._cropBm = bm; me._cropKey = cm; if (me._canvas) me._redraw();
+                });
+              };
+              im.src = ed.crop.mask;
+            }
+            if (me._cropBm) { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(me._cropBm, 0, 0, W, H); }
+          } else if (ed.crop) {
             // di luar poligon dibuang: kotak besar + poligon dengan aturan evenodd
             ctx.beginPath(); ctx.rect(-4, -4, W + 8, H + 8); pathOf(ed.crop); ctx.fill('evenodd');
           }
@@ -693,10 +709,85 @@
     $('tReset').onclick = function () { cfm('Kembali ke hasil kalibrasi?', 'Geser, putar, dan skala yang Anda setel dibatalkan.', 'Reset', function () { apply(Object.assign({}, reset)); }); };
     function close() { try { map.remove(); } catch (e) {} el.remove(); }
     $('tNo').onclick = close;
-    $('tClean').onclick = function () { clean(meta, { onChange: function () { layer._draw(); }, onDone: function () { if (cx.onClean) cx.onClean(); } }); };
+    $('tClean').onclick = function () { clean(meta, { toast: cx.toast, onChange: function () { layer._draw(); }, onDone: function () { if (cx.onClean) cx.onClean(); } }); };
     $('tOk').onclick = function () { cx.onSave(Object.assign({}, af)); close(); };
     setMode('img');
     return { close: close };
+  }
+
+  // ---------- pangkas otomatis: cari bagian yang berisi garis, buang kertas kosong di luarnya ----------
+  // hasil: { gw, gh, ink: Uint8Array } pada grid <= 512 px
+  function inkGrid(meta) {
+    var lv = meta.levels.length - 1, l = meta.levels[lv];
+    return getTile(meta.id + '|' + lv + '|0|0').then(function (blob) {
+      if (!blob) throw new Error('Gambar belum tersedia');
+      return createImageBitmap(blob);
+    }).then(function (bm) {
+      var w = bm.width, h = bm.height, cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      var cx = cv.getContext('2d', { willReadFrequently: true }); cx.fillStyle = '#fff'; cx.fillRect(0, 0, w, h); cx.drawImage(bm, 0, 0); bm.close();
+      var d = cx.getImageData(0, 0, w, h).data, lum = new Uint8Array(w * h), hist = new Array(64).fill(0), i;
+      for (i = 0; i < w * h; i++) { var y = (d[i * 4] * 77 + d[i * 4 + 1] * 150 + d[i * 4 + 2] * 29) >> 8; lum[i] = y; hist[y >> 2]++; }
+      var mb = 0; for (i = 1; i < 64; i++) if (hist[i] > hist[mb]) mb = i;
+      var paper = mb * 4 + 2, thr = paper - 45;
+      var gw = Math.ceil(w / 2), gh = Math.ceil(h / 2), g = new Uint8Array(gw * gh), x, yy;
+      for (yy = 0; yy < h; yy++) for (x = 0; x < w; x++) if (lum[yy * w + x] < thr) g[(yy >> 1) * gw + (x >> 1)] = 1;
+      // buang bintik terpisah (kurang dari 3 sel di sekitarnya)
+      var out = new Uint8Array(gw * gh);
+      for (yy = 0; yy < gh; yy++) for (x = 0; x < gw; x++) {
+        if (!g[yy * gw + x]) continue;
+        var n = 0;
+        for (var dy = -2; dy <= 2; dy++) for (var dx = -2; dx <= 2; dx++) {
+          var xx = x + dx, y2 = yy + dy;
+          if (xx >= 0 && y2 >= 0 && xx < gw && y2 < gh && g[y2 * gw + xx]) n++;
+        }
+        if (n >= 4) out[yy * gw + x] = 1;
+      }
+      return { gw: gw, gh: gh, ink: out };
+    });
+  }
+  function dilate(src, gw, gh, r) {
+    if (r <= 0) return src.slice();
+    var a = new Uint8Array(gw * gh), b = new Uint8Array(gw * gh), x, y, ps = new Int32Array(Math.max(gw, gh) + 1);
+    for (y = 0; y < gh; y++) {
+      ps[0] = 0; for (x = 0; x < gw; x++) ps[x + 1] = ps[x] + src[y * gw + x];
+      for (x = 0; x < gw; x++) a[y * gw + x] = ps[Math.min(gw, x + r + 1)] - ps[Math.max(0, x - r)] > 0 ? 1 : 0;
+    }
+    for (x = 0; x < gw; x++) {
+      ps[0] = 0; for (y = 0; y < gh; y++) ps[y + 1] = ps[y] + a[y * gw + x];
+      for (y = 0; y < gh; y++) b[y * gw + x] = ps[Math.min(gh, y + r + 1)] - ps[Math.max(0, y - r)] > 0 ? 1 : 0;
+    }
+    return b;
+  }
+  // keep: 1 = dipertahankan. shape: 'bentuk' (ikuti peta, lubang tertutup terisi) atau 'kotak'
+  function cropKeep(G, pct, shape) {
+    var gw = G.gw, gh = G.gh, r = Math.round(pct / 100 * Math.max(gw, gh)), dl = dilate(G.ink, gw, gh, r), i, x, y;
+    var any = false; for (i = 0; i < dl.length; i++) if (dl[i]) { any = true; break; }
+    if (!any) return null;
+    if (shape === 'kotak') {
+      var x0 = gw, x1 = -1, y0 = gh, y1 = -1;
+      for (y = 0; y < gh; y++) for (x = 0; x < gw; x++) if (dl[y * gw + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      var kb = new Uint8Array(gw * gh);
+      for (y = y0; y <= y1; y++) for (x = x0; x <= x1; x++) kb[y * gw + x] = 1;
+      return kb;
+    }
+    var outside = new Uint8Array(gw * gh), st = [];
+    function push(xx, yy) { var k = yy * gw + xx; if (!dl[k] && !outside[k]) { outside[k] = 1; st.push(k); } }
+    for (x = 0; x < gw; x++) { push(x, 0); push(x, gh - 1); }
+    for (y = 0; y < gh; y++) { push(0, y); push(gw - 1, y); }
+    while (st.length) {
+      var k = st.pop(), cx = k % gw, cy = (k - cx) / gw;
+      if (cx > 0) push(cx - 1, cy); if (cx < gw - 1) push(cx + 1, cy); if (cy > 0) push(cx, cy - 1); if (cy < gh - 1) push(cx, cy + 1);
+    }
+    var keep = new Uint8Array(gw * gh);
+    for (i = 0; i < keep.length; i++) keep[i] = outside[i] ? 0 : 1;
+    return keep;
+  }
+  function maskUrl(keep, gw, gh) {
+    var cv = document.createElement('canvas'); cv.width = gw; cv.height = gh;
+    var cx = cv.getContext('2d'), im = cx.createImageData(gw, gh), i;
+    for (i = 0; i < keep.length; i++) { im.data[i * 4 + 3] = keep[i] ? 0 : 255; }
+    cx.putImageData(im, 0, 0);
+    return cv.toDataURL('image/png');
   }
 
   // ---------- bersihkan gambar (pangkas dan hapus area dengan poligon) ----------
@@ -708,14 +799,16 @@
     if (!meta.edit) meta.edit = { keyBg: false, tol: 6, boost: 100, crop: null, erase: [] };
     var ed = meta.edit; if (!ed.erase) ed.erase = [];
     ed.keyBg = false; ed.solid = false; // hapus latar otomatis dimatikan; diganti poligon
-    var hist = [], mode = 'pan', pts = [];
+    var hist = [], mode = 'pan', pts = [], shape = 'bentuk', G = null, aRaf = 0;
     var el = document.createElement('div');
     el.id = 'cleanUI';
     el.innerHTML = '<div class="cal-h"><b>Bersihkan gambar</b><button class="btn sm" id="kNo">Batal</button></div>' +
       '<div class="seg tseg" id="kMode"><button data-m="pan" class="on">Geser</button><button data-m="crop">Pangkas</button><button data-m="erase">Hapus area</button></div>' +
       '<div class="cal-s" id="kHelp"></div>' +
       '<div class="cal-m"><div id="kMap" class="cal-map" style="background:#C9D3CF"></div></div>' +
-      '<div class="tpanel"><div class="trow" id="kPoly" style="display:none;gap:6px"><button class="btn sm pri" id="kClose" style="flex:1">Selesai poligon</button><button class="btn sm" id="kPop" style="flex:1">Titik −</button><button class="btn sm" id="kCancel" style="flex:1">Batal</button></div>' +
+      '<div class="tpanel"><div class="trow" style="gap:6px;flex-wrap:wrap"><button class="btn sm pri" id="kAuto" style="flex:1">Pangkas otomatis</button><div class="seg tseg" id="kShape" style="margin:0;flex:1.3;min-width:150px"><button data-s="bentuk" class="on">Ikuti bentuk</button><button data-s="kotak">Kotak</button></div></div>' +
+      '<div class="trow"><span>Sisi kertas</span><input type="range" id="kPct" min="0" max="15" step="0.5" value="1"><b id="kPctV" style="min-width:42px;color:var(--tx3)"></b></div>' +
+      '<div class="trow" id="kPoly" style="display:none;gap:6px"><button class="btn sm pri" id="kClose" style="flex:1">Selesai poligon</button><button class="btn sm" id="kPop" style="flex:1">Titik −</button><button class="btn sm" id="kCancel" style="flex:1">Batal</button></div>' +
       '<div class="trow" id="kBoxes" style="flex-wrap:wrap"></div>' +
       '<div class="cal-b"><button class="btn" id="kUndo">Urungkan</button><button class="btn" id="kClr">Reset bersih</button><button class="btn pri" id="kOk">Selesai</button></div></div>';
     document.body.appendChild(el);
@@ -731,10 +824,13 @@
     function redraw() {
       layer._draw();
       shapes.clearLayers();
-      if (ed.crop) poly(ed.crop, { color: '#2F7CF6', weight: 2, dashArray: '8 6', fill: false, interactive: false }).addTo(shapes);
+      if (ed.crop && !ed.crop.mask) poly(ed.crop, { color: '#2F7CF6', weight: 2, dashArray: '8 6', fill: false, interactive: false }).addTo(shapes);
       ed.erase.forEach(function (r) { poly(r, { color: '#FF5B50', weight: 1.5, dashArray: '5 4', fillColor: '#FF5B50', fillOpacity: 0.15, interactive: false }).addTo(shapes); });
       var h = '';
-      if (ed.crop) h += '<button class="btn sm" data-x="crop">× Pangkas</button>';
+      if (ed.crop) h += '<button class="btn sm" data-x="crop">× Pangkas' + (ed.crop.mask ? ' otomatis' : '') + '</button>';
+      var am = !!(ed.crop && ed.crop.mask);
+      $('kPct').disabled = !am; if (am) { $('kPct').value = ed.crop.pct; $('kPctV').textContent = String(ed.crop.pct).replace('.', ',') + '%'; } else $('kPctV').textContent = '';
+      Array.prototype.forEach.call($('kShape').querySelectorAll('button'), function (b) { b.classList.toggle('on', b.getAttribute('data-s') === (am ? ed.crop.shape : shape)); });
       ed.erase.forEach(function (r, i) { h += '<button class="btn sm" data-x="' + i + '">× Area ' + (i + 1) + '</button>'; });
       $('kBoxes').innerHTML = h || '<span style="color:var(--tx2)">Belum ada pangkas / area hapus.</span>';
       if (cx.onChange) cx.onChange();
@@ -776,6 +872,29 @@
       }
       pts.push(p); drawTmp();
     });
+    function autoCrop(pct, sh) {
+      var go = G ? Promise.resolve(G) : inkGrid(meta).then(function (g) { G = g; return g; });
+      return go.then(function (g) {
+        var keep = cropKeep(g, pct, sh);
+        if (!keep) { if (cx.toast) cx.toast('Tidak menemukan garis pada gambar'); return false; }
+        ed.crop = { mask: maskUrl(keep, g.gw, g.gh), mid: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), w: g.gw, h: g.gh, pct: pct, shape: sh, auto: true };
+        redraw(); return true;
+      });
+    }
+    $('kAuto').onclick = function () { snap(); shape = ed.crop && ed.crop.mask ? ed.crop.shape : shape; autoCrop(ed.crop && ed.crop.mask ? ed.crop.pct : 1, shape).catch(function () { if (cx.toast) cx.toast('Gagal memangkas otomatis'); }); };
+    $('kShape').onclick = function (e) {
+      var s2 = e.target.getAttribute('data-s'); if (!s2) return;
+      shape = s2;
+      if (ed.crop && ed.crop.mask) { snap(); autoCrop(ed.crop.pct, s2); } else redraw();
+    };
+    $('kPct').oninput = function () {
+      if (!(ed.crop && ed.crop.mask)) return;
+      var v = +this.value; $('kPctV').textContent = String(v).replace('.', ',') + '%';
+      if (aRaf) cancelAnimationFrame(aRaf);
+      aRaf = requestAnimationFrame(function () { aRaf = 0; if (ed.crop && ed.crop.mask) autoCrop(v, ed.crop.shape); });
+    };
+    $('kPct').onchange = function () { /* nilai akhir sudah diterapkan */ };
+    $('kPct').onpointerdown = function () { if (ed.crop && ed.crop.mask) snap(); };
     $('kClose').onclick = finish;
     $('kPop').onclick = function () { pts.pop(); drawTmp(); };
     $('kCancel').onclick = function () { pts = []; drawTmp(); };

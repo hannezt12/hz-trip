@@ -15,7 +15,9 @@ import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import androidx.activity.result.ActivityResult;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 
@@ -164,6 +166,7 @@ public class HzTripPlugin extends Plugin {
         o.put("notif", Sched.p(ctx).getBoolean("notif", false));
         o.put("overlay", Alert.canPopup(ctx));
         o.put("popupSound", Sched.p(ctx).getString("popupSound", "alarm"));
+        o.put("popupName", Sched.p(ctx).getString("popupUriName", ""));
         o.put("auto", Sched.autoEnabled(ctx));
         o.put("winEnd", Sched.windowEnd(ctx, now));
         o.put("nextStart", Sched.nextStart(ctx, now));
@@ -261,6 +264,67 @@ public class HzTripPlugin extends Plugin {
             m = "alarm";
         }
         Sched.p(getContext()).edit().putString("popupSound", m).apply();
+        call.resolve();
+    }
+
+    /** Pilih nada popup lewat pemilih nada bawaan Android (alarm, notifikasi, nada dering). */
+    @PluginMethod
+    public void pickPopupSound(PluginCall call) {
+        try {
+            Intent i = new Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER);
+            i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE,
+                    android.media.RingtoneManager.TYPE_ALARM | android.media.RingtoneManager.TYPE_NOTIFICATION | android.media.RingtoneManager.TYPE_RINGTONE);
+            i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
+            i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false);
+            i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE, "Nada popup HZ Trip");
+            String cur = Sched.p(getContext()).getString("popupUri", "");
+            if (cur != null && cur.length() > 0) {
+                i.putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, android.net.Uri.parse(cur));
+            }
+            startActivityForResult(call, i, "popPicked");
+        } catch (Exception e) {
+            call.reject("Gagal membuka pemilih nada");
+        }
+    }
+
+    @ActivityCallback
+    private void popPicked(PluginCall call, ActivityResult result) {
+        if (call == null) {
+            return;
+        }
+        JSObject o = new JSObject();
+        try {
+            if (result.getResultCode() == android.app.Activity.RESULT_OK && result.getData() != null) {
+                android.net.Uri u = result.getData().getParcelableExtra(android.media.RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
+                String name = "";
+                if (u != null) {
+                    try {
+                        android.media.Ringtone r = android.media.RingtoneManager.getRingtone(getContext(), u);
+                        name = r != null ? r.getTitle(getContext()) : "";
+                    } catch (Throwable ignored) {
+                    }
+                }
+                Sched.p(getContext()).edit().putString("popupUri", u == null ? "" : u.toString()).putString("popupUriName", name).apply();
+                o.put("changed", true);
+                o.put("name", name);
+            } else {
+                o.put("changed", false);
+            }
+        } catch (Throwable t) {
+            o.put("changed", false);
+        }
+        call.resolve(o);
+    }
+
+    @PluginMethod
+    public void clearPopupSound(PluginCall call) {
+        Sched.p(getContext()).edit().remove("popupUri").remove("popupUriName").apply();
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void testPopupSound(PluginCall call) {
+        Alert.beep(getContext());
         call.resolve();
     }
 

@@ -29,7 +29,7 @@
   function mockPlugin() {
     var L = {}, timer = null, sec = 0, mode = 'tidur', lat = -4.9, lng = 105.2, sched = { auto: true, margin: 30 }, notif = false;
     function k(d) { return 'mock-pts-' + d; }
-    function st() { return { mode: mode, recording: mode === 'rekam', manual: mode === 'rekam', permission: true, background: false, batteryFree: false, auto: sched.auto, paused: false, winEnd: 0, nextStart: Date.now() + 8 * 3600000, count: sec, lastT: Date.now(), lastV: 0, lastAcc: 6, gpsOn: mode === 'rekam', sigSensor: true, actPerm: true, notif: notif, overlay: true, popupSound: localStorage.getItem('mock-popsnd') || 'alarm' }; }
+    function st() { return { mode: mode, recording: mode === 'rekam', manual: mode === 'rekam', permission: true, background: false, batteryFree: false, auto: sched.auto, paused: false, winEnd: 0, nextStart: Date.now() + 8 * 3600000, count: sec, lastT: Date.now(), lastV: 0, lastAcc: 6, gpsOn: mode === 'rekam', sigSensor: true, actPerm: true, notif: notif, overlay: true, popupSound: localStorage.getItem('mock-popsnd') || 'alarm', popupName: localStorage.getItem('mock-popname') || '' }; }
     function emit(n, o) { (L[n] || []).forEach(function (f) { f(o); }); }
     return {
       addListener: function (n, f) { (L[n] = L[n] || []).push(f); return Promise.resolve({ remove: function () {} }); },
@@ -39,6 +39,9 @@
       openOverlaySettings: function () { return Promise.resolve(); },
       keepScreen: function () { return Promise.resolve(); },
       setPopupSound: function (o) { localStorage.setItem('mock-popsnd', o.mode); return Promise.resolve(); },
+      pickPopupSound: function () { localStorage.setItem('mock-popname', 'Nada uji'); return Promise.resolve({ changed: true, name: 'Nada uji' }); },
+      clearPopupSound: function () { localStorage.removeItem('mock-popname'); return Promise.resolve(); },
+      testPopupSound: function () { return Promise.resolve(); },
       setSchedule: function (o) { sched = o; return Promise.resolve(st()); },
       resumeAuto: function () { notif = false; return Promise.resolve(st()); },
       setWatch: function (o) { notif = o.mode === 'notif'; return Promise.resolve(); },
@@ -122,7 +125,7 @@
     S.mode = s.mode || (s.recording ? 'rekam' : 'tidur');
     S.manual = !!s.manual; S.paused = !!s.paused; S.auto = s.auto !== false;
     S.winEnd = s.winEnd || 0; S.nextStart = s.nextStart || 0;
-    S.popSnd = s.popupSound || 'alarm'; S.notif = !!s.notif; S.overlay = s.overlay !== false; S.actPerm = s.actPerm !== false; S.gpsOn = !!s.gpsOn; S.sigSensor = s.sigSensor !== false; S.lastT = s.lastT || 0;
+    S.popSnd = s.popupSound || 'alarm'; S.popName = s.popupName || ''; S.notif = !!s.notif; S.overlay = s.overlay !== false; S.actPerm = s.actPerm !== false; S.gpsOn = !!s.gpsOn; S.sigSensor = s.sigSensor !== false; S.lastT = s.lastT || 0;
     S.perm = s.permission !== false; S.bg = s.background !== false; S.battFree = !!s.batteryFree;
     if (S.mode !== 'rekam') S.live.t = 0;
     else if (s.lastT) S.live = { v: s.lastV * 3.6, acc: s.lastAcc, t: S.live.t, count: s.count };
@@ -373,7 +376,7 @@
   // Trip pendek otomatis yang muncul lama setelah trip sebelumnya dianggap salah dan disembunyikan (bisa dipulihkan 30 hari).
   var junkSeq = 0;
   function autoJunk(ymd, trips) {
-    if (S.settings.junkOn === false) return;
+    return; // aturan trip pendek salah dihapus (v0.7.3): semua trip tampil
     var ed = S.ov.days[ymd];
     if (ed && ed.ops && ed.ops.length) return;
     var gapMs = (S.settings.junkGap || 30) * 60000, maxKm = (S.settings.junkM || 500) / 1000, changed = false;
@@ -728,6 +731,7 @@
     if (document.activeElement !== $('driverIn')) $('driverIn').value = S.settings.driver || '';
     $('autoChk').checked = !!S.settings.auto;
     if ($('popSel') && document.activeElement !== $('popSel')) $('popSel').value = S.popSnd || 'alarm';
+    if ($('popName')) $('popName').textContent = S.popName ? 'Nada pilihan: ' + S.popName : 'Nada bawaan sistem (menurut pilihan di atas)';
     $('marginSel').value = String(S.settings.margin);
     var bits = [];
     bits.push(S.perm ? 'Izin lokasi: sudah.' : 'Izin lokasi: belum.');
@@ -1016,7 +1020,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.7.2'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.7.3'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1055,7 +1059,7 @@
     if (!$('bkInfo')) return;
     Plug.listDays().then(function (r) {
       var n = (r.days || []).length;
-      $('bkInfo').innerHTML = (S.settings.lastBackup ? 'Terakhir dibuat: <b>' + dtText(S.settings.lastBackup) + '</b> (' + bkAge() + ' hari lalu)' : 'Belum pernah membuat cadangan.') + '<br>Data di ponsel: ' + n + ' hari rekaman.' + (S.settings.lastAuto ? '<br>Cadangan otomatis terakhir: <b>' + dtText(S.settings.lastAuto) + '</b> (' + (S.settings.autoDir === 'EXTERNAL' ? 'folder data aplikasi' : 'Dokumen/HZTrip/cadangan') + ')' : '');
+      $('bkInfo').innerHTML = (S.settings.lastBackup ? 'Terakhir dibuat: <b>' + dtText(S.settings.lastBackup) + '</b> (' + bkAge() + ' hari lalu)' : 'Belum pernah membuat cadangan.') + '<br>Data di ponsel: ' + n + ' hari rekaman.' + (S.settings.lastAuto ? '<br>Cadangan otomatis terakhir: <b>' + dtText(S.settings.lastAuto) + '</b> (berkas ' + (S.settings.autoSlot || 'A') + ', ' + (S.settings.autoDir === 'EXTERNAL' ? 'folder data aplikasi' : 'Dokumen/HZTrip/cadangan') + ')' : '');
       if ($('autoBkChk')) $('autoBkChk').checked = S.settings.autoBk !== false;
     }).catch(function () {});
   }
@@ -1071,25 +1075,26 @@
     }).then(blobB64);
   }
   var autoBusy = false;
+  // hapus berkas cadangan otomatis model lama (HZTrip-auto-TANGGAL) setelah cadangan baru tersimpan
   function pruneAuto(dir) {
     var P = window.Capacitor.Plugins;
     P.Filesystem.readdir({ path: 'HZTrip/cadangan', directory: dir }).then(function (r) {
-      var fs = (r.files || []).map(function (f) { return f.name || f; }).filter(function (n) { return /^HZTrip-auto-.*\.hztrip$/.test(n); }).sort();
-      fs.slice(0, Math.max(0, fs.length - 4)).forEach(function (n) { P.Filesystem.deleteFile({ path: 'HZTrip/cadangan/' + n, directory: dir }).catch(function () {}); });
+      (r.files || []).map(function (f) { return f.name || f; }).filter(function (n) { return /^HZTrip-auto-.*\.hztrip$/.test(n); }).forEach(function (n) { P.Filesystem.deleteFile({ path: 'HZTrip/cadangan/' + n, directory: dir }).catch(function () {}); });
     }).catch(function () {});
   }
-  // Cadangan otomatis mingguan ke folder Dokumen/HZTrip/cadangan (4 berkas terakhir disimpan)
+  // Cadangan otomatis harian ke Dokumen/HZTrip/cadangan: 2 berkas (A dan B) diperbarui bergantian, dibuat saat app dibuka pertama kali tiap hari
   function autoBackup() {
     var P = window.Capacitor && window.Capacitor.Plugins;
     if (!native || !P || !P.Filesystem || S.settings.autoBk === false || autoBusy || bkBusy) return Promise.resolve();
-    if (Date.now() - (S.settings.lastAuto || 0) < 7 * 86400000) return Promise.resolve();
+    if (S.settings.lastAuto && T.ymd(S.settings.lastAuto) === T.ymd(Date.now())) return Promise.resolve();
     autoBusy = true;
+    var slot = S.settings.autoSlot === 'A' ? 'B' : 'A';
     return buildBackup().then(function (b64) {
-      var path = 'HZTrip/cadangan/HZTrip-auto-' + T.ymd(Date.now()) + '.hztrip';
+      var path = 'HZTrip/cadangan/HZTrip-cadangan-' + slot + '.hztrip';
       function put(dir) { return P.Filesystem.writeFile({ path: path, data: b64, directory: dir, recursive: true }).then(function () { return dir; }); }
       return put('DOCUMENTS').catch(function () { return put('EXTERNAL'); });
     }).then(function (dir) {
-      S.settings.lastAuto = Date.now(); S.settings.autoDir = dir; saveSettings();
+      S.settings.lastAuto = Date.now(); S.settings.autoDir = dir; S.settings.autoSlot = slot; saveSettings();
       pruneAuto(dir); renderBackupInfo(); toast('Cadangan otomatis tersimpan');
     }).catch(function () { diagLocal('gagal'); }).then(function () { autoBusy = false; });
   }
@@ -1174,7 +1179,6 @@
   function renderThinInfo() {
     if (!$('thinInfo')) return;
     $('thinSel').value = String(S.settings.thinDays || 90);
-    $('junkChk').checked = S.settings.junkOn !== false; $('junkGap').value = String(S.settings.junkGap || 30); $('junkM').value = String(S.settings.junkM || 500);
     thinList().then(function (l) {
       var n = Object.keys(S.ov.arch || {}).length;
       $('thinInfo').innerHTML = l.length ? '<b>' + l.length + ' hari</b> lebih lama dari ' + (S.settings.thinDays || 90) + ' hari belum dirampingkan.' + (n ? '<br>Sudah dirampingkan: ' + n + ' hari.' : '') : 'Tidak ada data lama yang perlu dirampingkan.' + (n ? ' Sudah dirampingkan: ' + n + ' hari.' : '');
@@ -1443,7 +1447,7 @@
     if (o.aff) n.aff = { A: o.aff.A / k, B: o.aff.B / k, C: o.aff.C, D: o.aff.D / k, E: o.aff.E / k, F: o.aff.F };
     if (o.edit) {
       var e = Object.assign({}, o.edit);
-      e.crop = o.edit.crop ? sc(o.edit.crop) : null; e.erase = (o.edit.erase || []).map(sc);
+      e.crop = o.edit.crop ? (o.edit.crop.mask ? o.edit.crop : sc(o.edit.crop)) : null; e.erase = (o.edit.erase || []).map(sc);
       e.keyBg = false; e.solid = false;
       n.edit = e;
     }
@@ -1463,10 +1467,10 @@
         '<canvas id="ovPrev" class="ovprev"></canvas><button class="btn sm" id="ovZoom" style="margin-top:6px;width:100%">Perbesar dan periksa gambar</button>' +
         '<label class="lbl" style="margin-top:8px">Nama</label><input id="ovName" value="' + esc(nm) + '" style="' + inp + '">' +
         '<div class="pgrid" style="margin-top:10px"><div><label class="lbl">Halaman (1–' + h.numPages + ')</label><input id="ovPage" type="number" min="1" max="' + h.numPages + '" value="1" style="' + inp + '"></div>' +
-        '<div><label class="lbl">Ketajaman</label><select id="ovRes" style="' + inp + ';padding:0 8px"><option value="9000">Normal (9000 px)</option><option value="16000" selected>Tajam (16000 px)</option><option value="24000">Maksimal (24000 px)</option></select></div></div>' +
+        '<div><label class="lbl">Ketajaman</label><select id="ovRes" style="' + inp + ';padding:0 8px"><option value="5000">Ringan (5000 px)</option><option value="7000">Sedang (7000 px)</option><option value="9000" selected>Tajam (9000 px)</option></select></div></div>' +
         (ovList().length ? '<label class="lbl" style="margin-top:10px">Gantikan peta lama (kalibrasi dan editan dipindahkan)</label><select id="ovRep" style="' + inp + ';padding:0 8px"><option value="-1">Tidak, tambah sebagai peta baru</option>' + ovList().map(function (o, k) { return '<option value="' + k + '">' + esc(o.name) + '</option>'; }).join('') + '</select>' : '') +
         lay +
-        '<div class="muted" style="margin-top:8px">Makin tajam, makin lama diproses dan makin besar di ponsel (Tajam bisa beberapa menit, Maksimal belasan menit). Pilih Tajam atau Maksimal bila peta akan di-zoom dekat. Setelah dikalibrasi, ukuran m/piksel tampil di daftar peta.</div>' +
+        '<div class="muted" style="margin-top:8px">Makin tajam, makin lama diproses dan makin besar di ponsel. 9000 px sudah cukup tajam untuk zoom dekat; di atas itu tidak banyak berpengaruh. Setelah dikalibrasi, ukuran m/piksel tampil di daftar peta.</div>' +
         '<div class="row" style="margin-top:14px;gap:8px"><button class="btn" id="ovNo" style="flex:1">Batal</button><button class="btn pri" id="ovGo" style="flex:1">Proses</button></div>');
       var tm = null;
       function prev() { clearTimeout(tm); tm = setTimeout(function () { var c = $('ovPrev'); if (c) h.preview(c, +$('ovPage').value || 1, hidden, 700).catch(function () {}); }, 150); }
@@ -1511,7 +1515,7 @@
   function cleanOv(i, next) {
     var o = ovList()[i]; if (!o) return;
     closeSheet();
-    HzOverlay.clean(o, { onChange: function () {}, onDone: function () { saveSettings(); renderOv(); syncAllOverlays(); if (next) next(); } });
+    HzOverlay.clean(o, { toast: toast, onChange: function () {}, onDone: function () { saveSettings(); renderOv(); syncAllOverlays(); if (next) next(); } });
   }
   function openOvSheet() {
     var l = ovList();
@@ -1586,9 +1590,9 @@
   }
   // ---------- SpidoMap: peta langsung di kiri Spidometer ----------
   var SP = { map: null, lay: null, mk: null, active: false, follow: true, zoomAuto: true, autoPaused: false, zoomBusy: false, hdAcc: 0, hdLL: null, cur: null, from: null, to: null, t0: 0, raf: 0, lastTs: 0, hudT: 0, band: -1, pendBand: -1, pendT: 0, mv: 0, lastSeg: null, rec: null, wl: null };
-  function spIdx() { var p = $('spPager'); return p && p.scrollLeft < p.clientWidth / 2 ? 0 : 1; }
-  function spShow(which) { var p = $('spPager'); p.scrollTo({ left: which === 'map' ? 0 : p.clientWidth, behavior: 'smooth' }); }
-  function spResetMain() { var p = $('spPager'); if (p) { p.scrollLeft = p.clientWidth; $('spMain').scrollTop = 0; } }
+  function spIdx() { var p = $('spPager'); return p && p.scrollLeft > p.clientWidth / 2 ? 1 : 0; }
+  function spShow(which) { var p = $('spPager'); p.scrollTo({ left: which === 'map' ? p.clientWidth : 0, behavior: 'smooth' }); }
+  function spResetMain() { var p = $('spPager'); if (p) { p.scrollLeft = 0; $('spMain').scrollTop = 0; } }
   function spBtns() {
     $('spFol').textContent = 'Ikuti: ' + (SP.follow ? 'ya' : 'tidak'); $('spFol').classList.toggle('on', SP.follow);
     $('spZoom').textContent = 'Zoom otomatis: ' + (SP.zoomAuto ? 'ya' : 'tidak'); $('spZoom').classList.toggle('on', SP.zoomAuto);
@@ -1729,16 +1733,17 @@
     var pg = $('spPager'), tm = null;
     pg.addEventListener('scroll', function () {
       clearTimeout(tm);
-      tm = setTimeout(function () { spSetActive(S.view === 'spido' && !document.hidden && spIdx() === 0); }, 120);
+      tm = setTimeout(function () { spSetActive(S.view === 'spido' && !document.hidden && spIdx() === 1); }, 120);
     });
     $('spBack').onclick = function () { spShow('main'); };
+    $('spToMain').onclick = function () { spShow('main'); };
     $('spLoc').onclick = spLocate;
     $('spFol').onclick = function () { SP.follow = !SP.follow; if (SP.follow && SP.cur) SP.map.setView(SP.cur, SP.map.getZoom(), { animate: true }); spBtns(); };
     $('spZoom').onclick = function () { SP.zoomAuto = !SP.zoomAuto; if (SP.zoomAuto) SP.autoPaused = false; spBtns(); };
     $('spAwake').onclick = function () { S.settings.spAwake = !S.settings.spAwake; saveSettings(); spBtns(); spAwake(true); };
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) { if (SP.active) { SP.active = false; cancelAnimationFrame(SP.raf); spAwake(false); SP.resume = true; } }
-      else if (SP.resume) { SP.resume = false; spSetActive(S.view === 'spido' && spIdx() === 0); }
+      else if (SP.resume) { SP.resume = false; spSetActive(S.view === 'spido' && spIdx() === 1); }
     });
     window.addEventListener('resize', function () { if (S.view === 'spido' && !SP.active) spResetMain(); });
     spResetMain();
@@ -1874,9 +1879,6 @@
     spInit();
     $('bkMake').onclick = function () { makeBackup(); };
     $('autoBkChk').onchange = function () { S.settings.autoBk = this.checked; saveSettings(); if (this.checked) autoBackup(); };
-    $('junkChk').onchange = function () { S.settings.junkOn = this.checked; saveSettings(); };
-    $('junkGap').onchange = function () { S.settings.junkGap = +this.value; saveSettings(); };
-    $('junkM').onchange = function () { S.settings.junkM = +this.value; saveSettings(); };
     $('thinSel').onchange = function () { S.settings.thinDays = +this.value; saveSettings(); renderThinInfo(); };
     $('thinGo').onclick = function () { startThin(); };
     $('diagShare').onclick = function () { var t = S.diagText || ''; if (!t) { toast('Belum ada catatan'); return; } saveFile('HZTrip-catatan-' + T.ymd(Date.now()) + '.txt', textB64(t), 'text/plain'); };
@@ -1944,6 +1946,9 @@
     $('autoChk').onchange = function () { S.settings.auto = this.checked; saveSettings(); pushSchedule(); if (this.checked && native && !S.actPerm) askActivity(); };
     $('btnAct').onclick = askActivity;
     $('popSel').onchange = function () { S.popSnd = this.value; Plug.setPopupSound({ mode: this.value }).catch(function () {}); };
+    $('btnPopPick').onclick = function () { Plug.pickPopupSound().then(function (r) { if (r && r.changed) { S.popName = r.name || 'Nada pilihan'; renderSpido(); toast('Nada popup disimpan'); } }).catch(function () { toast('Pemilih nada tidak bisa dibuka'); }); };
+    $('btnPopTest').onclick = function () { Plug.testPopupSound().catch(function () {}); };
+    $('btnPopDef').onclick = function () { Plug.clearPopupSound().then(function () { S.popName = ''; renderSpido(); toast('Kembali ke nada bawaan'); }).catch(function () {}); };
     $('btnOver').onclick = function () { Plug.openOverlaySettings().catch(function () { toast('Tidak bisa membuka pengaturan'); }); };
     $('marginSel').onchange = function () { S.settings.margin = +this.value; saveSettings(); renderSched(); pushSchedule(); };
     $('schedBox').onchange = onSched;
