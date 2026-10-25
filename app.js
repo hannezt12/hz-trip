@@ -112,7 +112,7 @@
       });
       if (!S.settings.schedule || !S.settings.schedule.days || S.settings.schedule.days.length !== 7) S.settings.schedule = T.defaultSchedule();
       if (!S.settings.firstSeen) { S.settings.firstSeen = Date.now(); saveSettings(); }
-      applyTheme();
+      applyTheme(); applyFont();
     }).catch(function () {});
   }
 
@@ -481,7 +481,7 @@
       var t = x.t;
       var isSel = S.sel && S.sel.indexOf(i) >= 0, dim = S.sel && !isSel && !(i === selLo() - 1 || i === selHi() + 1);
       return '<button class="trip' + (isSel ? ' sel' : '') + (dim ? ' dim' : '') + (S.mini && S.mini.i === i ? ' mapped' : '') + '" data-i="' + i + '"><div class="t1">' + (S.sel ? '<span class="cbx">' + (isSel ? '✓' : '') + '</span>' : '') + '<span class="tm">' + T.hm(t.start) + ' – ' + T.hm(t.end) + (t.open ? ' ●' : '') + '</span>' + (t.manual ? '<span class="chip m">manual</span>' : '') + '<span class="chip">' + esc(x.unit) + '</span>' + labelChip(x) + '<span class="pmap" data-pm="' + i + '">' + (S.mini && S.mini.i === i ? 'Tutup' : 'Peta') + '</span></div>' +
-        '<div class="t2"><div><small>DURASI</small><b style="font-size:18px">' + T.durText(t.durSec) + '</b></div><div><small>MIN</small><b>' + Math.round(t.min) + '</b></div><div><small>MAKS</small><b style="color:' + zc(t.max) + '">' + Math.round(t.max) + '</b></div><div><small>KM</small><b>' + T.km1(t.km) + '</b></div></div></button>';
+        '<div class="t2"><div><small>DURASI</small><b style="font-size:max(11px,calc(18px * var(--fs,1)))">' + T.durText(t.durSec) + '</b></div><div><small>MIN</small><b>' + Math.round(t.min) + '</b></div><div><small>MAKS</small><b style="color:' + zc(t.max) + '">' + Math.round(t.max) + '</b></div><div><small>KM</small><b>' + T.km1(t.km) + '</b></div></div></button>';
     }).join('');
   }
   function exitSel() { S.sel = null; $('mergeBar').style.display = 'none'; $('tripList').style.paddingBottom = '0'; }
@@ -999,6 +999,13 @@
   }
 
 
+  // ---------- ukuran teks ----------
+  var FS = { s: 0.7, m: 0.85, l: 1 };
+  function applyFont() {
+    var k = S.settings.fs || 'l';
+    document.documentElement.style.setProperty('--fs', String(FS[k] || 1));
+    document.querySelectorAll('#fontSeg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-f') === k); });
+  }
   // ---------- tema ----------
   var themeMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
   function applyTheme() {
@@ -1020,7 +1027,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.7.3'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.7.4'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1038,7 +1045,7 @@
     if (key === 'peta') { renderOv(); renderCacheInfo(); }
     if (key === 'data') { renderHidden(); renderBackupInfo(); renderThinInfo(); }
     if (key === 'latar') { syncStatus(); renderDiag(); }
-    if (key === 'tampil') applyTheme();
+    if (key === 'tampil') { applyTheme(); applyFont(); }
     renderSettings();
   }
   function backSet() {
@@ -1248,6 +1255,7 @@
     if (!window.L) return false;
     map = L.map('map', { zoomControl: true, preferCanvas: true }).setView([-4.95, 105.2], 14);
     trackLayer = L.layerGroup().addTo(map);
+    bindPins(map, function () { return [trackLayer]; });
     setTiles();
     makeLocate(map);
     return true;
@@ -1265,10 +1273,66 @@
     document.querySelectorAll('#mapSeg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-map') === S.settings.mapMode); });
   }
   function gapText(g) { return 'Berhenti ' + T.hm(g.from) + '–' + T.hm(g.to) + ' (' + T.durText((g.to - g.from) / 1000) + ')'; }
+  // Ketuk pin: label tampil dengan garis tipis ke pin. Beberapa pin yang berdekatan tampil bersamaan, berurutan menurut jam.
+  function bindPins(m, groupFn) {
+    var box = document.createElement('div');
+    box.className = 'pinbox';
+    box.innerHTML = '<svg class="pinsvg"></svg>';
+    m.getContainer().appendChild(box);
+    var svg = box.firstChild, cur = null;
+    function clear() { cur = null; svg.innerHTML = ''; Array.prototype.slice.call(box.querySelectorAll('.pinl')).forEach(function (e) { e.remove(); }); }
+    function place() {
+      if (!cur) return;
+      var sz = m.getSize(), lines = '';
+      cur.forEach(function (c) {
+        var p = m.latLngToContainerPoint(c.pin.ll), x = p.x + c.dx, y = p.y + c.dy;
+        c.el.style.left = x + 'px'; c.el.style.top = y + 'px';
+        var ax = c.dx >= 0 ? x : x + c.w, ay = y + c.h / 2;
+        lines += '<line x1="' + p.x.toFixed(1) + '" y1="' + p.y.toFixed(1) + '" x2="' + ax.toFixed(1) + '" y2="' + ay.toFixed(1) + '"/>';
+      });
+      svg.innerHTML = lines;
+      svg.setAttribute('width', sz.x); svg.setAttribute('height', sz.y);
+    }
+    function show(list, at) {
+      clear();
+      var sz = m.getSize(), cx = 0, cy = 0;
+      list.sort(function (p, q) { return p.t - q.t; });
+      list.forEach(function (p) { var c = m.latLngToContainerPoint(p.ll); cx += c.x; cy += c.y; });
+      cx /= list.length; cy /= list.length;
+      var right = cx < sz.x / 2, n = list.length, GAP = 34;
+      cur = list.map(function (p, i) {
+        var el = document.createElement('div'); el.className = 'pinl';
+        el.innerHTML = '<i style="background:' + p.col + '"></i>' + esc(p.txt);
+        el.onclick = function (e) { e.stopPropagation(); clear(); };
+        box.appendChild(el);
+        var w = el.offsetWidth, h = el.offsetHeight, pc = m.latLngToContainerPoint(p.ll);
+        var ty = cy + (i - (n - 1) / 2) * GAP - h / 2, tx = right ? cx + 52 : cx - 52 - w;
+        tx = Math.max(6, Math.min(sz.x - w - 6, tx)); ty = Math.max(6, Math.min(sz.y - h - 6, ty));
+        return { el: el, pin: p, w: w, h: h, dx: tx - pc.x, dy: ty - pc.y };
+      });
+      place();
+    }
+    m.on('click', function (e) {
+      var grp = groupFn(), pins = [];
+      (grp || []).forEach(function (g) { (g._pins || []).forEach(function (p) { pins.push(p); }); });
+      var near = pins.filter(function (p) { return m.latLngToContainerPoint(p.ll).distanceTo(e.containerPoint) <= 26; });
+      if (!near.length) { clear(); return; }
+      // buang pin kembar persis (jam dan teks sama)
+      var seen = {}; near = near.filter(function (p) { var k = p.txt + '|' + p.ll.join(','); if (seen[k]) return false; seen[k] = 1; return true; });
+      show(near);
+    });
+    m.on('move zoom', place);
+    m.on('dragstart zoomstart', function () { /* label ikut peta */ });
+    m._pinClear = clear;
+  }
   // Gambar trek ke satu peta. faint = trip lain pada hari itu digambar samar sebagai pembanding.
   function drawTrips(group, pts, trips, sel, faint) {
     var bounds = [];
-    function dot(lat, lng, col, rad, tip) { L.circleMarker([lat, lng], { radius: rad, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1 }).bindTooltip(tip).addTo(group); }
+    group._pins = [];
+    function dot(lat, lng, col, rad, tip, ts) {
+      L.circleMarker([lat, lng], { radius: rad, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1, interactive: false }).addTo(group);
+      group._pins.push({ ll: [lat, lng], txt: tip, col: col, t: ts || 0 });
+    }
     trips.forEach(function (x, i) {
       var dimmed = sel >= 0 && sel !== i;
       if (dimmed && !faint) return;
@@ -1282,12 +1346,12 @@
       tk.gaps.forEach(function (g) {
         var la = [g.a.lat, g.a.lng], lb = [g.b.lat, g.b.lng];
         L.polyline([la, lb], { color: COL.s, weight: 4, opacity: 0.95, dashArray: '2 9', lineCap: 'round', interactive: false }).addTo(group);
-        dot(la[0], la[1], COL.s, 6, gapText(g));
-        dot(lb[0], lb[1], COL.s, 6, gapText(g));
+        dot(la[0], la[1], COL.s, 6, gapText(g), g.from);
+        dot(lb[0], lb[1], COL.s, 6, gapText(g), g.to);
       });
-      dot(t.startLat, t.startLng, '#3FD07A', 7, 'Mulai ' + T.hm(t.start));
-      dot(t.endLat, t.endLng, '#FF5B50', 7, 'Selesai ' + T.hm(t.end));
-      dot(t.maxLat, t.maxLng, '#F5C518', 8, 'Tercepat ' + Math.round(t.max) + ' km/j (' + T.hm(t.maxT) + ')');
+      dot(t.startLat, t.startLng, '#3FD07A', 7, 'Mulai ' + T.hm(t.start), t.start);
+      dot(t.endLat, t.endLng, '#FF5B50', 7, 'Selesai ' + T.hm(t.end), t.end);
+      dot(t.maxLat, t.maxLng, '#F5C518', 8, 'Tercepat ' + Math.round(t.max) + ' km/j (' + T.hm(t.maxT) + ')', t.maxT);
     });
     return bounds;
   }
@@ -1300,6 +1364,7 @@
     $('miniWrap').style.display = 'block';
     if (!mini) {
       mini = L.map('miniMap', { zoomControl: false, preferCanvas: true, attributionControl: false }).setView([-4.95, 105.2], 14);
+      setTimeout(function () { if (mini && mini._tr) bindPins(mini, function () { return [mini._tr]; }); }, 0);
       mini._tr = L.layerGroup().addTo(mini);
     }
     mini.invalidateSize();
@@ -1455,7 +1520,7 @@
   }
   function importOv(file) {
     var nm = file.name.replace(/\.pdf$/i, '');
-    var inp = 'width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:0 12px;font-size:16px';
+    var inp = 'width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:0 12px;font-size:max(11px,calc(16px * var(--fs,1)))';
     openSheet('<div class="grab"></div><div class="st">MEMBACA PDF…</div><div class="muted">' + esc(file.name) + ' (' + mb(file.size) + ')</div>');
     HzOverlay.openPdf(file).then(function (h) {
       var hidden = {};
@@ -1524,7 +1589,7 @@
       (l.length ? l.map(function (o, i) {
         return '<div class="ovrow"><div class="nm">' + esc(o.name) + (o.cal ? '' : '<small>belum dikalibrasi (Pengaturan)</small>') + '</div>' +
           (o.cal ? '<button class="btn sm" data-tn="' + i + '">Setel</button><input type="checkbox" data-on="' + i + '"' + (o.on ? ' checked' : '') + '>' : '') + '</div>';
-      }).join('') + '<div style="margin-top:10px;font-size:14px;color:var(--tx3)">Transparansi: <span id="ovOpV">' + op + '</span>%</div><input type="range" id="ovOp" min="20" max="100" value="' + op + '" style="width:100%">'
+      }).join('') + '<div style="margin-top:10px;font-size:max(11px,calc(14px * var(--fs,1)));color:var(--tx3)">Transparansi: <span id="ovOpV">' + op + '</span>%</div><input type="range" id="ovOp" min="20" max="100" value="' + op + '" style="width:100%">'
         : '<div class="muted">Belum ada peta. Tambahkan PDF di Pengaturan, bagian PETA SAYA (PDF).</div>'));
     var sh = $('sheet');
     sh.onchange = function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-on'); if (k !== null && k !== undefined) { ovList()[+k].on = e.target.checked; saveSettings(); syncAllOverlays(); } };
@@ -1581,7 +1646,7 @@
       $('mapChips').innerHTML = items.length > 1 ? '<button data-k="1" class="kind' + (mapSel < 0 ? ' on' : '') + '">' + kl + '</button>' + list.map(function (o, i) {
         return '<button data-i="' + i + '"' + (mapSel === i ? ' class="on"' : '') + '>' + (o.i + 1) + ' · ' + T.hm(o.x.t.start) + '</button>';
       }).join('') : '';
-      trackLayer.clearLayers();
+      trackLayer.clearLayers(); if (map._pinClear) map._pinClear();
       var bounds = drawTrips(trackLayer, pts, trips, mapSel, false);
       $('mapMsg').textContent = bounds.length ? '' : (day === S.today ? 'Belum ada lintasan hari ini. Lintasan muncul saat ada trip yang terekam.' : 'Tidak ada lintasan pada ' + T.dateLong(day) + '.');
       if (bounds.length && (fit || !fitted)) { map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 }); fitted = true; }
@@ -1667,7 +1732,7 @@
     var ll = [f.lat, f.lng];
     if (SP.lastSeg) {
       L.polyline([SP.lastSeg, ll], { color: pbZone(f.v * 3.6), weight: 6, opacity: 0.95, lineCap: 'round', interactive: false }).addTo(SP.lay);
-      spHeading(SP.lastSeg, ll);
+      if (f.v * 3.6 >= 5) spHeading(SP.lastSeg, ll);
     }
     SP.lastSeg = ll; SP.from = SP.cur || ll; SP.to = ll; SP.t0 = performance.now();
   }
@@ -1700,6 +1765,12 @@
           else if (ts - SP.pendT >= 5000) { SP.zoomBusy = true; SP.map.setZoom(band, { animate: true }); SP.pendBand = -1; }
         } else SP.pendBand = -1;
       }
+      // arah: GPS bila >= 5 km/j, kompas ponsel bila lebih pelan
+      var gpsDrive = rec && fresh && v >= 5;
+      if (!gpsDrive && SP.compT && Date.now() - SP.compT < 2000) {
+        var dd = ((SP.comp - SP.hdAcc) % 360 + 540) % 360 - 180;
+        if (Math.abs(dd) > 3) { SP.hdAcc += dd * 0.5; spArrow(SP.cur || (SP.mk && SP.mk.getLatLng())); }
+      }
       spNote();
     }
     SP.raf = requestAnimationFrame(spLoop);
@@ -1713,10 +1784,32 @@
       spBtns();
       setTimeout(function () { if (!SP.active) return; SP.map.invalidateSize(); spRebuild(); if (SP.cur) SP.map.setView(SP.cur, S.mode === 'rekam' ? 17 : 17, { animate: false }); }, 60);
       SP.lastTs = 0; SP.raf = requestAnimationFrame(spLoop);
-      spAwake(true);
+      spAwake(true); spCompassOn(true);
     } else {
-      cancelAnimationFrame(SP.raf); spAwake(false);
+      cancelAnimationFrame(SP.raf); spAwake(false); spCompassOn(false);
     }
+  }
+  // kompas ponsel: dipakai saat kecepatan di bawah 5 km/jam (ujung atas / belakang ponsel)
+  function spCompass(ev) {
+    var al = ev.alpha, be = ev.beta, ga = ev.gamma;
+    if (al == null || be == null || ga == null) return;
+    if (ev.type === 'deviceorientation' && !ev.absolute) return;
+    var r = Math.PI / 180, x = be * r, y = ga * r, z = al * r;
+    var cY = Math.cos(y), cZ = Math.cos(z), sX = Math.sin(x), sY = Math.sin(y), sZ = Math.sin(z);
+    // belakang ponsel (dipakai saat ponsel tegak) dan ujung atas ponsel (saat rebah); pakai yang proyeksi mendatarnya lebih besar
+    var Bx = -cZ * sY - sZ * sX * cY, By = -sZ * sY + cZ * sX * cY, cX = Math.cos(x), Tx = -sZ * cX, Ty = cZ * cX;
+    var bx = Bx, by = By;
+    if (Math.hypot(Tx, Ty) >= Math.hypot(Bx, By)) { bx = Tx; by = Ty; }
+    if (Math.hypot(bx, by) < 0.05) return;
+    var h = Math.atan2(bx, by) / r; if (h < 0) h += 360;
+    SP.comp = h; SP.compT = Date.now();
+  }
+  function spCompassOn(on) {
+    window.removeEventListener('deviceorientationabsolute', spCompass, true);
+    window.removeEventListener('deviceorientation', spCompass, true);
+    if (!on) return;
+    if ('ondeviceorientationabsolute' in window) window.addEventListener('deviceorientationabsolute', spCompass, true);
+    else window.addEventListener('deviceorientation', spCompass, true);
   }
   function spLocate() {
     SP.follow = true; SP.autoPaused = false; spBtns();
@@ -1742,7 +1835,7 @@
     $('spZoom').onclick = function () { SP.zoomAuto = !SP.zoomAuto; if (SP.zoomAuto) SP.autoPaused = false; spBtns(); };
     $('spAwake').onclick = function () { S.settings.spAwake = !S.settings.spAwake; saveSettings(); spBtns(); spAwake(true); };
     document.addEventListener('visibilitychange', function () {
-      if (document.hidden) { if (SP.active) { SP.active = false; cancelAnimationFrame(SP.raf); spAwake(false); SP.resume = true; } }
+      if (document.hidden) { if (SP.active) { SP.active = false; cancelAnimationFrame(SP.raf); spAwake(false); spCompassOn(false); SP.resume = true; } }
       else if (SP.resume) { SP.resume = false; spSetActive(S.view === 'spido' && spIdx() === 1); }
     });
     window.addEventListener('resize', function () { if (S.view === 'spido' && !SP.active) spResetMain(); });
@@ -1874,6 +1967,7 @@
     $('btnMenu').onclick = openDrawer;
     $('setMenu').onclick = function (e) { var b = e.target.closest ? e.target.closest('[data-sp]') : null; if (b) openSet(b.getAttribute('data-sp')); };
     document.querySelectorAll('[data-back]').forEach(function (b) { b.onclick = backSet; });
+    $('fontSeg').onclick = function (e) { var f = e.target.getAttribute && e.target.getAttribute('data-f'); if (f) { S.settings.fs = f; saveSettings(); applyFont(); } };
     $('themeSeg').onclick = function (e) { var t = e.target.getAttribute && e.target.getAttribute('data-t'); if (t) { S.settings.theme = t; saveSettings(); applyTheme(); } };
     pbInit();
     spInit();

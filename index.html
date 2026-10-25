@@ -139,7 +139,7 @@
       <div class="h">CADANGAN DATA</div>
       <div class="card"><div class="muted" id="bkInfo">Memeriksa…</div>
         <button class="btn pri" id="bkMake" style="margin-top:10px;width:100%">Buat cadangan sekarang</button>
-        <label class="plist" style="display:flex;align-items:center;gap:12px;margin-top:8px;font-size:15px"><input type="checkbox" id="autoBkChk" checked style="width:20px;height:20px"> Simpan cadangan otomatis tiap hari (2 berkas bergantian)</label>
+        <label class="plist" style="display:flex;align-items:center;gap:12px;margin-top:8px;font-size:max(11px,calc(15px * var(--fs,1)))"><input type="checkbox" id="autoBkChk" checked style="width:20px;height:20px"> Simpan cadangan otomatis tiap hari (2 berkas bergantian)</label>
         <button class="btn" id="bkRestore" style="margin-top:8px;width:100%">Pulihkan dari cadangan</button>
         <input type="file" id="bkFile" accept=".hztrip,application/gzip,application/octet-stream,application/json" style="display:none">
         <div class="muted" style="margin-top:8px">Satu berkas berisi semua trip, jadwal, unit, dan pengaturan. Kirim ke WhatsApp atau Drive supaya aman bila ponsel hilang. Peta saya (PDF) tidak ikut; impor ulang dari berkas PDF Anda.</div></div>
@@ -161,7 +161,7 @@
         <button class="btn" id="btnBg" style="margin-top:10px;width:100%">Atur izin lokasi "Selalu"</button>
         <button class="btn" id="btnBatt" style="margin-top:8px;width:100%">Atur penghematan baterai</button>
         <button class="btn" id="btnAct" style="margin-top:8px;width:100%">Atur izin aktivitas fisik</button>
-        <div style="margin-top:12px"><label for="popSel" style="display:block;font-size:12px;font-weight:600;letter-spacing:.1em;color:var(--tx2);margin-bottom:6px">SUARA POPUP</label>
+        <div style="margin-top:12px"><label for="popSel" style="display:block;font-size:max(11px,calc(12px * var(--fs,1)));font-weight:600;letter-spacing:.1em;color:var(--tx2);margin-bottom:6px">SUARA POPUP</label>
           <select id="popSel"><option value="alarm">Alarm (berbunyi walau ponsel senyap)</option><option value="notif">Notifikasi (ikut mode senyap)</option><option value="off">Tanpa suara (hanya getar)</option></select>
           <div class="muted" id="popName" style="margin-top:8px"></div>
           <div class="row" style="margin-top:6px;gap:6px"><button class="btn sm" id="btnPopPick" style="flex:1">Pilih nada</button><button class="btn sm" id="btnPopTest" style="flex:1">Coba bunyikan</button><button class="btn sm" id="btnPopDef" style="flex:1">Nada bawaan</button></div>
@@ -171,7 +171,7 @@
         <div class="muted" style="margin-top:8px">Tombol cepat: geser layar dari atas dua kali, ketuk ikon pensil, lalu seret "HZ Trip" ke deretan atas. Satu ketuk untuk Mulai / Akhiri.</div>
       </div>
       <div class="h">CATATAN PEMICU</div>
-      <div class="card"><pre id="diagBox" class="muted" style="white-space:pre-wrap;font-size:11px;max-height:260px;overflow:auto;margin:0">Memuat…</pre>
+      <div class="card"><pre id="diagBox" class="muted" style="white-space:pre-wrap;font-size:max(11px,calc(12px * var(--fs,1)));max-height:260px;overflow:auto;margin:0">Memuat…</pre>
         <div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="diagShare" style="flex:1">Bagikan</button><button class="btn" id="diagClear" style="flex:1">Hapus</button></div>
         <div class="muted" style="margin-top:8px">Setiap kali pemicu otomatis jalan, berhenti, atau gagal, tercatat di sini. Bila rekaman terlambat mulai, kirim catatan ini agar penyebabnya bisa dilacak.</div></div>
       </div>
@@ -179,6 +179,9 @@
         <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Tampilan</b></div>
       <div class="h">TEMA</div>
       <div class="themeseg" id="themeSeg"><button data-t="dark">Gelap</button><button data-t="light">Terang</button><button data-t="auto">Ikuti sistem</button></div>
+      <div class="h" style="margin-top:18px">UKURAN TEKS</div>
+      <div class="themeseg" id="fontSeg"><button data-f="s">Kecil</button><button data-f="m">Sedang</button><button data-f="l">Besar</button></div>
+      <div class="muted" style="margin-top:8px">Besar = ukuran sekarang. Sedang 85%, Kecil 70%, teks terkecil tetap 11 px. Angka kecepatan besar tidak ikut berubah.</div>
       <div class="muted" style="margin-top:8px">Tema terang lebih mudah dibaca di bawah matahari. Peta, cetakan PDF, dan KML tidak berubah.</div>
       </div>
       <div class="spage" id="sp-tentang">
@@ -187,7 +190,7 @@
       <div class="card muted">Warna kecepatan: hijau sampai 60, kuning 60–90, merah di atas 90 km/jam.<br>Jalan kaki (di bawah 10 km/jam) tidak dicatat sebagai trip.<br>Label Kerja / Pribadi mengikuti jenis unit yang dipakai (diatur saat unit didaftarkan). Unit tiap trip bisa diubah di Riwayat.<br>Titik GPS mentah tidak pernah diubah; hanya unit dan label yang bisa Anda ubah.</div>
 
       <div class="h">VERSI</div>
-      <div class="card muted">HZ Trip versi 0.7.3<br>Putar ulang lintasan: tombol Putar di Lintasan.</div>
+      <div class="card muted">HZ Trip versi 0.7.4<br>Putar ulang lintasan: tombol Putar di Lintasan.</div>
       </div>
     </section>
   </div>
@@ -201,7 +204,7 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">Versi 0.7.3</div>
+  <div class="ver">Versi 0.7.4</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
