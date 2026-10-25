@@ -408,7 +408,7 @@
       var tr = edited(ymd, res);
       var km = 0, mx = 0, ws = 0, ds = 0;
       tr.forEach(function (t) { km += t.km; mx = Math.max(mx, t.max); ws += t.avg * t.durSec; ds += t.durSec; });
-      return { ymd: ymd, n: tr.length, km: km, max: mx, avg: ds ? ws / ds : 0 };
+      return { ymd: ymd, n: tr.length, km: km, max: mx, avg: ds ? ws / ds : 0, tr: tr, pts: res.points };
     }).catch(function () { return { ymd: ymd, n: 0, km: 0, max: 0, avg: 0 }; });
   }
   var BLN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
@@ -433,6 +433,34 @@
           '<div class="mt">' + r.n + ' trip</div></button>';
       }).join('');
       $('monthView').innerHTML = html;
+      fillMonthClimb(rows);
+    });
+  }
+  // total naik per hari di daftar 30 hari (dihitung di latar belakang dari data ketinggian)
+  function fillMonthClimb(rows) {
+    var days = rows.filter(function (r) { return r.n; }), i = 0, stop = false;
+    function nx() {
+      if (i >= days.length || stop || S.view !== 'riwayat' || S.hMode !== 'list') return;
+      var r = days[i++], tot = 0, got = 0, items = r.tr.map(function (t) { return { t: t, pts: r.pts }; });
+      climbSeq(items, function (it, c) { tot += c.up; got++; }).then(function () {
+        if (got < items.length) { if (!got) stop = true; }
+        if (got) {
+          var el = document.querySelector('#monthView .mrow[data-d="' + r.ymd + '"] .mt');
+          if (el) el.textContent = r.n + ' trip · ▲ ' + Math.round(tot) + ' m';
+        }
+        nx();
+      });
+    }
+    nx();
+  }
+  function fillDayClimb() {
+    var day = S.hDay, items = S.hTrips.map(function (x) { return { t: x.t, pts: S.hPts }; });
+    items.forEach(function (it, i) {
+      climbOfTrip(it.t, it.pts).then(function (c) {
+        if (!c || day !== S.hDay) return;
+        var el = document.querySelector('#tripList [data-cl="' + i + '"]');
+        if (el) el.textContent = '▲ naik ' + c.up + ' m · ▼ turun ' + c.down + ' m · ' + c.min + '–' + c.max + ' m';
+      });
     });
   }
   function loadRiwayat() {
@@ -481,8 +509,9 @@
       var t = x.t;
       var isSel = S.sel && S.sel.indexOf(i) >= 0, dim = S.sel && !isSel && !(i === selLo() - 1 || i === selHi() + 1);
       return '<button class="trip' + (isSel ? ' sel' : '') + (dim ? ' dim' : '') + (S.mini && S.mini.i === i ? ' mapped' : '') + '" data-i="' + i + '"><div class="t1">' + (S.sel ? '<span class="cbx">' + (isSel ? '✓' : '') + '</span>' : '') + '<span class="tm">' + T.hm(t.start) + ' – ' + T.hm(t.end) + (t.open ? ' ●' : '') + '</span>' + (t.manual ? '<span class="chip m">manual</span>' : '') + '<span class="chip">' + esc(x.unit) + '</span>' + labelChip(x) + '<span class="pmap" data-pm="' + i + '">' + (S.mini && S.mini.i === i ? 'Tutup' : 'Peta') + '</span></div>' +
-        '<div class="t2"><div><small>DURASI</small><b style="font-size:max(11px,calc(18px * var(--fs,1)))">' + T.durText(t.durSec) + '</b></div><div><small>MIN</small><b>' + Math.round(t.min) + '</b></div><div><small>MAKS</small><b style="color:' + zc(t.max) + '">' + Math.round(t.max) + '</b></div><div><small>KM</small><b>' + T.km1(t.km) + '</b></div></div></button>';
+        '<div class="t2"><div><small>DURASI</small><b style="font-size:max(11px,calc(18px * var(--fs,1)))">' + T.durText(t.durSec) + '</b></div><div><small>MIN</small><b>' + Math.round(t.min) + '</b></div><div><small>MAKS</small><b style="color:' + zc(t.max) + '">' + Math.round(t.max) + '</b></div><div><small>KM</small><b>' + T.km1(t.km) + '</b></div></div><div class="clm" data-cl="' + i + '"></div></button>';
     }).join('');
+    fillDayClimb();
   }
   function exitSel() { S.sel = null; $('mergeBar').style.display = 'none'; $('tripList').style.paddingBottom = '0'; }
   function selLo() { return S.sel && S.sel.length ? Math.min.apply(null, S.sel) : -99; }
@@ -903,8 +932,13 @@
         return saveFile(base + '.kml', textB64(E.buildKml(ds, { title: 'HZ Trip ' + ds[0].ymd })), 'application/vnd.google-earth.kml+xml');
       }
       if (!window.jspdf) { toast('Library PDF belum siap'); return; }
-      var doc = E.buildPdf(ds, { driver: S.settings.driver, scope: P.scope, summary: P.summary, color: P.color, month: P.month });
-      return saveFile(base + '.pdf', doc.output('datauristring').split(',')[1], 'application/pdf');
+      var items = [];
+      ds.forEach(function (dd) { dd.trips.forEach(function (x) { items.push({ t: x.t, pts: dd.pts, x: x }); }); });
+      if (items.length > 0) toast('Menghitung ketinggian…');
+      return climbSeq(items, function (it, c) { it.x.climb = c; }).then(function () {
+        var doc = E.buildPdf(ds, { driver: S.settings.driver, scope: P.scope, summary: P.summary, color: P.color, month: P.month });
+        return saveFile(base + '.pdf', doc.output('datauristring').split(',')[1], 'application/pdf');
+      });
     }).catch(function (e) { showErr(e && e.message || e); });
   }
 
@@ -969,6 +1003,7 @@
     return { get: get, put: put, stats: stats, clear: clear };
   })();
 
+  if (window.HzDem) HzDem.setStore(TC);
   var CachedLayer = null;
   function cachedLayerClass() {
     if (CachedLayer) return CachedLayer;
@@ -1027,7 +1062,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.7.4'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.8.0'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1258,6 +1293,7 @@
     bindPins(map, function () { return [trackLayer]; });
     setTiles();
     makeLocate(map);
+    demButtons(map);
     return true;
   }
   function setBase(m, force) {
@@ -1288,6 +1324,7 @@
         var p = m.latLngToContainerPoint(c.pin.ll), x = p.x + c.dx, y = p.y + c.dy;
         c.el.style.left = x + 'px'; c.el.style.top = y + 'px';
         var ax = c.dx >= 0 ? x : x + c.w, ay = y + c.h / 2;
+        if (c.pin.dot) lines += '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="4"/>';
         lines += '<line x1="' + p.x.toFixed(1) + '" y1="' + p.y.toFixed(1) + '" x2="' + ax.toFixed(1) + '" y2="' + ay.toFixed(1) + '"/>';
       });
       svg.innerHTML = lines;
@@ -1302,7 +1339,7 @@
       var right = cx < sz.x / 2, n = list.length, GAP = 34;
       cur = list.map(function (p, i) {
         var el = document.createElement('div'); el.className = 'pinl';
-        el.innerHTML = '<i style="background:' + p.col + '"></i>' + esc(p.txt);
+        el.innerHTML = '<i style="background:' + p.col + '"></i>' + (p.html || esc(p.txt));
         el.onclick = function (e) { e.stopPropagation(); clear(); };
         box.appendChild(el);
         var w = el.offsetWidth, h = el.offsetHeight, pc = m.latLngToContainerPoint(p.ll);
@@ -1312,7 +1349,9 @@
       });
       place();
     }
+    m._pinInfo = function (ll, html) { show([{ ll: ll, html: html, txt: '', col: '#4DA3FF', t: 0, dot: true }]); };
     m.on('click', function (e) {
+      if (m._slopeOn) { slopeTap(m, e); return; }
       var grp = groupFn(), pins = [];
       (grp || []).forEach(function (g) { (g._pins || []).forEach(function (p) { pins.push(p); }); });
       var near = pins.filter(function (p) { return m.latLngToContainerPoint(p.ll).distanceTo(e.containerPoint) <= 26; });
@@ -1443,6 +1482,175 @@
     m.on('dragstart', function () { st.follow = false; if (st.btn) st.btn.classList.remove('on'); });
     m.on('unload', function () { locStop(m); });
     locStart(m);
+  }
+
+  // ---------- kontur, lereng, profil ketinggian (data ketinggian) ----------
+  var DM = { layer: null, btnK: null, btnL: null, btnP: null, pid: 0, mk: null, pr: null, miss: 0 };
+  function contourStep(z) {
+    var s = S.settings.contourStep || 'auto';
+    if (s !== 'auto') return +s;
+    return z <= 15 ? 10 : (z === 16 ? 5 : 2);
+  }
+  function contourColor() {
+    return S.settings.mapMode === 'osm' ? ['rgba(150,90,30,.75)', 'rgba(125,65,10,1)', 'rgba(255,255,255,.9)'] : ['rgba(255,214,128,.85)', 'rgba(255,190,70,1)', 'rgba(0,0,0,.7)'];
+  }
+  function setContour(on) {
+    S.settings.contour = !!on; saveSettings();
+    if (DM.btnK) DM.btnK.classList.toggle('on', !!on);
+    if (!map || !window.HzDem) return;
+    if (on && !DM.layer) {
+      DM.layer = HzDem.contours({ step: contourStep, color: contourColor, onMissing: function () { if (Date.now() - DM.miss > 20000) { DM.miss = Date.now(); toast('Data ketinggian belum lengkap (butuh internet)'); } } });
+      DM.layer.addTo(map);
+    } else if (!on && DM.layer) { map.removeLayer(DM.layer); DM.layer = null; }
+  }
+  var ICO_K = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M2 8c4-4 7 1 11-2s6 0 9 1"/><path d="M2 14c4-4 7 1 11-2s6 0 9 1"/><path d="M2 20c4-4 7 1 11-2s6 0 9 1"/></svg>';
+  var ICO_L = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l7-12 4 7 2-3 5 8z"/><path d="M12 3v3"/></svg>';
+  var ICO_P = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M6 16l4-5 3 3 5-7"/></svg>';
+  function demButtons(m) {
+    function mk(cls, html, label, fn) {
+      var Ctl = L.Control.extend({
+        options: { position: 'bottomright' },
+        onAdd: function () {
+          var b = L.DomUtil.create('button', 'locbtn leaflet-control');
+          b.type = 'button'; b.setAttribute('aria-label', label); b.innerHTML = html;
+          L.DomEvent.disableClickPropagation(b);
+          b.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+          b.onclick = function () { fn(b); };
+          return b;
+        }
+      });
+      var c = new Ctl(); c.addTo(m); return c.getContainer();
+    }
+    DM.btnL = mk('l', ICO_L, 'Info lereng', function (b) {
+      m._slopeOn = !m._slopeOn; b.classList.toggle('on', m._slopeOn);
+      if (m._pinClear) m._pinClear();
+      toast(m._slopeOn ? 'Ketuk peta untuk info lereng' : 'Mode lereng mati');
+    });
+    DM.btnK = mk('k', ICO_K, 'Kontur', function () { setContour(!S.settings.contour); });
+    DM.btnP = mk('p', ICO_P, 'Profil ketinggian', function () { S.profOpen = !S.profOpen; renderProfile(); });
+    if (S.settings.contour) setContour(true);
+    DM.btnP.classList.toggle('on', !!S.profOpen);
+  }
+  var ARROW = '<span style="display:inline-block;transform:rotate(DEGdeg);font-weight:700">&#8593;</span>';
+  function fmt1(v) { return String(Math.round(v * 10) / 10).replace('.', ','); }
+  function slopeTap(m, e) {
+    if (!window.HzDem) return;
+    var ll = e.latlng;
+    HzDem.info(ll.lat, ll.lng).then(function (r) {
+      if (!r) { toast('Data ketinggian belum tersedia (butuh internet)'); return; }
+      var txt = '<b>' + Math.round(r.h) + ' m</b> · ' + (r.pct < 0.5 ? 'datar' : 'lereng ' + fmt1(r.pct) + '% ' + ARROW.replace('DEG', Math.round(r.down)));
+      m._pinInfo([ll.lat, ll.lng], txt);
+    });
+  }
+  function tripPts(pts, t) {
+    var out = [];
+    E.trackOf(pts, t).runs.forEach(function (r) { r.pts.forEach(function (p) { out.push([p.lat, p.lng]); }); });
+    return out;
+  }
+  // cache hasil naik/turun per trip (kunci: jam mulai-selesai)
+  var CL = (function () {
+    var c = null;
+    function load() { if (c) return c; try { c = JSON.parse(localStorage.getItem('hzclimb') || '{}'); } catch (e) { c = {}; } return c; }
+    return { get: function (k) { return load()[k]; }, set: function (k, v) { load()[k] = v; try { localStorage.setItem('hzclimb', JSON.stringify(c)); } catch (e) {} } };
+  })();
+  function climbOfTrip(t, pts) {
+    var k = t.start + '-' + t.end, c = CL.get(k);
+    if (c) return Promise.resolve({ up: c[0], down: c[1], min: c[2], max: c[3] });
+    if (!window.HzDem) return Promise.resolve(null);
+    return HzDem.profile(tripPts(pts, t), 60).then(function (p) {
+      if (!p) return null;
+      CL.set(k, [Math.round(p.up), Math.round(p.down), Math.round(p.min), Math.round(p.max)]);
+      return { up: Math.round(p.up), down: Math.round(p.down), min: Math.round(p.min), max: Math.round(p.max) };
+    }).catch(function () { return null; });
+  }
+  function climbSeq(items, onEach) {
+    var i = 0, bad = false;
+    function nx() {
+      if (i >= items.length || bad) return Promise.resolve();
+      var it = items[i++];
+      return climbOfTrip(it.t, it.pts).then(function (c) { if (!c) bad = true; else onEach(it, c); return nx(); });
+    }
+    return nx();
+  }
+  function hideProf() {
+    var b = $('profBox'); if (b) b.style.display = 'none';
+    if (DM.mk && map) { map.removeLayer(DM.mk); DM.mk = null; }
+    if (map) setTimeout(function () { map.invalidateSize(); }, 50);
+  }
+  function renderProfile() {
+    if (DM.btnP) DM.btnP.classList.toggle('on', !!S.profOpen);
+    if (!S.profOpen) { hideProf(); return; }
+    var v = S.mapView, b = $('profBox');
+    if (!v || !v.trips || !v.trips.length) { b.style.display = 'block'; $('profS').textContent = 'Belum ada trip pada hari ini.'; $('profCv').style.display = 'none'; $('profR').textContent = ''; setTimeout(function () { map.invalidateSize(); }, 50); return; }
+    b.style.display = 'block'; $('profCv').style.display = 'none'; $('profR').textContent = '';
+    $('profT').textContent = v.sel >= 0 ? 'Profil ketinggian · trip ' + (v.sel + 1) : 'Profil ketinggian · semua trip';
+    $('profS').textContent = 'Menghitung ketinggian…';
+    setTimeout(function () { map.invalidateSize(); }, 50);
+    var pid = ++DM.pid, list = v.trips.map(function (x) { return x.t; });
+    if (v.sel >= 0 && list[v.sel]) list = [list[v.sel]];
+    var parts = [];
+    (function nx(i) {
+      if (i >= list.length) return Promise.resolve();
+      return HzDem.profile(tripPts(v.pts, list[i]), 50).then(function (p) { if (p) parts.push(p); return nx(i + 1); });
+    })(0).then(function () {
+      if (pid !== DM.pid) return;
+      if (!parts.length) { $('profS').textContent = 'Data ketinggian belum tersedia. Hubungkan internet sekali, lalu buka lagi.'; return; }
+      var pr = { d: [], e: [], lat: [], lng: [], up: 0, down: 0, min: Infinity, max: -Infinity, km: 0, seps: [] }, off = 0;
+      parts.forEach(function (p, k) {
+        if (k > 0) { off += 150; pr.seps.push(off - 75); }
+        p.d.forEach(function (dd, j) { pr.d.push(off + dd); pr.e.push(p.e[j]); pr.lat.push(p.lat[j]); pr.lng.push(p.lng[j]); });
+        off += p.d[p.d.length - 1];
+        pr.up += p.up; pr.down += p.down; pr.min = Math.min(pr.min, p.min); pr.max = Math.max(pr.max, p.max); pr.km += p.km;
+      });
+      DM.pr = pr;
+      $('profS').innerHTML = 'Terendah <b>' + Math.round(pr.min) + ' m</b> · Tertinggi <b>' + Math.round(pr.max) + ' m</b> · Naik <b>' + Math.round(pr.up) + ' m</b> · Turun <b>' + Math.round(pr.down) + ' m</b> · ' + T.km1(pr.km) + ' km';
+      $('profCv').style.display = 'block';
+      drawProf(-1);
+    }).catch(function () { if (pid === DM.pid) $('profS').textContent = 'Gagal menghitung ketinggian.'; });
+  }
+  function drawProf(hi) {
+    var pr = DM.pr, cv = $('profCv'); if (!pr) return;
+    var dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = 100;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    var cx = cv.getContext('2d'); cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.clearRect(0, 0, W, H);
+    var dm = pr.d[pr.d.length - 1] || 1, lo = pr.min, hiE = pr.max, span = Math.max(8, hiE - lo), top = 10, bot = 16;
+    function X(dd) { return 4 + dd / dm * (W - 8); }
+    function Y(e) { return H - bot - (e - lo) / span * (H - bot - top); }
+    var cs = getComputedStyle(document.documentElement), tx2 = cs.getPropertyValue('--tx2') || '#8a97a0';
+    cx.beginPath(); cx.moveTo(X(pr.d[0]), H - bot);
+    pr.d.forEach(function (dd, i) { cx.lineTo(X(dd), Y(pr.e[i])); });
+    cx.lineTo(X(pr.d[pr.d.length - 1]), H - bot); cx.closePath();
+    var gr = cx.createLinearGradient(0, top, 0, H - bot); gr.addColorStop(0, 'rgba(77,163,255,.45)'); gr.addColorStop(1, 'rgba(77,163,255,.05)');
+    cx.fillStyle = gr; cx.fill();
+    cx.beginPath(); pr.d.forEach(function (dd, i) { if (i) cx.lineTo(X(dd), Y(pr.e[i])); else cx.moveTo(X(dd), Y(pr.e[i])); });
+    cx.strokeStyle = '#4DA3FF'; cx.lineWidth = 2; cx.lineJoin = 'round'; cx.stroke();
+    cx.setLineDash([3, 4]); cx.strokeStyle = tx2; cx.lineWidth = 1;
+    pr.seps.forEach(function (s) { cx.beginPath(); cx.moveTo(X(s), top); cx.lineTo(X(s), H - bot); cx.stroke(); });
+    cx.setLineDash([]);
+    cx.fillStyle = tx2; cx.font = '11px sans-serif'; cx.textBaseline = 'alphabetic';
+    cx.textAlign = 'left'; cx.fillText(Math.round(lo) + ' m', 4, H - 3);
+    cx.textAlign = 'right'; cx.fillText(Math.round(hiE) + ' m', W - 4, 10);
+    cx.textAlign = 'center'; cx.fillText(T.km1(pr.km) + ' km', W / 2, H - 3);
+    if (hi >= 0) {
+      cx.strokeStyle = '#fff'; cx.lineWidth = 1; cx.beginPath(); cx.moveTo(X(pr.d[hi]), top); cx.lineTo(X(pr.d[hi]), H - bot); cx.stroke();
+      cx.fillStyle = '#4DA3FF'; cx.beginPath(); cx.arc(X(pr.d[hi]), Y(pr.e[hi]), 5, 0, 7); cx.fill(); cx.lineWidth = 2; cx.strokeStyle = '#fff'; cx.stroke();
+    }
+  }
+  function profHover(ev) {
+    var pr = DM.pr; if (!pr || !map) return;
+    var cv = $('profCv'), r = cv.getBoundingClientRect(), fx = (ev.clientX - r.left - 4) / Math.max(1, r.width - 8), dm = pr.d[pr.d.length - 1] || 1, tgt = Math.max(0, Math.min(1, fx)) * dm, lo = 0, hi = pr.d.length - 1;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (pr.d[mid] < tgt) lo = mid + 1; else hi = mid; }
+    drawProf(lo);
+    var ll = [pr.lat[lo], pr.lng[lo]];
+    if (!DM.mk) DM.mk = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 3, fillColor: '#4DA3FF', fillOpacity: 1, interactive: false }).addTo(map); else DM.mk.setLatLng(ll);
+    $('profR').textContent = Math.round(pr.e[lo]) + ' m · ' + T.km1(pr.d[lo] / 1000) + ' km dari awal';
+  }
+  function profInit() {
+    var cv = $('profCv');
+    $('profX').onclick = function () { S.profOpen = false; renderProfile(); };
+    cv.addEventListener('pointerdown', function (e) { try { cv.setPointerCapture(e.pointerId); } catch (er) {} profHover(e); e.preventDefault(); });
+    cv.addEventListener('pointermove', function (e) { if (e.buttons || e.pointerType === 'touch') profHover(e); });
+    cv.addEventListener('pointerup', function () { if (DM.mk && map) { map.removeLayer(DM.mk); DM.mk = null; } drawProf(-1); });
   }
 
   // ---------- peta saya (PDF ditimpa di atas peta) ----------
@@ -1648,6 +1856,8 @@
       }).join('') : '';
       trackLayer.clearLayers(); if (map._pinClear) map._pinClear();
       var bounds = drawTrips(trackLayer, pts, trips, mapSel, false);
+      S.mapView = { pts: pts, trips: trips, sel: mapSel, day: day };
+      if (S.profOpen) renderProfile();
       $('mapMsg').textContent = bounds.length ? '' : (day === S.today ? 'Belum ada lintasan hari ini. Lintasan muncul saat ada trip yang terekam.' : 'Tidak ada lintasan pada ' + T.dateLong(day) + '.');
       if (bounds.length && (fit || !fitted)) { map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 }); fitted = true; }
       if (PB.open) { pbPlay(false); pbBuild(); if (!PB.seq.length) pbClose(); else pbDraw(false); }
@@ -1828,7 +2038,6 @@
       clearTimeout(tm);
       tm = setTimeout(function () { spSetActive(S.view === 'spido' && !document.hidden && spIdx() === 1); }, 120);
     });
-    $('spBack').onclick = function () { spShow('main'); };
     $('spToMain').onclick = function () { spShow('main'); };
     $('spLoc').onclick = spLocate;
     $('spFol').onclick = function () { SP.follow = !SP.follow; if (SP.follow && SP.cur) SP.map.setView(SP.cur, SP.map.getZoom(), { animate: true }); spBtns(); };
@@ -1949,7 +2158,10 @@
     openSheet('<div class="grab"></div><div class="st">PETA</div>' +
       '<button class="srow" id="mmOv" style="margin-top:10px"><div class="si"><b>Peta saya</b><small>Lapisan PDF peta (tampil di mode Peta)</small></div>' + CHEV + '</button>' +
       '<button class="srow" id="mmKml"><div class="si"><b>Ekspor KML</b><small>Lintasan hari ini untuk Google Earth</small></div>' + CHEV + '</button>' +
+      '<div class="h" style="margin-top:12px">JARAK KONTUR</div><div class="opts" id="mmCs">' + ['auto', '1', '2', '5', '10'].map(function (v) { return '<button class="opt' + ((S.settings.contourStep || 'auto') === v ? ' on' : '') + '" data-cs="' + v + '">' + (v === 'auto' ? 'Otomatis' : v + ' m') + '</button>'; }).join('') + '</div>' +
+      '<div class="muted" style="margin-top:6px">Otomatis: 10 m saat zoom jauh, 5 m menengah, 2 m dekat. Data berukuran sekitar 30 m, jadi garis di bawah 2 m kurang bermakna.</div>' +
       '<button class="btn" id="mmX" style="width:100%;margin-top:10px">Tutup</button>');
+    $('mmCs').onclick = function (e) { var v = e.target.getAttribute && e.target.getAttribute('data-cs'); if (!v) return; S.settings.contourStep = v; saveSettings(); document.querySelectorAll('#mmCs .opt').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-cs') === v); }); if (DM.layer) DM.layer.redraw(); };
     $('mmX').onclick = closeSheet;
     $('mmOv').onclick = function () { closeSheet(); openOvSheet(); };
     $('mmKml').onclick = function () { closeSheet(); mapKml(); };
@@ -1971,6 +2183,7 @@
     $('themeSeg').onclick = function (e) { var t = e.target.getAttribute && e.target.getAttribute('data-t'); if (t) { S.settings.theme = t; saveSettings(); applyTheme(); } };
     pbInit();
     spInit();
+    profInit();
     $('bkMake').onclick = function () { makeBackup(); };
     $('autoBkChk').onchange = function () { S.settings.autoBk = this.checked; saveSettings(); if (this.checked) autoBackup(); };
     $('thinSel').onchange = function () { S.settings.thinDays = +this.value; saveSettings(); renderThinInfo(); };

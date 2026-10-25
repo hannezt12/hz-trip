@@ -82,7 +82,7 @@ jobs:
       - name: Susun folder www/ dari file web
         run: |
           mkdir -p www
-          cp index.html style.css trips.js ekspor.js peta.js app.js www/
+          cp index.html style.css trips.js ekspor.js peta.js dem.js app.js www/
           cp -r fonts www/
           cp -r vendor www/
 

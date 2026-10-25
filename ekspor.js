@@ -167,21 +167,26 @@
         var x = M + k * ((W - 2 * M) / 3);
         txt(it[0], x, 34, 8, false, '#4A5A63'); txt(it[1], x, 39, 10, true);
       });
-      var tk = 0, tmax = 0, ws = 0, ds = 0;
+      var tk = 0, tmax = 0, ws = 0, ds = 0, anyUp = false, tup = 0;
       var rows = days.map(function (d) {
         var km = 0, mx = 0, w = 0, du = 0;
         d.trips.forEach(function (x) { km += x.t.km; mx = Math.max(mx, x.t.max); w += x.t.avg * x.t.durSec; du += x.t.durSec; });
         tk += km; tmax = Math.max(tmax, mx); ws += w; ds += du;
-        return { cells: [T.dateLong(d.ymd), units(d).join(', '), String(Math.round(mx)), String(Math.round(du ? w / du : 0)), T.km1(km)], max: mx };
+        var up = 0, gotUp = false;
+        d.trips.forEach(function (x) { if (x.climb) { up += x.climb.up; gotUp = true; } });
+        if (gotUp) { anyUp = true; tup += up; }
+        var cells = [T.dateLong(d.ymd), units(d).join(', '), String(Math.round(mx)), String(Math.round(du ? w / du : 0)), T.km1(km)];
+        cells.push(gotUp ? String(Math.round(up)) : '-');
+        return { cells: cells, max: mx };
       });
-      var body = rows.map(function (r) { return r.cells; });
-      body.push(['Total (' + rows.length + ' hari)', '', String(Math.round(tmax)), String(Math.round(ds ? ws / ds : 0)), T.km1(tk)]);
+      var body = rows.map(function (r) { return anyUp ? r.cells : r.cells.slice(0, 5); });
+      body.push(['Total (' + rows.length + ' hari)', '', String(Math.round(tmax)), String(Math.round(ds ? ws / ds : 0)), T.km1(tk)].concat(anyUp ? [String(Math.round(tup))] : []));
       doc.autoTable({
         startY: 43, margin: { left: M, right: M }, theme: 'grid',
-        head: [['Tanggal', 'Unit', 'Maks km/j', 'Rata-rata km/j', 'Total km']], body: body,
+        head: [['Tanggal', 'Unit', 'Maks km/j', 'Rata-rata km/j', 'Total km'].concat(anyUp ? ['Naik (m)'] : [])], body: body,
         styles: { font: 'helvetica', fontSize: 10, cellPadding: { top: 2, bottom: 2, left: 2, right: 2.5 }, lineColor: [221, 227, 230], lineWidth: 0.2, textColor: hex('#161C20') },
         headStyles: { fillColor: hex('#E9EEF0'), textColor: hex('#2C3A41'), fontStyle: 'bold', fontSize: 9, lineColor: [201, 210, 215] },
-        columnStyles: { 0: { fontStyle: 'bold' }, 1: { cellWidth: 36 }, 2: { halign: 'right', cellWidth: 26 }, 3: { halign: 'right', cellWidth: 32 }, 4: { halign: 'right', cellWidth: 24 } },
+        columnStyles: { 0: { fontStyle: 'bold' }, 1: { cellWidth: 36 }, 2: { halign: 'right', cellWidth: 26 }, 3: { halign: 'right', cellWidth: 32 }, 4: { halign: 'right', cellWidth: 24 }, 5: { halign: 'right', cellWidth: 22 } },
         didParseCell: function (d) {
           if (d.section === 'head' && d.column.index >= 2) d.cell.styles.halign = 'right';
           if (d.section === 'body' && d.row.index === rows.length) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = hex('#F3F6F7'); }
@@ -221,14 +226,17 @@
         txt(it[0], x, 34, 8, false, '#4A5A63'); txt(it[1], x, 39, 10, true);
       });
 
+      var anyUpD = false;
       var body = day.trips.map(function (x, i) {
         if (x.check) anyCheck = true;
         var t = x.t;
-        return [String(i + 1), range(t) + (x.check ? ' *' : ''), x.unit, String(Math.round(t.max)), String(Math.round(t.avg)), T.km1(t.km)];
+        if (x.climb) anyUpD = true;
+        return [String(i + 1), range(t) + (x.check ? ' *' : ''), x.unit, String(Math.round(t.max)), String(Math.round(t.avg)), T.km1(t.km), x.climb ? String(x.climb.up) : '-'];
       });
+      if (!anyUpD) body = body.map(function (r) { return r.slice(0, 6); });
       doc.autoTable({
         startY: 43, margin: { left: M, right: M },
-        head: [['No', 'Waktu', 'Unit', 'Maks', 'Rata-rata', 'Jarak km']],
+        head: [['No', 'Waktu', 'Unit', 'Maks', 'Rata-rata', 'Jarak km'].concat(anyUpD ? ['Naik m'] : [])],
         body: body, theme: 'grid',
         styles: { font: 'helvetica', fontSize: 10, cellPadding: { top: 2, bottom: 2, left: 2, right: 2.5 }, lineColor: [221, 227, 230], lineWidth: 0.2, textColor: hex('#161C20') },
         headStyles: { fillColor: hex('#E9EEF0'), textColor: hex('#2C3A41'), fontStyle: 'bold', fontSize: 9, lineColor: [201, 210, 215] },

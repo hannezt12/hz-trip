@@ -317,7 +317,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 #modeBox b{color:var(--tx)}
 #modeBtns .mrow2{margin-top:10px}
 
-/* v0.7.4: SpidoMap (halaman peta di kiri Spidometer) */
+/* v0.8.0: SpidoMap (halaman peta di kiri Spidometer) */
 #main.pg{padding:0;overflow:hidden}
 #v-spido.on{height:100%;position:relative}
 #spPager{display:flex;height:100%;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
@@ -345,7 +345,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .spar{background:transparent;border:0}
 .spar svg{display:block;transition:transform .4s linear;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5))}
 
-/* v0.7.4: penampil zoom PDF */
+/* v0.8.0: penampil zoom PDF */
 #pdfZoom{position:fixed;inset:0;z-index:95;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,24px)}
 #pdfZoom .cal-h{display:flex;align-items:center;justify-content:space-between;padding:8px 16px}
 #pdfZoom .cal-h b{font-family:var(--cond);font-size:max(11px,calc(24px * var(--fs,1)));font-weight:600;letter-spacing:.03em}
@@ -354,15 +354,26 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 #pdfZoom .pzh{padding:8px 16px calc(10px + env(safe-area-inset-bottom,0px));font-size:max(11px,calc(12px * var(--fs,1)));color:var(--tx2);text-align:center}
 #cleanUI .leaflet-control-zoom{margin:10px}
 
-/* v0.7.4: tombol spidometer di atas tombol posisi */
+/* v0.8.0: tombol spidometer di atas tombol posisi */
 #spToMain{position:absolute;right:10px;bottom:64px;z-index:600;margin:0}
 #spStrip{display:none}
 #spBar{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
 
-/* v0.7.4: ukuran teks, label pin */
+/* v0.8.0: ukuran teks, label pin */
 .leaflet-container{font-size:max(11px,calc(12px * var(--fs,1)))}
 .pinbox{position:absolute;inset:0;z-index:650;pointer-events:none;overflow:hidden}
 .pinbox .pinsvg{position:absolute;left:0;top:0;pointer-events:none}
 .pinbox line{stroke:var(--tx2);stroke-width:1;stroke-linecap:round}
 .pinl{position:absolute;pointer-events:auto;background:var(--ov);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:6px 10px;white-space:nowrap;font-size:max(11px,calc(13px * var(--fs,1)));box-shadow:0 2px 8px rgba(0,0,0,.35);display:flex;align-items:center;gap:7px}
 .pinl i{display:inline-block;width:10px;height:10px;border-radius:50%;border:2px solid #fff;box-sizing:content-box;margin:-2px 0}
+
+/* v0.8.0: profil ketinggian, kontur */
+#profBox{flex:none;margin:6px 12px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+#profBox .phd{display:flex;align-items:center;justify-content:space-between}
+#profBox .phd b{font-family:var(--cond);font-size:max(11px,calc(18px * var(--fs,1)));font-weight:600;letter-spacing:.03em}
+#profBox .pst{font-size:max(11px,calc(13px * var(--fs,1)));color:var(--tx2);margin-top:2px;min-height:16px}
+#profBox .pst b{color:var(--tx)}
+#profCv{display:block;width:100%;height:100px;touch-action:none;margin-top:4px}
+.trip .clm{font-size:max(11px,calc(12px * var(--fs,1)));color:var(--tx2);margin-top:6px;min-height:14px;text-align:left}
+#spHud .spv{margin-left:auto}
+.pinbox circle{fill:#4DA3FF;stroke:#fff;stroke-width:2}
