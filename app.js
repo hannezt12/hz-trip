@@ -1047,6 +1047,7 @@
     CL.clear();
     if (DM.layer) DM.layer.redraw();
     if (DM.slope) DM.slope.redraw();
+    if (DM.hach) DM.hach.redraw();
     renderDemInfo();
   }
   function demImport(files) {
@@ -1102,7 +1103,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.8.4'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.8.5'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1549,7 +1550,7 @@
   }
   function setSlopeLayer(on) {
     S.settings.slopeLayer = !!on; saveSettings();
-    if (DM.btnS) DM.btnS.classList.toggle('on', !!on);
+    if (DM.sync) DM.sync();
     if (!map || !window.HzDem) return;
     if (on && !DM.slope) {
       DM.slope = HzDem.slopeLayer({ onMissing: function () { if (Date.now() - DM.miss > 20000) { DM.miss = Date.now(); toast('Data ketinggian belum lengkap (butuh internet)'); } } });
@@ -1559,7 +1560,7 @@
   }
   function setContour(on) {
     S.settings.contour = !!on; saveSettings();
-    if (DM.btnK) DM.btnK.classList.toggle('on', !!on);
+    if (DM.sync) DM.sync();
     if (!map || !window.HzDem) return;
     if (on && !DM.layer) {
       DM.layer = HzDem.contours({ step: contourStep, color: contourColor, onMissing: function () { if (Date.now() - DM.miss > 20000) { DM.miss = Date.now(); toast('Data ketinggian belum lengkap (butuh internet)'); } } });
@@ -1570,32 +1571,69 @@
   var ICO_L = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l7-12 4 7 2-3 5 8z"/><path d="M12 3v3"/></svg>';
   var ICO_S = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18L3 6z"/><path d="M3 14l6 6M3 10l10 10"/></svg>';
   var ICO_P = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M6 16l4-5 3 3 5-7"/></svg>';
+  var ICO_T = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>';
+  function setHach(on) {
+    S.settings.hach = !!on; saveSettings();
+    if (!map || !window.HzDem) return;
+    if (on && !DM.hach) {
+      DM.hach = HzDem.hachLayer({ kind: function () { return S.settings.hachKind || 'down'; }, osm: function () { return S.settings.mapMode === 'osm'; }, onMissing: function () { if (Date.now() - DM.miss > 20000) { DM.miss = Date.now(); toast('Data ketinggian belum lengkap (butuh internet)'); } } });
+      DM.hach.addTo(map);
+    } else if (!on && DM.hach) { map.removeLayer(DM.hach); DM.hach = null; }
+    if (DM.sync) DM.sync();
+  }
   function demButtons(m) {
-    function mk(cls, html, label, fn) {
-      var Ctl = L.Control.extend({
-        options: { position: 'bottomright' },
-        onAdd: function () {
-          var b = L.DomUtil.create('button', 'locbtn leaflet-control');
-          b.type = 'button'; b.setAttribute('aria-label', label); b.innerHTML = html;
-          L.DomEvent.disableClickPropagation(b);
-          b.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-          b.onclick = function () { fn(b); };
-          return b;
-        }
-      });
-      var c = new Ctl(); c.addTo(m); return c.getContainer();
+    // satu tombol "Alat peta" yang membuka panel berlabel
+    var panel = document.createElement('div');
+    panel.className = 'toolpanel'; panel.style.display = 'none';
+    m.getContainer().appendChild(panel);
+    L.DomEvent.disableClickPropagation(panel); L.DomEvent.disableScrollPropagation(panel);
+    function row(id, label, sub) { return '<div class="trow"><button type="button" class="tsw" data-t="' + id + '" role="switch"><span class="tl">' + label + (sub ? '<small>' + sub + '</small>' : '') + '</span><span class="tk"></span></button></div>'; }
+    panel.innerHTML = '<div class="tt">ALAT PETA</div>' + row('contour', 'Kontur') + row('slopeLayer', 'Kemiringan (warna)') +
+      row('hach', 'Arsiran') + '<div class="tseg" id="tHk"><button type="button" data-k="down">Arah turun</button><button type="button" data-k="row">Arah row</button></div>' +
+      row('slopeTap', 'Info lereng', 'ketuk titik di peta') + row('prof', 'Profil ketinggian');
+    function state(id) {
+      return id === 'contour' ? !!S.settings.contour : id === 'slopeLayer' ? !!S.settings.slopeLayer : id === 'hach' ? !!S.settings.hach : id === 'slopeTap' ? !!m._slopeOn : !!S.profOpen;
     }
-    DM.btnL = mk('l', ICO_L, 'Info lereng', function (b) {
-      m._slopeOn = !m._slopeOn; b.classList.toggle('on', m._slopeOn);
-      if (m._pinClear) m._pinClear();
-      toast(m._slopeOn ? 'Ketuk peta untuk info lereng' : 'Mode lereng mati');
+    function sync() {
+      var any = false;
+      panel.querySelectorAll('.tsw').forEach(function (b) { var on = state(b.getAttribute('data-t')); b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); if (on) any = true; });
+      var k = S.settings.hachKind || 'down';
+      panel.querySelectorAll('#tHk button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-k') === k); });
+      if (DM.main) DM.main.classList.toggle('hason', any);
+    }
+    DM.sync = sync;
+    panel.onclick = function (e) {
+      var k = e.target.closest && e.target.closest('#tHk button');
+      if (k) { S.settings.hachKind = k.getAttribute('data-k'); saveSettings(); if (!S.settings.hach) setHach(true); else if (DM.hach) DM.hach.redraw(); sync(); return; }
+      var b = e.target.closest && e.target.closest('.tsw'); if (!b) return;
+      var id = b.getAttribute('data-t');
+      if (id === 'contour') setContour(!S.settings.contour);
+      else if (id === 'slopeLayer') setSlopeLayer(!S.settings.slopeLayer);
+      else if (id === 'hach') setHach(!S.settings.hach);
+      else if (id === 'slopeTap') {
+        m._slopeOn = !m._slopeOn; if (m._pinClear) m._pinClear();
+        toast(m._slopeOn ? 'Ketuk peta untuk info lereng' : 'Mode lereng mati');
+      } else if (id === 'prof') { S.profOpen = !S.profOpen; renderProfile(); }
+      sync();
+    };
+    var Ctl = L.Control.extend({
+      options: { position: 'bottomright' },
+      onAdd: function () {
+        var b = L.DomUtil.create('button', 'locbtn leaflet-control');
+        b.type = 'button'; b.setAttribute('aria-label', 'Alat peta'); b.innerHTML = ICO_T;
+        L.DomEvent.disableClickPropagation(b);
+        b.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+        b.onclick = function () { var open = panel.style.display === 'none'; panel.style.display = open ? 'block' : 'none'; b.classList.toggle('open', open); sync(); };
+        DM.main = b; return b;
+      }
     });
-    DM.btnS = mk('s', ICO_S, 'Kemiringan (warna)', function () { setSlopeLayer(!S.settings.slopeLayer); });
-    DM.btnK = mk('k', ICO_K, 'Kontur', function () { setContour(!S.settings.contour); });
-    DM.btnP = mk('p', ICO_P, 'Profil ketinggian', function () { S.profOpen = !S.profOpen; renderProfile(); });
+    new Ctl().addTo(m);
+    // tombol lama dipertahankan sebagai penampung status (tidak tampil)
+    DM.btnL = document.createElement('button'); DM.btnS = document.createElement('button'); DM.btnK = document.createElement('button'); DM.btnP = document.createElement('button');
     if (S.settings.contour) setContour(true);
     if (S.settings.slopeLayer) setSlopeLayer(true);
-    DM.btnP.classList.toggle('on', !!S.profOpen);
+    if (S.settings.hach) setHach(true);
+    sync();
   }
   var ARROW = '<span style="display:inline-block;transform:rotate(DEGdeg);font-weight:700">&#8593;</span>';
   function fmt1(v) { return String(Math.round(v * 10) / 10).replace('.', ','); }
@@ -1644,7 +1682,7 @@
     if (map) setTimeout(function () { map.invalidateSize(); }, 50);
   }
   function renderProfile() {
-    if (DM.btnP) DM.btnP.classList.toggle('on', !!S.profOpen);
+    if (DM.sync) DM.sync();
     if (!S.profOpen) { hideProf(); return; }
     var v = S.mapView, b = $('profBox');
     if (!v || !v.trips || !v.trips.length) { b.style.display = 'block'; $('profS').textContent = 'Belum ada trip pada hari ini.'; $('profCv').style.display = 'none'; $('profR').textContent = ''; setTimeout(function () { map.invalidateSize(); }, 50); return; }

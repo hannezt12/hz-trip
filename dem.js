@@ -475,8 +475,40 @@
         ctx.imageSmoothingEnabled = true;
         ctx.drawImage(sm, -S4 / 2, -S4 / 2, cols * S4, rows * S4);
       },
+      _renderHach: function (zd) {
+        var c = this._canvas, m = this._map, min = this._min, ctx = c.getContext('2d'), w = c.width, h = c.height, G = 30;
+        ctx.clearRect(0, 0, w, h);
+        var cen = m.getCenter(), mpp = 156543.03 * Math.cos(cen.lat * Math.PI / 180) / Math.pow(2, m.getZoom()), dm = Math.max(25, 12 * mpp), kind = this.o.kind ? this.o.kind() : 'down', osm = this.o.osm && this.o.osm();
+        var items = [], x0 = Math.ceil(min.x / G) * G - min.x, y0 = Math.ceil(min.y / G) * G - min.y, x, y;
+        for (y = y0; y < h; y += G) for (x = x0; x < w; x += G) {
+          var ll = m.layerPointToLatLng(L.point(min.x + x, min.y + y)), dLat = dm / 111320, dLng = dLat / Math.cos(ll.lat * Math.PI / 180);
+          var n = elev(ll.lat + dLat, ll.lng, zd), s = elev(ll.lat - dLat, ll.lng, zd), e = elev(ll.lat, ll.lng + dLng, zd), wv = elev(ll.lat, ll.lng - dLng, zd);
+          if (!(n === n && s === s && e === e && wv === wv)) continue;
+          var gx = (e - wv) / (2 * dm), gy = (n - s) / (2 * dm), pct = 100 * Math.hypot(gx, gy);
+          if (pct < 2) continue;
+          var ux = -gx / (pct / 100), uy = gy / (pct / 100), len = Math.max(10, Math.min(26, 8 + pct * 1.2)); // arah turun di layar (x kanan, y bawah)
+          items.push([x, y, ux, uy, len]);
+        }
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        function draw(col, wd) {
+          ctx.strokeStyle = col; ctx.lineWidth = wd; ctx.beginPath();
+          items.forEach(function (q) {
+            var x = q[0], y = q[1], ux = q[2], uy = q[3], L2 = q[4] / 2, ax, ay, bx, by;
+            if (kind === 'row') { var vx = uy, vy = -ux; ax = x - vx * L2; ay = y - vy * L2; bx = x + vx * L2; by = y + vy * L2; ctx.moveTo(ax, ay); ctx.lineTo(bx, by); }
+            else {
+              ax = x - ux * L2; ay = y - uy * L2; bx = x + ux * L2; by = y + uy * L2; ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+              var hx = -ux * 5, hy = -uy * 5, px = -uy * 3, py = ux * 3;
+              ctx.moveTo(bx + hx + px, by + hy + py); ctx.lineTo(bx, by); ctx.lineTo(bx + hx - px, by + hy - py);
+            }
+          });
+          ctx.stroke();
+        }
+        draw(osm ? 'rgba(255,255,255,.7)' : 'rgba(0,0,0,.4)', 3);
+        draw(osm ? 'rgba(15,50,120,.95)' : 'rgba(205,238,255,.95)', 1.2);
+      },
       _render: function (zd) {
         if (this.o.mode === 'slope') return this._renderSlope(zd);
+        if (this.o.mode === 'hach') return this._renderHach(zd);
         var c = this._canvas, m = this._map, min = this._min, ctx = c.getContext('2d'), w = c.width, h = c.height;
         ctx.clearRect(0, 0, w, h);
         var cols = Math.ceil(w / S) + 1, rows = Math.ceil(h / S) + 1, g = new Float32Array(cols * rows), i, j, mn = Infinity, mx = -Infinity;
@@ -566,7 +598,8 @@
   ];
   function slopeClass(p) { for (var i = 0; i < SLOPE_CLASSES.length; i++) if (p <= SLOPE_CLASSES[i].max) { var c = SLOPE_CLASSES[i]; return [c.rgb[0], c.rgb[1], c.rgb[2], c.a]; } return [0, 0, 0, 0]; }
   function contours(o) { return new (layerClass())(o); }
+  function hachLayer(o) { o = o || {}; o.mode = 'hach'; o.pane = 'hachPane'; o.z = 265; return new (layerClass())(o); }
   function slopeLayer(o) { o = o || {}; o.mode = 'slope'; o.pane = 'slopePane'; o.z = 255; return new (layerClass())(o); }
 
-  root.HzDem = { slopeLayer: slopeLayer, SLOPE_CLASSES: SLOPE_CLASSES, rampColor: rampColor, contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
+  root.HzDem = { hachLayer: hachLayer, slopeLayer: slopeLayer, SLOPE_CLASSES: SLOPE_CLASSES, rampColor: rampColor, contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
 })(window);
