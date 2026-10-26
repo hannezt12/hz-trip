@@ -377,3 +377,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .trip .clm{font-size:max(11px,calc(12px * var(--fs,1)));color:var(--tx2);margin-top:6px;min-height:14px;text-align:left}
 #spHud .spv{margin-left:auto}
 .pinbox circle{fill:#4DA3FF;stroke:#fff;stroke-width:2}
+
+.slegend{display:flex;gap:6px;align-items:center;background:var(--ov);border:1px solid var(--line);border-radius:10px;padding:4px 8px;font-size:calc(11px*var(--fs,1));color:var(--tx);margin:10px 10px 0 0;float:right;clear:both}
+.slegend span{display:flex;align-items:center;gap:3px}.slegend i{display:inline-block;width:10px;height:10px;border-radius:3px}.slegend em{font-style:normal;opacity:.7}
+.leaflet-top.leaflet-right .slegend{float:right}

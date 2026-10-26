@@ -1046,6 +1046,7 @@
     if (window.HzDem) HzDem.resetMem();
     CL.clear();
     if (DM.layer) DM.layer.redraw();
+    if (DM.slope) DM.slope.redraw();
     renderDemInfo();
   }
   function demImport(files) {
@@ -1101,7 +1102,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.8.2'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.8.4'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1534,7 +1535,27 @@
     return z <= 16 ? 10 : 5;
   }
   function contourColor() {
-    return S.settings.mapMode === 'osm' ? ['rgba(20,120,60,.8)', 'rgba(10,95,45,1)', 'rgba(255,255,255,.9)'] : ['rgba(130,255,150,.85)', 'rgba(140,255,160,1)', 'rgba(0,0,0,.75)'];
+    return S.settings.mapMode === 'osm' ? ['', '', 'rgba(255,255,255,.9)', 1] : ['', '', 'rgba(0,0,0,.75)', 0];
+  }
+  function slopeLegend(on) {
+    var m = map; if (!m) return;
+    if (DM.leg) { m.removeControl(DM.leg); DM.leg = null; }
+    if (!on || !window.HzDem) return;
+    var Ctl = L.Control.extend({ options: { position: 'topright' }, onAdd: function () {
+      var e = L.DomUtil.create('div', 'slegend leaflet-control');
+      e.innerHTML = HzDem.SLOPE_CLASSES.map(function (c) { return '<span><i style="background:rgb(' + c.rgb.join(',') + ')"></i>' + c.t + '</span>'; }).join('') + '<em>%</em>';
+      return e; } });
+    DM.leg = new Ctl(); DM.leg.addTo(m);
+  }
+  function setSlopeLayer(on) {
+    S.settings.slopeLayer = !!on; saveSettings();
+    if (DM.btnS) DM.btnS.classList.toggle('on', !!on);
+    if (!map || !window.HzDem) return;
+    if (on && !DM.slope) {
+      DM.slope = HzDem.slopeLayer({ onMissing: function () { if (Date.now() - DM.miss > 20000) { DM.miss = Date.now(); toast('Data ketinggian belum lengkap (butuh internet)'); } } });
+      DM.slope.addTo(map);
+    } else if (!on && DM.slope) { map.removeLayer(DM.slope); DM.slope = null; }
+    slopeLegend(on);
   }
   function setContour(on) {
     S.settings.contour = !!on; saveSettings();
@@ -1547,6 +1568,7 @@
   }
   var ICO_K = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M2 8c4-4 7 1 11-2s6 0 9 1"/><path d="M2 14c4-4 7 1 11-2s6 0 9 1"/><path d="M2 20c4-4 7 1 11-2s6 0 9 1"/></svg>';
   var ICO_L = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l7-12 4 7 2-3 5 8z"/><path d="M12 3v3"/></svg>';
+  var ICO_S = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18L3 6z"/><path d="M3 14l6 6M3 10l10 10"/></svg>';
   var ICO_P = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M6 16l4-5 3 3 5-7"/></svg>';
   function demButtons(m) {
     function mk(cls, html, label, fn) {
@@ -1568,9 +1590,11 @@
       if (m._pinClear) m._pinClear();
       toast(m._slopeOn ? 'Ketuk peta untuk info lereng' : 'Mode lereng mati');
     });
+    DM.btnS = mk('s', ICO_S, 'Kemiringan (warna)', function () { setSlopeLayer(!S.settings.slopeLayer); });
     DM.btnK = mk('k', ICO_K, 'Kontur', function () { setContour(!S.settings.contour); });
     DM.btnP = mk('p', ICO_P, 'Profil ketinggian', function () { S.profOpen = !S.profOpen; renderProfile(); });
     if (S.settings.contour) setContour(true);
+    if (S.settings.slopeLayer) setSlopeLayer(true);
     DM.btnP.classList.toggle('on', !!S.profOpen);
   }
   var ARROW = '<span style="display:inline-block;transform:rotate(DEGdeg);font-weight:700">&#8593;</span>';
@@ -2202,7 +2226,7 @@
       '<button class="srow" id="mmKml"><div class="si"><b>Ekspor KML</b><small>Lintasan hari ini untuk Google Earth, dengan ketinggian</small></div>' + CHEV + '</button>' +
       '<label style="display:block;margin:6px 4px"><input type="checkbox" id="mmKc"' + (S.settings.kmlContour !== false ? ' checked' : '') + '> Sertakan kontur di KML</label>' +
       '<div class="h" style="margin-top:12px">JARAK KONTUR</div><div class="opts" id="mmCs">' + ['auto', '1', '2', '5', '10'].map(function (v) { return '<button class="opt' + ((S.settings.contourStep || 'auto') === v ? ' on' : '') + '" data-cs="' + v + '">' + (v === 'auto' ? 'Otomatis' : v + ' m') + '</button>'; }).join('') + '</div>' +
-      '<div class="muted" style="margin-top:6px">Otomatis: dengan data DEMNAS 10 m saat zoom jauh, 5 m menengah, 2 m dekat; tanpa DEMNAS (data gratis ±30 m) minimal 5 m.</div>' +
+      '<div class="muted" style="margin-top:6px">Warna garis bergradasi: lembah merah muda pudar, makin tinggi makin abu lalu hijau muda. Otomatis: dengan data DEMNAS 10 m saat zoom jauh, 5 m menengah, 2 m dekat; tanpa DEMNAS (data gratis ±30 m) minimal 5 m.</div>' +
       '<button class="btn" id="mmX" style="width:100%;margin-top:10px">Tutup</button>');
     $('mmCs').onclick = function (e) { var v = e.target.getAttribute && e.target.getAttribute('data-cs'); if (!v) return; S.settings.contourStep = v; saveSettings(); document.querySelectorAll('#mmCs .opt').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-cs') === v); }); if (DM.layer) DM.layer.redraw(); };
     $('mmKc').onchange = function () { S.settings.kmlContour = this.checked; saveSettings(); };
@@ -2212,7 +2236,7 @@
   }
   // siapkan ketinggian + kontur untuk KML (butuh data ketinggian); selalu lanjut walau gagal
   function kmlPrep(ds, withC) {
-    var opts = { title: 'HZ Trip ' + ds[0].ymd };
+    var opts = { title: 'HZ Trip ' + ds[0].ymd, ramp: window.HzDem && HzDem.rampColor };
     if (!window.HzDem) return Promise.resolve(opts);
     var all = [];
     ds.forEach(function (day) { day.trips.forEach(function (x) { tripPts(day.pts, x.t).forEach(function (q) { all.push(q); }); }); });

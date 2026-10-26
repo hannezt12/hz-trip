@@ -409,10 +409,11 @@
     LC = L.Layer.extend({
       initialize: function (o) { this.o = o || {}; this._id = 0; },
       onAdd: function (map) {
-        if (!map.getPane('demPane')) { var p = map.createPane('demPane'); p.style.zIndex = 260; p.style.pointerEvents = 'none'; }
+        var pn = this.o.pane || 'demPane';
+        if (!map.getPane(pn)) { var p = map.createPane(pn); p.style.zIndex = this.o.z || 260; p.style.pointerEvents = 'none'; }
         var c = this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated');
         c.style.pointerEvents = 'none';
-        map.getPane('demPane').appendChild(c);
+        map.getPane(pn).appendChild(c);
         this._update();
       },
       onRemove: function () { this._id++; L.DomUtil.remove(this._canvas); this._canvas = null; },
@@ -445,7 +446,37 @@
           me._render(zd);
         });
       },
+      _renderSlope: function (zd) {
+        var c = this._canvas, m = this._map, min = this._min, ctx = c.getContext('2d'), w = c.width, h = c.height, S4 = 4;
+        ctx.clearRect(0, 0, w, h);
+        var cols = Math.ceil(w / S4) + 1, rows = Math.ceil(h / S4) + 1, g = new Float32Array(cols * rows), i, j, any = false;
+        for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+          var ll = m.layerPointToLatLng(L.point(min.x + i * S4, min.y + j * S4)), v = elev(ll.lat, ll.lng, zd);
+          g[j * cols + i] = v; if (v === v) any = true;
+        }
+        if (!any) return;
+        var g2 = new Float32Array(g.length), s, n, dj, di, ii, jj, vv;
+        for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+          s = 0; n = 0;
+          for (dj = -1; dj <= 1; dj++) for (di = -1; di <= 1; di++) { ii = i + di; jj = j + dj; if (ii < 0 || jj < 0 || ii >= cols || jj >= rows) continue; vv = g[jj * cols + ii]; if (vv === vv) { s += vv; n++; } }
+          g2[j * cols + i] = n ? s / n : NaN;
+        }
+        var cen = m.getCenter(), mpp = 156543.03 * Math.cos(cen.lat * Math.PI / 180) / Math.pow(2, m.getZoom()), cell = S4 * mpp, K = Math.max(1, Math.ceil(15 / cell)), dm = 2 * K * cell;
+        var sm = document.createElement('canvas'); sm.width = cols; sm.height = rows;
+        var sc = sm.getContext('2d'), im = sc.createImageData(cols, rows), D = im.data;
+        for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+          var a = g2[j * cols + Math.max(0, i - K)], b = g2[j * cols + Math.min(cols - 1, i + K)], up = g2[Math.max(0, j - K) * cols + i], dn = g2[Math.min(rows - 1, j + K) * cols + i];
+          var di2 = Math.min(cols - 1, i + K) - Math.max(0, i - K), dj2 = Math.min(rows - 1, j + K) - Math.max(0, j - K);
+          if (!(a === a && b === b && up === up && dn === dn) || !di2 || !dj2) continue;
+          var pct = 100 * Math.hypot((b - a) / (di2 * cell), (dn - up) / (dj2 * cell)), cl = slopeClass(pct), o = (j * cols + i) * 4;
+          D[o] = cl[0]; D[o + 1] = cl[1]; D[o + 2] = cl[2]; D[o + 3] = cl[3];
+        }
+        sc.putImageData(im, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(sm, -S4 / 2, -S4 / 2, cols * S4, rows * S4);
+      },
       _render: function (zd) {
+        if (this.o.mode === 'slope') return this._renderSlope(zd);
         var c = this._canvas, m = this._map, min = this._min, ctx = c.getContext('2d'), w = c.width, h = c.height;
         ctx.clearRect(0, 0, w, h);
         var cols = Math.ceil(w / S) + 1, rows = Math.ceil(h / S) + 1, g = new Float32Array(cols * rows), i, j, mn = Infinity, mx = -Infinity;
@@ -471,10 +502,10 @@
           g = g2;
         }
         var I = this.o.step ? this.o.step(m.getZoom()) : 5, col = this.o.color ? this.o.color() : ['rgba(255,214,128,.8)', 'rgba(255,190,70,1)', 'rgba(0,0,0,.65)'];
-        var k0 = Math.ceil(mn / I), k1 = Math.floor(mx / I), minor = [], major = [], labels = [], k;
+        var k0 = Math.ceil(mn / I), k1 = Math.floor(mx / I), levs = [], labels = [], k, osm = !!col[3];
         function lerp(a, b, L1) { return (L1 - a) / (b - a); }
         for (k = k0; k <= k1; k++) {
-          var Lv = k * I, isMajor = k % 5 === 0, arr = isMajor ? major : minor, placed = [];
+          var Lv = k * I, isMajor = k % 5 === 0, arr = [], placed = []; levs.push([Lv, isMajor, arr]);
           for (j = 0; j < rows - 1; j++) for (i = 0; i < cols - 1; i++) {
             var a = g[j * cols + i], b = g[j * cols + i + 1], cc = g[(j + 1) * cols + i + 1], d = g[(j + 1) * cols + i];
             if (!(isFinite(a) && isFinite(b) && isFinite(cc) && isFinite(d))) continue;
@@ -499,7 +530,7 @@
             if (isMajor && (i + j) % 6 === 0) {
               var px = (segs[0][0][0] + segs[0][1][0]) / 2, py = (segs[0][0][1] + segs[0][1][1]) / 2, near = false;
               for (var q = 0; q < placed.length; q++) if (Math.abs(placed[q][0] - px) < 150 && Math.abs(placed[q][1] - py) < 90) { near = true; break; }
-              if (!near && px > 20 && py > 20 && px < w - 40 && py < h - 20) { placed.push([px, py]); labels.push([px, py, String(Lv)]); }
+              if (!near && px > 20 && py > 20 && px < w - 40 && py < h - 20) { placed.push([px, py]); labels.push([px, py, String(Lv), Lv]); }
             }
           }
         }
@@ -510,18 +541,32 @@
           arr2.forEach(function (sg) { ctx.moveTo(sg[0][0], sg[0][1]); ctx.lineTo(sg[1][0], sg[1][1]); });
           ctx.strokeStyle = style; ctx.lineWidth = wd; ctx.stroke();
         }
-        strokeSegs(minor, col[0], 0.7);
-        strokeSegs(major, col[1], 1.2);
+        function ramp(v) { return rampColor(mx > mn ? (v - mn) / (mx - mn) : 0.5, osm); }
+        levs.forEach(function (lv) { strokeSegs(lv[2], 'rgba(' + ramp(lv[0]) + ',' + (lv[1] ? 1 : 0.8) + ')', lv[1] ? 1.2 : 0.7); });
         ctx.font = '600 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         labels.forEach(function (lb) {
           ctx.lineWidth = 3; ctx.strokeStyle = col[2]; ctx.strokeText(lb[2], lb[0], lb[1]);
-          ctx.fillStyle = col[1]; ctx.fillText(lb[2], lb[0], lb[1]);
+          ctx.fillStyle = 'rgb(' + ramp(lb[3]) + ')'; ctx.fillText(lb[2], lb[0], lb[1]);
         });
       }
     });
     return LC;
   }
+  // gradasi kontur: lembah = merah muda pudar, tengah = abu terang, punggung = hijau muda (versi gelap untuk peta terang)
+  function rampColor(t, dark) {
+    t = Math.max(0, Math.min(1, t));
+    var A = dark ? [190, 45, 65] : [255, 130, 145], M = dark ? [120, 120, 120] : [235, 235, 235], B = dark ? [25, 130, 65] : [140, 255, 170], a, b, u;
+    if (t < 0.5) { a = A; b = M; u = t / 0.5; } else { a = M; b = B; u = (t - 0.5) / 0.5; }
+    return Math.round(a[0] + (b[0] - a[0]) * u) + ',' + Math.round(a[1] + (b[1] - a[1]) * u) + ',' + Math.round(a[2] + (b[2] - a[2]) * u);
+  }
+  // kelas kemiringan (%): [r,g,b,alpha 0-255]; batas = SLOPE_CLASSES
+  var SLOPE_CLASSES = [
+    { max: 2, rgb: [57, 255, 20], a: 46, t: '0–2' }, { max: 5, rgb: [0, 190, 255], a: 120, t: '2–5' }, { max: 8, rgb: [30, 80, 230], a: 130, t: '5–8' },
+    { max: 12, rgb: [155, 55, 225], a: 140, t: '8–12' }, { max: 15, rgb: [85, 20, 140], a: 155, t: '12–15' }, { max: Infinity, rgb: [128, 0, 32], a: 170, t: '>15' }
+  ];
+  function slopeClass(p) { for (var i = 0; i < SLOPE_CLASSES.length; i++) if (p <= SLOPE_CLASSES[i].max) { var c = SLOPE_CLASSES[i]; return [c.rgb[0], c.rgb[1], c.rgb[2], c.a]; } return [0, 0, 0, 0]; }
   function contours(o) { return new (layerClass())(o); }
+  function slopeLayer(o) { o = o || {}; o.mode = 'slope'; o.pane = 'slopePane'; o.z = 255; return new (layerClass())(o); }
 
-  root.HzDem = { contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
+  root.HzDem = { slopeLayer: slopeLayer, SLOPE_CLASSES: SLOPE_CLASSES, rampColor: rampColor, contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
 })(window);

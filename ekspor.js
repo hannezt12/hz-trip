@@ -136,8 +136,12 @@
     });
     if (opts.contours && opts.contours.length) {
       out.push('<Folder><name>Kontur ' + opts.cstep + ' m</name>');
+      var cmn = Infinity, cmx = -Infinity;
+      opts.contours.forEach(function (c) { cmn = Math.min(cmn, c.level); cmx = Math.max(cmx, c.level); });
       opts.contours.forEach(function (c) {
-        out.push('<Placemark><name>' + c.level + ' m</name><styleUrl>#' + (c.major ? 'cJ' : 'cM') + '</styleUrl><MultiGeometry>' +
+        var rgb = (opts.ramp ? opts.ramp(cmx > cmn ? (c.level - cmn) / (cmx - cmn) : 0.5, false) : '140,255,170').split(',');
+        var hx = function (n) { return ('0' + (+n).toString(16)).slice(-2); }, kc = (c.major ? 'ff' : 'cc') + hx(rgb[2]) + hx(rgb[1]) + hx(rgb[0]);
+        out.push('<Placemark><name>' + c.level + ' m</name><Style><LineStyle><color>' + kc + '</color><width>' + (c.major ? 1.6 : 1) + '</width></LineStyle></Style><MultiGeometry>' +
           c.lines.map(function (l) { return '<LineString><coordinates>' + l.map(function (q) { return q[1] + ',' + q[0] + ',' + c.level; }).join(' ') + '</coordinates></LineString>'; }).join('') + '</MultiGeometry></Placemark>');
       });
       out.push('</Folder>');
