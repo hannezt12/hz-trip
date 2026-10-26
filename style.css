@@ -384,7 +384,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 
 .locbtn.hason{position:relative}.locbtn.hason::after{content:"";position:absolute;top:5px;right:5px;width:9px;height:9px;border-radius:50%;background:#4DA3FF;border:1.5px solid var(--ov)}
 .locbtn.open svg{stroke:#4DA3FF}
-.toolpanel{position:absolute;right:10px;bottom:128px;z-index:1000;width:236px;background:var(--ov);border:1px solid var(--line);border-radius:14px;padding:8px 10px 6px;color:var(--tx);box-shadow:0 4px 18px rgba(0,0,0,.35)}
+.toolpanel{position:absolute;right:10px;bottom:128px;z-index:1000;width:236px;max-height:calc(100% - 140px);overflow-y:auto;background:var(--ov);border:1px solid var(--line);border-radius:14px;padding:8px 10px 6px;color:var(--tx);box-shadow:0 4px 18px rgba(0,0,0,.35)}
 .toolpanel .tt{font-size:calc(11px*var(--fs,1));letter-spacing:.08em;opacity:.7;margin:2px 2px 4px}
 .tsw{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:44px;background:none;border:0;color:inherit;font:inherit;padding:0 2px;text-align:left;cursor:pointer}
 .tsw .tl{display:flex;flex-direction:column;font-size:calc(15px*var(--fs,1))}.tsw small{opacity:.65;font-size:calc(11px*var(--fs,1))}
@@ -393,3 +393,10 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .tsw.on .tk{background:#4DA3FF}.tsw.on .tk::after{transform:translateX(16px)}
 .tseg{display:flex;gap:6px;margin:-2px 0 4px}.tseg button{flex:1;min-height:34px;border-radius:9px;border:1px solid var(--line);background:none;color:inherit;font:inherit;font-size:calc(13px*var(--fs,1));cursor:pointer}
 .tseg button.on{border-color:#4DA3FF;color:#4DA3FF}
+
+.tseg{flex-wrap:nowrap}
+.tbtn{width:100%;min-height:40px;border-radius:9px;border:1px solid var(--line);background:none;color:inherit;font:inherit;font-size:calc(14px*var(--fs,1));cursor:pointer;margin:2px 0 4px}
+.lkbar{position:absolute;top:10px;left:64px;right:10px;z-index:1000;display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:var(--ov);border:1px solid var(--line);border-radius:12px;padding:6px 8px;color:var(--tx);font-size:calc(13px*var(--fs,1))}
+.lkbar span{flex:1 1 100%}.lkbar button{flex:1;min-height:38px;border-radius:9px;border:1px solid var(--line);background:none;color:inherit;font:inherit;cursor:pointer}
+.lkbar button.pri{background:#4DA3FF;border-color:#4DA3FF;color:#06121c;font-weight:600}
+.lktip{background:rgba(13,18,21,.75);border:0;color:#BFEAFF;font-size:calc(11px*var(--fs,1));padding:1px 5px;box-shadow:none}.lktip::before{display:none}

@@ -1103,7 +1103,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.8.5'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.8.7'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1392,6 +1392,7 @@
     }
     m._pinInfo = function (ll, html) { show([{ ll: ll, html: html, txt: '', col: '#4DA3FF', t: 0, dot: true }]); };
     m.on('click', function (e) {
+      if (m._lakeDraw) { m._lakeDraw.tap(e.latlng); return; }
       if (m._slopeOn) { slopeTap(m, e); return; }
       var grp = groupFn(), pins = [];
       (grp || []).forEach(function (g) { (g._pins || []).forEach(function (p) { pins.push(p); }); });
@@ -1576,13 +1577,14 @@
     S.settings.hach = !!on; saveSettings();
     if (!map || !window.HzDem) return;
     if (on && !DM.hach) {
-      DM.hach = HzDem.hachLayer({ kind: function () { return S.settings.hachKind || 'down'; }, osm: function () { return S.settings.mapMode === 'osm'; }, onMissing: function () { if (Date.now() - DM.miss > 20000) { DM.miss = Date.now(); toast('Data ketinggian belum lengkap (butuh internet)'); } } });
+      DM.hach = HzDem.hachLayer({ kind: function () { return S.settings.hachKind || 'down'; }, umum: function () { return S.settings.hachSmooth === 'umum'; }, osm: function () { return S.settings.mapMode === 'osm'; }, onMissing: function () { if (Date.now() - DM.miss > 20000) { DM.miss = Date.now(); toast('Data ketinggian belum lengkap (butuh internet)'); } } });
       DM.hach.addTo(map);
     } else if (!on && DM.hach) { map.removeLayer(DM.hach); DM.hach = null; }
     if (DM.sync) DM.sync();
   }
   function demButtons(m) {
     // satu tombol "Alat peta" yang membuka panel berlabel
+    var closeP = function () {};
     var panel = document.createElement('div');
     panel.className = 'toolpanel'; panel.style.display = 'none';
     m.getContainer().appendChild(panel);
@@ -1590,13 +1592,21 @@
     function row(id, label, sub) { return '<div class="trow"><button type="button" class="tsw" data-t="' + id + '" role="switch"><span class="tl">' + label + (sub ? '<small>' + sub + '</small>' : '') + '</span><span class="tk"></span></button></div>'; }
     panel.innerHTML = '<div class="tt">ALAT PETA</div>' + row('contour', 'Kontur') + row('slopeLayer', 'Kemiringan (warna)') +
       row('hach', 'Arsiran') + '<div class="tseg" id="tHk"><button type="button" data-k="down">Arah turun</button><button type="button" data-k="row">Arah row</button></div>' +
-      row('slopeTap', 'Info lereng', 'ketuk titik di peta') + row('prof', 'Profil ketinggian');
+      '<div class="tseg" id="tHs"><button type="button" data-s="detail">Detail</button><button type="button" data-s="umum">Umum</button></div>' +
+      row('slopeTap', 'Info lereng', 'ketuk titik di peta') + row('prof', 'Profil ketinggian') +
+      '<div class="tt" style="margin-top:6px">SUMBER DATA</div>' + row('useNas', 'DEMNAS', '<span id="tNasSub"></span>') + row('useFree', 'DEM gratis', '±30 m, perlu internet') +
+      '<div class="tt" style="margin-top:6px">DANAU</div>' + row('lakesOn', 'Koreksi danau') + '<div class="trow"><button type="button" class="tbtn" data-t="lakes" id="tLakes">Kelola danau</button></div>';
     function state(id) {
-      return id === 'contour' ? !!S.settings.contour : id === 'slopeLayer' ? !!S.settings.slopeLayer : id === 'hach' ? !!S.settings.hach : id === 'slopeTap' ? !!m._slopeOn : !!S.profOpen;
+      return id === 'contour' ? !!S.settings.contour : id === 'slopeLayer' ? !!S.settings.slopeLayer : id === 'hach' ? !!S.settings.hach : id === 'slopeTap' ? !!m._slopeOn :
+        id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : !!S.profOpen;
     }
     function sync() {
       var any = false;
       panel.querySelectorAll('.tsw').forEach(function (b) { var on = state(b.getAttribute('data-t')); b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); if (on) any = true; });
+      var hs = S.settings.hachSmooth || 'detail';
+      panel.querySelectorAll('#tHs button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-s') === hs); });
+      if ($('tNasSub')) $('tNasSub').textContent = window.HzDem && HzDem.hasAnyLocal() ? 'data impor, ±8 m' : 'belum diimpor (Pengaturan > Peta)';
+      $('tLakes').textContent = 'Kelola danau (' + lakesList().length + ')  ›';
       var k = S.settings.hachKind || 'down';
       panel.querySelectorAll('#tHk button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-k') === k); });
       if (DM.main) DM.main.classList.toggle('hason', any);
@@ -1605,11 +1615,17 @@
     panel.onclick = function (e) {
       var k = e.target.closest && e.target.closest('#tHk button');
       if (k) { S.settings.hachKind = k.getAttribute('data-k'); saveSettings(); if (!S.settings.hach) setHach(true); else if (DM.hach) DM.hach.redraw(); sync(); return; }
-      var b = e.target.closest && e.target.closest('.tsw'); if (!b) return;
+      var sm = e.target.closest && e.target.closest('#tHs button');
+      if (sm) { S.settings.hachSmooth = sm.getAttribute('data-s'); saveSettings(); if (!S.settings.hach) setHach(true); else if (DM.hach) DM.hach.redraw(); sync(); return; }
+      var b = e.target.closest && e.target.closest('.tsw, .tbtn'); if (!b) return;
       var id = b.getAttribute('data-t');
+      if (id === 'lakes') { closeP(); openLakes(); return; }
       if (id === 'contour') setContour(!S.settings.contour);
       else if (id === 'slopeLayer') setSlopeLayer(!S.settings.slopeLayer);
       else if (id === 'hach') setHach(!S.settings.hach);
+      else if (id === 'useNas') setSource('nas', S.settings.useNas === false);
+      else if (id === 'useFree') setSource('free', S.settings.useFree === false);
+      else if (id === 'lakesOn') { S.settings.lakesOn = S.settings.lakesOn === false; saveSettings(); applyLakes(); demRedraw(); }
       else if (id === 'slopeTap') {
         m._slopeOn = !m._slopeOn; if (m._pinClear) m._pinClear();
         toast(m._slopeOn ? 'Ketuk peta untuk info lereng' : 'Mode lereng mati');
@@ -1624,12 +1640,14 @@
         L.DomEvent.disableClickPropagation(b);
         b.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
         b.onclick = function () { var open = panel.style.display === 'none'; panel.style.display = open ? 'block' : 'none'; b.classList.toggle('open', open); sync(); };
-        DM.main = b; return b;
+        DM.main = b; closeP = function () { panel.style.display = 'none'; b.classList.remove('open'); }; DM.closePanel = closeP; return b;
       }
     });
     new Ctl().addTo(m);
     // tombol lama dipertahankan sebagai penampung status (tidak tampil)
     DM.btnL = document.createElement('button'); DM.btnS = document.createElement('button'); DM.btnK = document.createElement('button'); DM.btnP = document.createElement('button');
+    if (window.HzDem) HzDem.setSources(S.settings.useNas !== false, S.settings.useFree !== false);
+    applyLakes();
     if (S.settings.contour) setContour(true);
     if (S.settings.slopeLayer) setSlopeLayer(true);
     if (S.settings.hach) setHach(true);
@@ -1637,14 +1655,104 @@
   }
   var ARROW = '<span style="display:inline-block;transform:rotate(DEGdeg);font-weight:700">&#8593;</span>';
   function fmt1(v) { return String(Math.round(v * 10) / 10).replace('.', ','); }
+  function slopeLine(tag, r) {
+    return (tag ? '<small>' + tag + '</small> ' : '') + '<b>' + Math.round(r.h) + ' mdpl</b> · ' + (r.pct < 0.5 ? 'datar' : 'lereng ' + fmt1(r.pct) + '% ' + ARROW.replace('DEG', Math.round(r.down)));
+  }
   function slopeTap(m, e) {
     if (!window.HzDem) return;
-    var ll = e.latlng;
-    HzDem.info(ll.lat, ll.lng).then(function (r) {
-      if (!r) { toast('Data ketinggian belum tersedia (butuh internet)'); return; }
-      var txt = '<b>' + Math.round(r.h) + ' m</b> · ' + (r.pct < 0.5 ? 'datar' : 'lereng ' + fmt1(r.pct) + '% ' + ARROW.replace('DEG', Math.round(r.down)));
-      m._pinInfo([ll.lat, ll.lng], txt);
+    var ll = e.latlng, both = S.settings.useNas !== false && S.settings.useFree !== false;
+    if (!both) {
+      HzDem.info(ll.lat, ll.lng).then(function (r) {
+        if (!r) { toast(S.settings.useNas === false ? 'Data ketinggian belum tersedia (butuh internet)' : 'Titik ini di luar area DEMNAS'); return; }
+        m._pinInfo([ll.lat, ll.lng], '<div>' + slopeLine('', r) + '</div>');
+      });
+      return;
+    }
+    Promise.all([HzDem.info(ll.lat, ll.lng, 'nas'), HzDem.info(ll.lat, ll.lng, 'free')]).then(function (r) {
+      var a = r[0], b = r[1];
+      if (!a && !b) { toast('Data ketinggian belum tersedia (butuh internet)'); return; }
+      var t = [];
+      if (a) t.push(slopeLine('DEMNAS', a));
+      if (b) t.push(slopeLine('DEM gratis', b));
+      if (a && b) t.push('<small>Selisih ' + Math.round(Math.abs(a.h - b.h)) + ' m · ' + fmt1(Math.abs(a.pct - b.pct)) + '% kemiringan</small>');
+      m._pinInfo([ll.lat, ll.lng], '<div style="line-height:1.35">' + t.join('<br>') + '</div>');
     });
+  }
+  // ---------- sumber data dan koreksi danau ----------
+  function demRedraw() {
+    CL.clear();
+    [DM.layer, DM.slope, DM.hach].forEach(function (l) { if (l) l.redraw(); });
+    if (S.profOpen) renderProfile();
+    if (DM.sync) DM.sync();
+  }
+  function setSource(which, on) {
+    var nas = S.settings.useNas !== false, free = S.settings.useFree !== false;
+    if (which === 'nas') nas = on; else free = on;
+    if (!nas && !free) { toast('Minimal satu sumber data harus nyala'); return; }
+    S.settings.useNas = nas; S.settings.useFree = free; saveSettings();
+    if (window.HzDem) HzDem.setSources(nas, free);
+    demRedraw();
+    toast(nas && free ? 'DEMNAS + DEM gratis' : nas ? 'DEMNAS saja' : 'DEM gratis saja');
+  }
+  function lakesList() { return S.settings.lakes || (S.settings.lakes = []); }
+  function applyLakes() {
+    if (window.HzDem) HzDem.setLakes(S.settings.lakesOn !== false ? lakesList() : []);
+    drawLakes();
+  }
+  function drawLakes() {
+    if (!map) return;
+    if (DM.lakeLayer) { map.removeLayer(DM.lakeLayer); DM.lakeLayer = null; }
+    if (S.settings.lakesOn === false || !lakesList().length) return;
+    var g = L.layerGroup();
+    lakesList().forEach(function (l) {
+      L.polygon(l.pts, { color: '#7FD8FF', weight: 1.2, dashArray: '5 4', fill: false, interactive: false }).bindTooltip(esc(l.name), { permanent: true, direction: 'center', className: 'lktip' }).addTo(g);
+    });
+    g.addTo(map); DM.lakeLayer = g;
+  }
+  function openLakes() {
+    var ls = lakesList();
+    openSheet('<div class="grab"></div><div class="st">DANAU</div>' +
+      (ls.length ? ls.map(function (l, i) { return '<div class="row" style="margin-top:8px"><input type="text" data-lk="' + i + '" value="' + esc(l.name) + '" maxlength="30"><button class="btn" data-del="' + i + '" style="flex-shrink:0">Hapus</button></div>'; }).join('') : '<div class="muted" style="margin:8px 0">Belum ada tanda danau.</div>') +
+      '<div class="muted" style="margin-top:10px">Di dalam tanda, permukaan dianggap datar di bawah tepinya, jadi panah di tepi menunjuk ke dalam. Dipakai oleh kontur, kemiringan, arsiran, Info lereng, dan profil. Matikan dengan saklar Koreksi danau.</div>' +
+      '<button class="btn pri" id="lkNew" style="width:100%;margin-top:12px;height:50px">+ Tandai danau baru</button><button class="btn" id="lkX" style="width:100%;margin-top:8px">Tutup</button>');
+    $('lkX').onclick = closeSheet;
+    $('lkNew').onclick = function () { closeSheet(); lakeStart(); };
+    $('sheet').querySelectorAll('input[data-lk]').forEach(function (inp) {
+      inp.onchange = function () { var l = lakesList()[+inp.getAttribute('data-lk')]; if (l) { l.name = inp.value.trim() || l.name; saveSettings(); drawLakes(); } };
+    });
+    $('sheet').querySelectorAll('button[data-del]').forEach(function (b) {
+      b.onclick = function () {
+        var i = +b.getAttribute('data-del'), l = lakesList()[i]; if (!l) return;
+        askConfirm('Hapus tanda "' + l.name + '"?', 'Kontur dan arah panah di sekitarnya kembali mengikuti data asli.', 'Hapus', function () { lakesList().splice(i, 1); saveSettings(); applyLakes(); demRedraw(); openLakes(); });
+      };
+    });
+  }
+  function lakeStart() {
+    if (!map || !window.HzDem) return;
+    if (DM.closePanel) DM.closePanel();
+    map._slopeOn = false; if (DM.sync) DM.sync();
+    var pts = [], pl = L.polyline([], { color: '#7FD8FF', weight: 2 }).addTo(map), mk = L.layerGroup().addTo(map), bar = document.createElement('div');
+    bar.className = 'lkbar';
+    bar.innerHTML = '<span id="lkT"></span><button type="button" id="lkU">Urung</button><button type="button" id="lkD" class="pri">Selesai</button><button type="button" id="lkC">Batal</button>';
+    map.getContainer().appendChild(bar);
+    L.DomEvent.disableClickPropagation(bar);
+    function upd() { pl.setLatLngs(pts.length > 2 ? pts.concat([pts[0]]) : pts); $('lkT').textContent = 'Ketuk tepi danau titik demi titik (' + pts.length + ')'; }
+    function end() { map._lakeDraw = null; map.removeLayer(pl); map.removeLayer(mk); bar.remove(); }
+    map._lakeDraw = { tap: function (ll) { pts.push([+ll.lat.toFixed(6), +ll.lng.toFixed(6)]); L.circleMarker(ll, { radius: 4, color: '#7FD8FF', weight: 2, fillOpacity: 1 }).addTo(mk); upd(); } };
+    $('lkU').onclick = function () { pts.pop(); mk.clearLayers(); pts.forEach(function (q) { L.circleMarker(q, { radius: 4, color: '#7FD8FF', weight: 2, fillOpacity: 1 }).addTo(mk); }); upd(); };
+    $('lkC').onclick = function () { end(); };
+    $('lkD').onclick = function () {
+      if (pts.length < 3) { toast('Minimal 3 titik'); return; }
+      toast('Menghitung…');
+      HzDem.lakeLevel(pts).then(function (lv) {
+        if (lv === null) { toast('Data ketinggian belum tersedia di area ini'); return; }
+        var n = lakesList().length + 1;
+        lakesList().push({ id: Date.now(), name: 'Danau ' + n, pts: pts.slice(), level: lv });
+        S.settings.lakesOn = true; saveSettings(); end(); applyLakes(); demRedraw(); openLakes();
+      });
+    };
+    upd();
+    toast('Ketuk tepi danau di peta');
   }
   function tripPts(pts, t) {
     var out = [];

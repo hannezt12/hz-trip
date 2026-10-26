@@ -33,17 +33,20 @@
     if (!holes) return arr;
     return netBlob(u).then(decode).then(function (n) { for (i = 0; i < 65536; i++) if (arr[i] !== arr[i]) arr[i] = n[i]; return arr; }).catch(function () { return arr; });
   }
-  function loadTile(z, x, y) {
+  var cur = 'mix', lakes = []; // sumber aktif: mix (DEMNAS + gratis), nas (DEMNAS saja), free (gratis saja)
+  function loadTile(z, x, y, src) {
+    src = src || cur;
     var n = Math.pow(2, z);
     x = ((x % n) + n) % n;
     if (y < 0 || y >= n) return Promise.resolve(null);
-    var k = z + '/' + x + '/' + y;
+    var k = src + '|' + z + '/' + x + '/' + y;
     if (mem.has(k)) { var v = mem.get(k); mem.delete(k); mem.set(k, v); return Promise.resolve(v); }
     if (pend[k]) return pend[k];
     if (fail[k] && Date.now() - fail[k] < 60000) return Promise.resolve(null);
     var u = urlOf(z, x, y);
-    var p = localGet(z, x, y).then(function (lb) {
-      if (lb) return decode(lb).then(function (arr) { return fillHoles(arr, u); });
+    var p = (src === 'free' ? Promise.resolve(null) : localGet(z, x, y)).then(function (lb) {
+      if (lb) return decode(lb).then(function (arr) { return src === 'mix' ? fillHoles(arr, u) : arr; });
+      if (src === 'nas') throw new Error('tidak ada data DEMNAS');
       return netBlob(u).then(decode);
     }).then(function (arr) {
       mem.set(k, arr);
@@ -58,21 +61,62 @@
     var n = 256 * Math.pow(2, z), s = Math.sin(lat * Math.PI / 180);
     return [(lng + 180) / 360 * n, (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n];
   }
-  function pix(z, ix, iy) {
+  function pix(z, ix, iy, src) {
     var n = Math.pow(2, z), tx = Math.floor(ix / 256), ty = Math.floor(iy / 256);
     tx = ((tx % n) + n) % n;
-    var t = mem.get(z + '/' + tx + '/' + ty);
+    var t = mem.get((src || cur) + '|' + z + '/' + tx + '/' + ty);
     if (!t) return NaN;
     return t[(iy - ty * 256) * 256 + (((ix % 256) + 256) % 256)];
   }
   // ketinggian (m) di satu titik; NaN bila kotaknya belum dimuat (panggil ensure dulu)
-  function elev(lat, lng, z) {
+  function rawElev(lat, lng, z, src) {
     var p = pxy(lat, lng, z), fx = p[0] - 0.5, fy = p[1] - 0.5, x0 = Math.floor(fx), y0 = Math.floor(fy), ax = fx - x0, ay = fy - y0;
-    var a = pix(z, x0, y0), b = pix(z, x0 + 1, y0), c = pix(z, x0, y0 + 1), d = pix(z, x0 + 1, y0 + 1);
+    var a = pix(z, x0, y0, src), b = pix(z, x0 + 1, y0, src), c = pix(z, x0, y0 + 1, src), d = pix(z, x0 + 1, y0 + 1, src);
     return (a * (1 - ax) + b * ax) * (1 - ay) + (c * (1 - ax) + d * ax) * ay;
   }
+  // koreksi danau: di dalam poligon permukaan dianggap datar di level tetap
+  function inPoly(lat, lng, pts) {
+    var ins = false, i, j;
+    for (i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      var yi = pts[i][0], xi = pts[i][1], yj = pts[j][0], xj = pts[j][1];
+      if ((yi > lat) !== (yj > lat) && lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) ins = !ins;
+    }
+    return ins;
+  }
+  function elev(lat, lng, z, src) {
+    var v = rawElev(lat, lng, z, src);
+    if (lakes.length && v === v) {
+      for (var i = 0; i < lakes.length; i++) {
+        var lk = lakes[i], b = lk.bb;
+        if (lat >= b[0] && lat <= b[2] && lng >= b[1] && lng <= b[3] && inPoly(lat, lng, lk.pts)) return lk.level;
+      }
+    }
+    return v;
+  }
+  function setLakes(list) {
+    lakes = (list || []).filter(function (l) { return l && l.pts && l.pts.length >= 3 && isFinite(l.level); }).map(function (l) {
+      var s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
+      l.pts.forEach(function (q) { s = Math.min(s, q[0]); n = Math.max(n, q[0]); w = Math.min(w, q[1]); e = Math.max(e, q[1]); });
+      return { pts: l.pts, level: l.level, bb: [s, w, n, e] };
+    });
+  }
+  // level danau = titik terendah di tepi poligon (data asli) dikurangi 2 m
+  function lakeLevel(pts) {
+    var S = [], i, k;
+    for (i = 0; i < pts.length; i++) {
+      var a = pts[i], b = pts[(i + 1) % pts.length], dm = Math.hypot((b[0] - a[0]) * 111320, (b[1] - a[1]) * 111320 * Math.cos(a[0] * Math.PI / 180)), nn = Math.max(1, Math.ceil(dm / 10));
+      for (k = 0; k < nn; k++) S.push([a[0] + (b[0] - a[0]) * k / nn, a[1] + (b[1] - a[1]) * k / nn]);
+    }
+    return ensure(14, S).then(function () {
+      var mn = Infinity;
+      S.forEach(function (q) { var v = rawElev(q[0], q[1], 14); if (v === v && v < mn) mn = v; });
+      return isFinite(mn) ? mn - 2 : null;
+    });
+  }
+  function setSources(nas, free) { cur = nas && free ? 'mix' : (nas ? 'nas' : 'free'); resetMem(); }
+  function source() { return cur; }
   // muat semua kotak yang dibutuhkan titik-titik (pts: [[lat,lng],...]); hasil: {total, ok}
-  function ensure(z, pts) {
+  function ensure(z, pts, src) {
     var need = {}, list = [];
     pts.forEach(function (q) {
       var p = pxy(q[0], q[1], z), X, Y;
@@ -88,7 +132,7 @@
     function worker() {
       if (i >= list.length) return Promise.resolve();
       var c = list[i++];
-      return loadTile(z, c[0], c[1]).then(function (t) { if (t) ok++; return worker(); });
+      return loadTile(z, c[0], c[1], src).then(function (t) { if (t) ok++; return worker(); });
     }
     var ws = [];
     for (var w = 0; w < Math.min(6, list.length); w++) ws.push(worker());
@@ -125,6 +169,7 @@
     return lreq('meta', 'readonly', function (s) { return s.get('sheets'); }).then(function (v) { cov = v || []; return cov; }).catch(function () { cov = []; return cov; });
   }
   function hasLocal(lat, lng) {
+    if (cur === 'free') return false;
     for (var i = 0; i < cov.length; i++) { var b = cov[i].bbox; if (lng >= b[0] && lng <= b[2] && lat >= b[1] && lat <= b[3]) return true; }
     return false;
   }
@@ -333,11 +378,11 @@
   }
 
   // ---------- info lereng di satu titik ----------
-  function info(lat, lng) {
+  function info(lat, lng, src) {
     var Z = 14, d = 30, dLat = d / 111320, dLng = dLat / Math.cos(lat * Math.PI / 180);
     var P = [[lat, lng], [lat + dLat, lng], [lat - dLat, lng], [lat, lng + dLng], [lat, lng - dLng]];
-    return ensure(Z, P).then(function () {
-      var e0 = elev(lat, lng, Z), n = elev(P[1][0], P[1][1], Z), s = elev(P[2][0], P[2][1], Z), e = elev(P[3][0], P[3][1], Z), w = elev(P[4][0], P[4][1], Z);
+    return ensure(Z, P, src).then(function () {
+      var e0 = elev(lat, lng, Z, src), n = elev(P[1][0], P[1][1], Z, src), s = elev(P[2][0], P[2][1], Z, src), e = elev(P[3][0], P[3][1], Z, src), w = elev(P[4][0], P[4][1], Z, src);
       if (!isFinite(e0) || !isFinite(n) || !isFinite(s) || !isFinite(e) || !isFinite(w)) return null;
       var gx = (e - w) / (2 * d), gy = (n - s) / (2 * d), pct = 100 * Math.hypot(gx, gy);
       var down = (Math.atan2(-gx, -gy) * 180 / Math.PI + 360) % 360;
@@ -478,7 +523,7 @@
       _renderHach: function (zd) {
         var c = this._canvas, m = this._map, min = this._min, ctx = c.getContext('2d'), w = c.width, h = c.height, G = 30;
         ctx.clearRect(0, 0, w, h);
-        var cen = m.getCenter(), mpp = 156543.03 * Math.cos(cen.lat * Math.PI / 180) / Math.pow(2, m.getZoom()), dm = Math.max(25, 12 * mpp), kind = this.o.kind ? this.o.kind() : 'down', osm = this.o.osm && this.o.osm();
+        var cen = m.getCenter(), mpp = 156543.03 * Math.cos(cen.lat * Math.PI / 180) / Math.pow(2, m.getZoom()), dm = this.o.umum && this.o.umum() ? Math.max(70, 30 * mpp) : Math.max(25, 12 * mpp), kind = this.o.kind ? this.o.kind() : 'down', osm = this.o.osm && this.o.osm();
         var items = [], x0 = Math.ceil(min.x / G) * G - min.x, y0 = Math.ceil(min.y / G) * G - min.y, x, y;
         for (y = y0; y < h; y += G) for (x = x0; x < w; x += G) {
           var ll = m.layerPointToLatLng(L.point(min.x + x, min.y + y)), dLat = dm / 111320, dLng = dLat / Math.cos(ll.lat * Math.PI / 180);
@@ -601,5 +646,5 @@
   function hachLayer(o) { o = o || {}; o.mode = 'hach'; o.pane = 'hachPane'; o.z = 265; return new (layerClass())(o); }
   function slopeLayer(o) { o = o || {}; o.mode = 'slope'; o.pane = 'slopePane'; o.z = 255; return new (layerClass())(o); }
 
-  root.HzDem = { hachLayer: hachLayer, slopeLayer: slopeLayer, SLOPE_CLASSES: SLOPE_CLASSES, rampColor: rampColor, contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
+  root.HzDem = { setSources: setSources, source: source, setLakes: setLakes, lakeLevel: lakeLevel, hasAnyLocal: function () { return cov.length > 0; }, hachLayer: hachLayer, slopeLayer: slopeLayer, SLOPE_CLASSES: SLOPE_CLASSES, rampColor: rampColor, contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
 })(window);
