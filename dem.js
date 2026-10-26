@@ -254,6 +254,84 @@
   }
   loadCov();
 
+
+  // ---------- garis kontur untuk ekspor (KML): bbox [w,s,e,n], step meter ----------
+  function contourLines(bbox, step, onProg) {
+    var Z = 14, p0 = pxy(bbox[3], bbox[0], Z), p1 = pxy(bbox[1], bbox[2], Z);
+    var pts = [], x, y;
+    for (x = p0[0]; x <= p1[0] + 200; x += 200) for (y = p0[1]; y <= p1[1] + 200; y += 200) pts.push(unpxy(Math.min(x, p1[0]), Math.min(y, p1[1]), Z));
+    pts.push(unpxy(p1[0], p1[1], Z));
+    return ensure(Z, pts).then(function (r) {
+      if (!r.ok) throw new Error('Data ketinggian belum lengkap (butuh internet)');
+      var W = p1[0] - p0[0], H = p1[1] - p0[1], st = Math.max(1, Math.ceil(Math.max(W, H) / 600));
+      var cols = Math.floor(W / st) + 1, rows = Math.floor(H / st) + 1, g = new Float32Array(cols * rows), i, j, mn = Infinity, mx = -Infinity;
+      for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+        var q = unpxy(p0[0] + i * st, p0[1] + j * st, Z), v = elev(q[0], q[1], Z);
+        g[j * cols + i] = v; if (isFinite(v)) { if (v < mn) mn = v; if (v > mx) mx = v; }
+      }
+      if (!isFinite(mn)) return [];
+      var passes = hasLocal((bbox[1] + bbox[3]) / 2, (bbox[0] + bbox[2]) / 2) ? 1 : 2, pass;
+      for (pass = 0; pass < passes; pass++) {
+        var g2 = new Float32Array(g.length);
+        for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+          var s = 0, n = 0, dj, di;
+          for (dj = -1; dj <= 1; dj++) for (di = -1; di <= 1; di++) {
+            var ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= cols || jj >= rows) continue;
+            var vv = g[jj * cols + ii]; if (isFinite(vv)) { s += vv; n++; }
+          }
+          g2[j * cols + i] = n ? s / n : NaN;
+        }
+        g = g2;
+      }
+      function ll(ix, iy) { var q = unpxy(p0[0] + ix * st, p0[1] + iy * st, Z); return [+q[0].toFixed(6), +q[1].toFixed(6)]; }
+      var out = [], k;
+      for (k = Math.ceil(mn / step); k <= Math.floor(mx / step); k++) {
+        var Lv = k * step, segs = [], E = {};
+        function lerp(a, b) { return (Lv - a) / (b - a); }
+        for (j = 0; j < rows - 1; j++) for (i = 0; i < cols - 1; i++) {
+          var a = g[j * cols + i], b = g[j * cols + i + 1], cc = g[(j + 1) * cols + i + 1], d = g[(j + 1) * cols + i];
+          if (!(isFinite(a) && isFinite(b) && isFinite(cc) && isFinite(d))) continue;
+          if (Lv < Math.min(a, b, cc, d) || Lv > Math.max(a, b, cc, d)) continue;
+          var idx = (a >= Lv ? 8 : 0) | (b >= Lv ? 4 : 0) | (cc >= Lv ? 2 : 0) | (d >= Lv ? 1 : 0);
+          if (idx === 0 || idx === 15) continue;
+          // titik di tepi: kunci tepi supaya segmen bisa disambung
+          var T = { k: 'h' + i + ',' + j, p: function () { return ll(i + lerp(a, b), j); } }, Rr = { k: 'v' + (i + 1) + ',' + j, p: function () { return ll(i + 1, j + lerp(b, cc)); } },
+              B = { k: 'h' + i + ',' + (j + 1), p: function () { return ll(i + lerp(d, cc), j + 1); } }, Lf = { k: 'v' + i + ',' + j, p: function () { return ll(i, j + lerp(a, d)); } };
+          var sg;
+          switch (idx) {
+            case 1: case 14: sg = [[Lf, B]]; break;
+            case 2: case 13: sg = [[B, Rr]]; break;
+            case 3: case 12: sg = [[Lf, Rr]]; break;
+            case 4: case 11: sg = [[T, Rr]]; break;
+            case 6: case 9: sg = [[T, B]]; break;
+            case 7: case 8: sg = [[T, Lf]]; break;
+            case 5: sg = ((a + b + cc + d) / 4 >= Lv) ? [[T, Lf], [B, Rr]] : [[T, Rr], [Lf, B]]; break;
+            default: sg = ((a + b + cc + d) / 4 >= Lv) ? [[T, Rr], [Lf, B]] : [[T, Lf], [B, Rr]];
+          }
+          sg.forEach(function (s2) { var A = s2[0], Bq = s2[1]; segs.push([A.k, A.p(), Bq.k, Bq.p()]); });
+        }
+        // sambung segmen jadi garis panjang
+        var by = {}; segs.forEach(function (s2, n) { (by[s2[0]] = by[s2[0]] || []).push(n); (by[s2[2]] = by[s2[2]] || []).push(n); });
+        var used = new Array(segs.length), lines = [];
+        function nextOf(key, self) { var l = by[key] || []; for (var t = 0; t < l.length; t++) if (!used[l[t]] && l[t] !== self) return l[t]; return -1; }
+        segs.forEach(function (s0, n0) {
+          if (used[n0]) return; used[n0] = 1;
+          var line = [s0[1], s0[3]], endK = s0[2], startK = s0[0], nx;
+          while ((nx = nextOf(endK, -1)) >= 0) { used[nx] = 1; var s3 = segs[nx]; if (s3[0] === endK) { line.push(s3[3]); endK = s3[2]; } else { line.push(s3[1]); endK = s3[0]; } }
+          while ((nx = nextOf(startK, -1)) >= 0) { used[nx] = 1; var s4 = segs[nx]; if (s4[0] === startK) { line.unshift(s4[3]); startK = s4[2]; } else { line.unshift(s4[1]); startK = s4[0]; } }
+          if (line.length > 1) lines.push(line);
+        });
+        if (lines.length) out.push({ level: Lv, major: k % 5 === 0, lines: lines });
+        if (onProg) onProg(k);
+      }
+      return out;
+    });
+  }
+  function unpxy(px, py, z) {
+    var n = 256 * Math.pow(2, z);
+    return [Math.atan(Math.sinh(Math.PI * (1 - 2 * py / n))) * 180 / Math.PI, px / n * 360 - 180];
+  }
+
   // ---------- info lereng di satu titik ----------
   function info(lat, lng) {
     var Z = 14, d = 30, dLat = d / 111320, dLng = dLat / Math.cos(lat * Math.PI / 180);
@@ -378,7 +456,8 @@
         }
         if (!isFinite(mn)) return;
         // haluskan 2x (rata-rata 3x3, abaikan NaN)
-        for (var pass = 0; pass < 2; pass++) {
+        var cc0 = m.getCenter(), passes = hasLocal(cc0.lat, cc0.lng) ? 1 : 2;
+        for (var pass = 0; pass < passes; pass++) {
           var g2 = new Float32Array(g.length);
           for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
             var s = 0, n = 0;
@@ -431,9 +510,9 @@
           arr2.forEach(function (sg) { ctx.moveTo(sg[0][0], sg[0][1]); ctx.lineTo(sg[1][0], sg[1][1]); });
           ctx.strokeStyle = style; ctx.lineWidth = wd; ctx.stroke();
         }
-        strokeSegs(minor, col[0], 1);
-        strokeSegs(major, col[1], 2);
-        ctx.font = '600 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        strokeSegs(minor, col[0], 0.7);
+        strokeSegs(major, col[1], 1.2);
+        ctx.font = '600 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         labels.forEach(function (lb) {
           ctx.lineWidth = 3; ctx.strokeStyle = col[2]; ctx.strokeText(lb[2], lb[0], lb[1]);
           ctx.fillStyle = col[1]; ctx.fillText(lb[2], lb[0], lb[1]);
@@ -444,5 +523,5 @@
   }
   function contours(o) { return new (layerClass())(o); }
 
-  root.HzDem = { importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
+  root.HzDem = { contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
 })(window);

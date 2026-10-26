@@ -89,11 +89,11 @@
       '<tr><td><b>Waktu bergerak</b></td><td>hijau ' + T.durText(t.zg) + ' | kuning ' + T.durText(t.zy) + ' | merah ' + T.durText(t.zr) + '</td></tr>' +
       '</table>]]>';
   }
-  function point(name, t, lat, lng, style, desc) {
+  function point(name, t, lat, lng, style, desc, z) {
     return '<Placemark><name>' + xe(name) + '</name><styleUrl>#' + style + '</styleUrl>' +
       (desc ? '<description>' + desc + '</description>' : '') +
       '<TimeStamp><when>' + iso(t) + '</when></TimeStamp>' +
-      '<Point><coordinates>' + f6(lng) + ',' + f6(lat) + ',0</coordinates></Point></Placemark>';
+      '<Point><coordinates>' + f6(lng) + ',' + f6(lat) + ',' + (z || 0) + '</coordinates></Point></Placemark>';
   }
   function buildKml(days, opts) {
     opts = opts || {};
@@ -103,9 +103,12 @@
     ['g', 'y', 'r', 's'].forEach(function (z) {
       out.push('<Style id="z' + z + '"><LineStyle><color>' + KCOL[z] + '</color><width>5</width></LineStyle></Style>');
     });
+    out.push('<Style id="cM"><LineStyle><color>b38cff7c</color><width>1</width></LineStyle></Style>');
+    out.push('<Style id="cJ"><LineStyle><color>ff8cff7c</color><width>1.6</width></LineStyle></Style>');
     out.push('<Style id="pS"><IconStyle><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/grn-circle.png</href></Icon></IconStyle></Style>');
     out.push('<Style id="pE"><IconStyle><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/red-circle.png</href></Icon></IconStyle></Style>');
     out.push('<Style id="pM"><IconStyle><scale>1.2</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/ylw-stars.png</href></Icon></IconStyle></Style>');
+    function alt(lat, lng) { var v = opts.elev ? opts.elev(lat, lng) : null; return v === null || v === undefined ? 0 : v.toFixed(1); }
     days.forEach(function (day) {
       var s = sumDay(day);
       out.push('<Folder><name>' + xe(T.dateLong(day.ymd)) + '</name>');
@@ -118,7 +121,7 @@
         var tk = trackOf(day.pts, t);
         tk.runs.forEach(function (r) {
           out.push('<Placemark><name>' + xe(ZNAME[r.z]) + '</name><styleUrl>#z' + r.z + '</styleUrl><LineString><tessellate>1</tessellate><coordinates>' +
-            r.pts.map(function (p) { return f6(p.lng) + ',' + f6(p.lat) + ',0'; }).join(' ') + '</coordinates></LineString></Placemark>');
+            r.pts.map(function (p) { return f6(p.lng) + ',' + f6(p.lat) + ',' + alt(p.lat, p.lng); }).join(' ') + '</coordinates></LineString></Placemark>');
         });
         tk.gaps.forEach(function (g) {
           out.push('<Placemark><name>' + xe('Berhenti ' + T.hm(g.from) + '-' + T.hm(g.to) + ' (' + T.durText((g.to - g.from) / 1000) + ')') + '</name><styleUrl>#zs</styleUrl><LineString><tessellate>1</tessellate><coordinates>' +
@@ -131,6 +134,14 @@
       });
       out.push('</Folder>');
     });
+    if (opts.contours && opts.contours.length) {
+      out.push('<Folder><name>Kontur ' + opts.cstep + ' m</name>');
+      opts.contours.forEach(function (c) {
+        out.push('<Placemark><name>' + c.level + ' m</name><styleUrl>#' + (c.major ? 'cJ' : 'cM') + '</styleUrl><MultiGeometry>' +
+          c.lines.map(function (l) { return '<LineString><coordinates>' + l.map(function (q) { return q[1] + ',' + q[0] + ',' + c.level; }).join(' ') + '</coordinates></LineString>'; }).join('') + '</MultiGeometry></Placemark>');
+      });
+      out.push('</Folder>');
+    }
     out.push('</Document></kml>');
     return out.join('\n');
   }

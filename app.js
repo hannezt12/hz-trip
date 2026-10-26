@@ -878,11 +878,13 @@
       '<div class="h">LABEL</div><div class="pgrid"><label><input type="checkbox" data-l="Kerja" checked> Kerja</label><label><input type="checkbox" data-l="Pribadi" checked> Pribadi</label></div></div>' +
       '<div class="h">ISI TAMBAHAN</div>' +
       '<label><input type="checkbox" id="pSum" checked> Ringkasan di bawah tabel</label>' +
-      '<label><input type="checkbox" id="pCol" checked> Warnai kecepatan maks (kuning dan merah)</label></div>' +
+      '<label><input type="checkbox" id="pCol" checked> Warnai kecepatan maks (kuning dan merah)</label>' +
+      '<label><input type="checkbox" id="pKc"' + (S.settings.kmlContour !== false ? ' checked' : '') + '> KML: sertakan kontur (area kecil, butuh data ketinggian)</label></div>' +
       '<div class="muted" id="pInfo" style="margin-top:10px">Menghitung…</div>' +
       '<div class="row" style="margin-top:10px"><button class="btn pri" id="pPdf" style="flex:1.3;height:52px">PDF</button><button class="btn" id="pKml" style="flex:1;height:52px">KML</button></div>' +
       '<button class="btn" id="pClose" style="width:100%;margin-top:8px">Tutup</button>');
     $('pClose').onclick = closeSheet;
+    $('pKc').onchange = function () { S.settings.kmlContour = this.checked; saveSettings(); };
     $('sheet').onchange = onPrintChange;
     $('pPdf').onclick = function () { runExport('pdf'); };
     $('pKml').onclick = function () { runExport('kml'); };
@@ -929,7 +931,9 @@
       if (P.scope === 'bulan') ds.month = P.month;
       var base = fileBase(P);
       if (kind === 'kml') {
-        return saveFile(base + '.kml', textB64(E.buildKml(ds, { title: 'HZ Trip ' + ds[0].ymd })), 'application/vnd.google-earth.kml+xml');
+        return kmlPrep(ds, !!($('pKc') && $('pKc').checked)).then(function (o) {
+          return saveFile(base + '.kml', textB64(E.buildKml(ds, o)), 'application/vnd.google-earth.kml+xml');
+        });
       }
       if (!window.jspdf) { toast('Library PDF belum siap'); return; }
       var items = [];
@@ -1097,7 +1101,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.8.1'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.8.2'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1530,7 +1534,7 @@
     return z <= 16 ? 10 : 5;
   }
   function contourColor() {
-    return S.settings.mapMode === 'osm' ? ['rgba(150,90,30,.75)', 'rgba(125,65,10,1)', 'rgba(255,255,255,.9)'] : ['rgba(255,214,128,.85)', 'rgba(255,190,70,1)', 'rgba(0,0,0,.7)'];
+    return S.settings.mapMode === 'osm' ? ['rgba(20,120,60,.8)', 'rgba(10,95,45,1)', 'rgba(255,255,255,.9)'] : ['rgba(130,255,150,.85)', 'rgba(140,255,160,1)', 'rgba(0,0,0,.75)'];
   }
   function setContour(on) {
     S.settings.contour = !!on; saveSettings();
@@ -2195,20 +2199,43 @@
   function openMapMenu() {
     openSheet('<div class="grab"></div><div class="st">PETA</div>' +
       '<button class="srow" id="mmOv" style="margin-top:10px"><div class="si"><b>Peta saya</b><small>Lapisan PDF peta (tampil di mode Peta)</small></div>' + CHEV + '</button>' +
-      '<button class="srow" id="mmKml"><div class="si"><b>Ekspor KML</b><small>Lintasan hari ini untuk Google Earth</small></div>' + CHEV + '</button>' +
+      '<button class="srow" id="mmKml"><div class="si"><b>Ekspor KML</b><small>Lintasan hari ini untuk Google Earth, dengan ketinggian</small></div>' + CHEV + '</button>' +
+      '<label style="display:block;margin:6px 4px"><input type="checkbox" id="mmKc"' + (S.settings.kmlContour !== false ? ' checked' : '') + '> Sertakan kontur di KML</label>' +
       '<div class="h" style="margin-top:12px">JARAK KONTUR</div><div class="opts" id="mmCs">' + ['auto', '1', '2', '5', '10'].map(function (v) { return '<button class="opt' + ((S.settings.contourStep || 'auto') === v ? ' on' : '') + '" data-cs="' + v + '">' + (v === 'auto' ? 'Otomatis' : v + ' m') + '</button>'; }).join('') + '</div>' +
-      '<div class="muted" style="margin-top:6px">Otomatis: 10 m saat zoom jauh, 5 m menengah, 2 m dekat. Data berukuran sekitar 30 m, jadi garis di bawah 2 m kurang bermakna.</div>' +
+      '<div class="muted" style="margin-top:6px">Otomatis: dengan data DEMNAS 10 m saat zoom jauh, 5 m menengah, 2 m dekat; tanpa DEMNAS (data gratis ±30 m) minimal 5 m.</div>' +
       '<button class="btn" id="mmX" style="width:100%;margin-top:10px">Tutup</button>');
     $('mmCs').onclick = function (e) { var v = e.target.getAttribute && e.target.getAttribute('data-cs'); if (!v) return; S.settings.contourStep = v; saveSettings(); document.querySelectorAll('#mmCs .opt').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-cs') === v); }); if (DM.layer) DM.layer.redraw(); };
+    $('mmKc').onchange = function () { S.settings.kmlContour = this.checked; saveSettings(); };
     $('mmX').onclick = closeSheet;
     $('mmOv').onclick = function () { closeSheet(); openOvSheet(); };
     $('mmKml').onclick = function () { closeSheet(); mapKml(); };
+  }
+  // siapkan ketinggian + kontur untuk KML (butuh data ketinggian); selalu lanjut walau gagal
+  function kmlPrep(ds, withC) {
+    var opts = { title: 'HZ Trip ' + ds[0].ymd };
+    if (!window.HzDem) return Promise.resolve(opts);
+    var all = [];
+    ds.forEach(function (day) { day.trips.forEach(function (x) { tripPts(day.pts, x.t).forEach(function (q) { all.push(q); }); }); });
+    if (!all.length) return Promise.resolve(opts);
+    toast('Menyiapkan ketinggian…');
+    return HzDem.ensure(14, all).then(function () {
+      opts.elev = function (lat, lng) { var e = HzDem.elev(lat, lng, 14); return isFinite(e) ? e : null; };
+      if (!withC) return opts;
+      var w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+      all.forEach(function (q) { s = Math.min(s, q[0]); n = Math.max(n, q[0]); w = Math.min(w, q[1]); e = Math.max(e, q[1]); });
+      var m = 0.003;
+      if (n - s > 0.1 || e - w > 0.1) { toast('Area terlalu luas untuk kontur (maks ±10 km); KML tanpa kontur'); return opts; }
+      var bb = [w - m, s - m, e + m, n + m], step = HzDem.hasLocal((s + n) / 2, (w + e) / 2) ? 5 : 10;
+      return HzDem.contourLines(bb, step).then(function (c) { opts.contours = c; opts.cstep = step; return opts; });
+    }).catch(function (err) { toast(String(err && err.message || err)); return opts; });
   }
   function mapKml() {
     var day = S.mapDay;
     loadDay(day).then(function (d) {
       if (!d.trips.length) { toast('Belum ada trip pada hari ini'); return; }
-      return saveFile('HZTrip-' + day + '.kml', textB64(E.buildKml([d], { title: 'HZ Trip ' + day })), 'application/vnd.google-earth.kml+xml');
+      return kmlPrep([d], S.settings.kmlContour !== false).then(function (o) {
+        return saveFile('HZTrip-' + day + '.kml', textB64(E.buildKml([d], o)), 'application/vnd.google-earth.kml+xml');
+      });
     });
   }
 
