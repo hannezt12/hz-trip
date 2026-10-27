@@ -93,6 +93,10 @@
     }
     return v;
   }
+  function inLake(lat, lng) {
+    for (var i = 0; i < lakes.length; i++) { var b = lakes[i].bb; if (lat >= b[0] && lat <= b[2] && lng >= b[1] && lng <= b[3] && inPoly(lat, lng, lakes[i].pts)) return true; }
+    return false;
+  }
   function setLakes(list) {
     lakes = (list || []).filter(function (l) { return l && l.pts && l.pts.length >= 3 && isFinite(l.level); }).map(function (l) {
       var s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
@@ -377,6 +381,24 @@
     return [Math.atan(Math.sinh(Math.PI * (1 - 2 * py / n))) * 180 / Math.PI, px / n * 360 - 180];
   }
 
+  // kisi ketinggian untuk tampilan 3D: bounds {s,w,n,e}, jumlah kolom; hasil: {cols,rows,z,mn,mx,dx,dy,lat0,lng0,zd}
+  function sampleGrid(b, cols) {
+    var latc = (b.s + b.n) / 2, kx = 111320 * Math.cos(latc * Math.PI / 180), ky = 111320, W = (b.e - b.w) * kx, H = (b.n - b.s) * ky;
+    var rows = Math.max(12, Math.min(130, Math.round(cols * H / W))), dx = W / (cols - 1), dy = H / (rows - 1);
+    var zd = Math.max(10, Math.min(14, Math.round(Math.log(156543.03 * Math.cos(latc * Math.PI / 180) / Math.max(dx, dy)) / Math.LN2)));
+    var pts = [], i, j;
+    for (j = 0; j < rows; j += 6) for (i = 0; i < cols; i += 6) pts.push([b.n - j * (b.n - b.s) / (rows - 1), b.w + i * (b.e - b.w) / (cols - 1)]);
+    pts.push([b.s, b.e]);
+    return ensure(zd, pts).then(function (r) {
+      var z = new Float32Array(cols * rows), mn = Infinity, mx = -Infinity, v;
+      for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+        v = elev(b.n - j * (b.n - b.s) / (rows - 1), b.w + i * (b.e - b.w) / (cols - 1), zd);
+        z[j * cols + i] = v; if (v === v) { if (v < mn) mn = v; if (v > mx) mx = v; }
+      }
+      return { cols: cols, rows: rows, z: z, mn: mn, mx: mx, dx: dx, dy: dy, W: W, H: H, zd: zd, ok: r.ok, total: r.total, b: b, kx: kx, ky: ky };
+    });
+  }
+
   // ---------- info lereng di satu titik ----------
   function info(lat, lng, src) {
     var Z = 14, d = 30, dLat = d / 111320, dLng = dLat / Math.cos(lat * Math.PI / 180);
@@ -513,7 +535,7 @@
           var a = g2[j * cols + Math.max(0, i - K)], b = g2[j * cols + Math.min(cols - 1, i + K)], up = g2[Math.max(0, j - K) * cols + i], dn = g2[Math.min(rows - 1, j + K) * cols + i];
           var di2 = Math.min(cols - 1, i + K) - Math.max(0, i - K), dj2 = Math.min(rows - 1, j + K) - Math.max(0, j - K);
           if (!(a === a && b === b && up === up && dn === dn) || !di2 || !dj2) continue;
-          var pct = 100 * Math.hypot((b - a) / (di2 * cell), (dn - up) / (dj2 * cell)), cl = slopeClass(pct), o = (j * cols + i) * 4;
+          var pct = 100 * Math.hypot((b - a) / (di2 * cell), (dn - up) / (dj2 * cell)), cl = slopeColor(pct), o = (j * cols + i) * 4;
           D[o] = cl[0]; D[o + 1] = cl[1]; D[o + 2] = cl[2]; D[o + 3] = cl[3];
         }
         sc.putImageData(im, 0, 0);
@@ -529,6 +551,7 @@
           var ll = m.layerPointToLatLng(L.point(min.x + x, min.y + y)), dLat = dm / 111320, dLng = dLat / Math.cos(ll.lat * Math.PI / 180);
           var n = elev(ll.lat + dLat, ll.lng, zd), s = elev(ll.lat - dLat, ll.lng, zd), e = elev(ll.lat, ll.lng + dLng, zd), wv = elev(ll.lat, ll.lng - dLng, zd);
           if (!(n === n && s === s && e === e && wv === wv)) continue;
+          if (inLake(ll.lat, ll.lng)) continue;
           var gx = (e - wv) / (2 * dm), gy = (n - s) / (2 * dm), pct = 100 * Math.hypot(gx, gy);
           if (pct < 2) continue;
           var ux = -gx / (pct / 100), uy = gy / (pct / 100), len = Math.max(10, Math.min(26, 8 + pct * 1.2)); // arah turun di layar (x kanan, y bawah)
@@ -551,7 +574,37 @@
         draw(osm ? 'rgba(255,255,255,.7)' : 'rgba(0,0,0,.4)', 3);
         draw(osm ? 'rgba(15,50,120,.95)' : 'rgba(205,238,255,.95)', 1.2);
       },
+      _renderMesh: function (zd) {
+        var c = this._canvas, m = this._map, min = this._min, ctx = c.getContext('2d'), w = c.width, h = c.height, G = 24;
+        ctx.clearRect(0, 0, w, h);
+        var cen = m.getCenter(), mpp = 156543.03 * Math.cos(cen.lat * Math.PI / 180) / Math.pow(2, m.getZoom()), dm = Math.max(25, 12 * mpp);
+        var x0 = Math.ceil(min.x / G) * G - min.x, y0 = Math.ceil(min.y / G) * G - min.y, cols = Math.floor((w - x0) / G) + 1, rows = Math.floor((h - y0) / G) + 1, P = new Float32Array(cols * rows), i, j;
+        for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+          var ll = m.layerPointToLatLng(L.point(min.x + x0 + i * G, min.y + y0 + j * G)), dLat = dm / 111320, dLng = dLat / Math.cos(ll.lat * Math.PI / 180);
+          var n = elev(ll.lat + dLat, ll.lng, zd), s = elev(ll.lat - dLat, ll.lng, zd), e = elev(ll.lat, ll.lng + dLng, zd), wv = elev(ll.lat, ll.lng - dLng, zd);
+          P[j * cols + i] = (n === n && s === s && e === e && wv === wv) ? 100 * Math.hypot((e - wv) / (2 * dm), (n - s) / (2 * dm)) : NaN;
+        }
+        var B = 16, paths = []; for (i = 0; i < B; i++) paths.push([]);
+        function seg(ax, ay, bx, by, pa, pb) {
+          if (!(pa === pa && pb === pb)) return;
+          var q = Math.min(B - 1, Math.floor(((pa + pb) / 2) / 15 * B)); paths[q].push([ax, ay, bx, by]);
+        }
+        for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+          var px = x0 + i * G, py = y0 + j * G, p0 = P[j * cols + i];
+          if (i + 1 < cols) seg(px, py, px + G, py, p0, P[j * cols + i + 1]);
+          if (j + 1 < rows) seg(px, py, px, py + G, p0, P[(j + 1) * cols + i]);
+        }
+        ctx.lineWidth = 1.1; ctx.lineCap = 'butt';
+        for (i = 0; i < B; i++) {
+          if (!paths[i].length) continue;
+          var cc = gradRGB((i + 0.5) / B);
+          ctx.strokeStyle = 'rgba(' + cc.join(',') + ',.9)'; ctx.beginPath();
+          paths[i].forEach(function (q) { ctx.moveTo(q[0], q[1]); ctx.lineTo(q[2], q[3]); });
+          ctx.stroke();
+        }
+      },
       _render: function (zd) {
+        if (this.o.mode === 'mesh') return this._renderMesh(zd);
         if (this.o.mode === 'slope') return this._renderSlope(zd);
         if (this.o.mode === 'hach') return this._renderHach(zd);
         var c = this._canvas, m = this._map, min = this._min, ctx = c.getContext('2d'), w = c.width, h = c.height;
@@ -641,10 +694,23 @@
     { max: 2, rgb: [57, 255, 20], a: 46, t: '0–2' }, { max: 5, rgb: [0, 190, 255], a: 120, t: '2–5' }, { max: 8, rgb: [30, 80, 230], a: 130, t: '5–8' },
     { max: 12, rgb: [155, 55, 225], a: 140, t: '8–12' }, { max: 15, rgb: [85, 20, 140], a: 155, t: '12–15' }, { max: Infinity, rgb: [128, 0, 32], a: 170, t: '>15' }
   ];
+  // gradasi (seperti permukaan 3D): merah = rendah/datar, jingga, kuning, hijau = tinggi/curam
+  var GSTOPS = [[0, 235, 35, 30], [0.35, 255, 150, 0], [0.65, 240, 225, 0], [1, 0, 165, 45]];
+  var GRAD_CSS = 'linear-gradient(90deg,rgb(235,35,30),rgb(255,150,0) 35%,rgb(240,225,0) 65%,rgb(0,165,45))';
+  function gradRGB(t) {
+    t = t !== t ? 0 : Math.max(0, Math.min(1, t));
+    for (var i = 1; i < GSTOPS.length; i++) if (t <= GSTOPS[i][0]) {
+      var a = GSTOPS[i - 1], b = GSTOPS[i], u = (t - a[0]) / (b[0] - a[0]);
+      return [Math.round(a[1] + (b[1] - a[1]) * u), Math.round(a[2] + (b[2] - a[2]) * u), Math.round(a[3] + (b[3] - a[3]) * u)];
+    }
+    return [0, 165, 45];
+  }
+  function slopeColor(pct) { var c = gradRGB(pct / 15); return [c[0], c[1], c[2], 105]; }
   function slopeClass(p) { for (var i = 0; i < SLOPE_CLASSES.length; i++) if (p <= SLOPE_CLASSES[i].max) { var c = SLOPE_CLASSES[i]; return [c.rgb[0], c.rgb[1], c.rgb[2], c.a]; } return [0, 0, 0, 0]; }
   function contours(o) { return new (layerClass())(o); }
   function hachLayer(o) { o = o || {}; o.mode = 'hach'; o.pane = 'hachPane'; o.z = 265; return new (layerClass())(o); }
+  function meshLayer(o) { o = o || {}; o.mode = 'mesh'; o.pane = 'meshPane'; o.z = 262; return new (layerClass())(o); }
   function slopeLayer(o) { o = o || {}; o.mode = 'slope'; o.pane = 'slopePane'; o.z = 255; return new (layerClass())(o); }
 
-  root.HzDem = { setSources: setSources, source: source, setLakes: setLakes, lakeLevel: lakeLevel, hasAnyLocal: function () { return cov.length > 0; }, hachLayer: hachLayer, slopeLayer: slopeLayer, SLOPE_CLASSES: SLOPE_CLASSES, rampColor: rampColor, contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
+  root.HzDem = { meshLayer: meshLayer, sampleGrid: sampleGrid, inLake: inLake, gradRGB: gradRGB, GRAD_CSS: GRAD_CSS, elev: elev, setSources: setSources, source: source, setLakes: setLakes, lakeLevel: lakeLevel, hasAnyLocal: function () { return cov.length > 0; }, hachLayer: hachLayer, slopeLayer: slopeLayer, SLOPE_CLASSES: SLOPE_CLASSES, rampColor: rampColor, contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
 })(window);
