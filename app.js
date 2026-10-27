@@ -1104,7 +1104,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'Versi 0.8.8'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.8.9'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1678,7 +1678,7 @@
   var ARROW = '<span style="display:inline-block;transform:rotate(DEGdeg);font-weight:700">&#8593;</span>';
   function fmt1(v) { return String(Math.round(v * 10) / 10).replace('.', ','); }
   // ---------- tampilan 3D (jaring permukaan, hanya mode Peta) ----------
-  var V3 = { on: false, g: null, yaw: -30, pitch: 52, zoom: 1, exag: 3, color: 'h', ptr: {}, pd: 0, q: null, trk: [], busy: 0 };
+  var V3 = { pdf: true, tex: null, moving: false, on: false, g: null, yaw: -30, pitch: 52, zoom: 1, exag: 3, color: 'h', ptr: {}, pd: 0, q: null, trk: [], busy: 0 };
   var ZCOL = { g: '#3FD07A', y: '#F5C518', r: '#FF5B50', s: '#9E9E9E' };
   function close3d() {
     var el = $('v3d'); if (el) el.remove();
@@ -1694,16 +1694,17 @@
     if (!el) {
       el = document.createElement('div'); el.id = 'v3d'; el.className = 'v3d';
       el.innerHTML = '<canvas id="v3c"></canvas><div class="v3bar"><div class="tseg" id="v3col"><button type="button" data-c="h">Ketinggian</button><button type="button" data-c="s">Kemiringan</button></div>' +
-        '<label class="v3x">Tinggi &times;<b id="v3xv">' + V3.exag + '</b><input type="range" id="v3x" min="1" max="10" step="0.5" value="' + V3.exag + '"></label>' +
-        '<div class="v3b2"><button type="button" id="v3r">Atur ulang</button><button type="button" id="v3q">Tutup</button></div></div><div class="v3leg" id="v3leg"></div><div class="v3msg" id="v3msg">Menghitung…</div>';
+        '<label class="v3x">Tinggi &times;<b id="v3xv">' + V3.exag + '</b><input type="range" id="v3x" min="1" max="20" step="0.5" value="' + V3.exag + '"></label>' +
+        '<div class="v3b2"><button type="button" id="v3p">Peta PDF</button><button type="button" id="v3r">Atur ulang</button><button type="button" id="v3q">Tutup</button></div></div><div class="v3leg" id="v3leg"></div><div class="v3msg" id="v3msg">Menghitung…</div>';
       c.appendChild(el); L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);
       c.classList.add('v3on'); V3.on = true;
       $('v3q').onclick = close3d;
-      $('v3r').onclick = function () { V3.yaw = -30; V3.pitch = 52; V3.zoom = 1; draw3d(); };
-      $('v3x').oninput = function () { V3.exag = +this.value; $('v3xv').textContent = V3.exag; prep3d(); draw3d(); };
+      $('v3p').onclick = function () { V3.pdf = !V3.pdf; this.classList.toggle('on', V3.pdf && !!V3.tex); draw3d(true); };
+      $('v3r').onclick = function () { V3.yaw = -30; V3.pitch = 52; V3.zoom = 1; draw3d(true); };
+      $('v3x').oninput = function () { V3.exag = +this.value; $('v3xv').textContent = V3.exag; prep3d(); V3.moving = true; draw3d(); clearTimeout(V3.wt); V3.wt = setTimeout(function () { V3.moving = false; draw3d(true); }, 250); };
       $('v3col').onclick = function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-c'); if (!k) return; V3.color = k; document.querySelectorAll('#v3col button').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-c') === k); }); prep3d(); draw3d(); };
       var cv = $('v3c');
-      cv.addEventListener('pointerdown', function (e) { cv.setPointerCapture(e.pointerId); V3.ptr[e.pointerId] = [e.clientX, e.clientY]; V3.pd = 0; });
+      cv.addEventListener('pointerdown', function (e) { cv.setPointerCapture(e.pointerId); V3.ptr[e.pointerId] = [e.clientX, e.clientY]; V3.pd = 0; V3.moving = true; });
       cv.addEventListener('pointermove', function (e) {
         var p = V3.ptr[e.pointerId]; if (!p) return;
         var ids = Object.keys(V3.ptr);
@@ -1713,9 +1714,9 @@
         } else { V3.yaw += (e.clientX - p[0]) * 0.4; V3.pitch = Math.max(12, Math.min(88, V3.pitch - (e.clientY - p[1]) * 0.3)); }
         V3.ptr[e.pointerId] = [e.clientX, e.clientY]; draw3d();
       });
-      function up(e) { delete V3.ptr[e.pointerId]; }
+      function up(e) { delete V3.ptr[e.pointerId]; if (!Object.keys(V3.ptr).length) { V3.moving = false; setTimeout(function () { draw3d(true); }, 0); } }
       cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-      cv.addEventListener('wheel', function (e) { e.preventDefault(); V3.zoom = Math.max(0.5, Math.min(5, V3.zoom * (e.deltaY < 0 ? 1.1 : 0.9))); draw3d(); }, { passive: false });
+      cv.addEventListener('wheel', function (e) { e.preventDefault(); V3.zoom = Math.max(0.5, Math.min(5, V3.zoom * (e.deltaY < 0 ? 1.1 : 0.9))); V3.moving = true; draw3d(); clearTimeout(V3.wt); V3.wt = setTimeout(function () { V3.moving = false; draw3d(true); }, 220); }, { passive: false });
     }
     document.querySelectorAll('#v3col button').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-c') === V3.color); });
     $('v3msg').style.display = 'block'; $('v3msg').textContent = 'Menghitung…';
@@ -1741,6 +1742,21 @@
       col[q * 3] = rgb[0] * sh; col[q * 3 + 1] = rgb[1] * sh; col[q * 3 + 2] = rgb[2] * sh; ok[q] = 1;
     }
     V3.q = { col: col, ok: ok };
+    // peta PDF: ambil gambar lapisan yang sedang tampil di peta, lalu petakan tiap titik jaring ke piksel gambar itu
+    V3.tex = null;
+    var ovs = (map._ovl || []).filter(function (l) { return l && l._canvas && l._min; });
+    if (ovs.length) {
+      var l0 = ovs[0], snap = document.createElement('canvas'); snap.width = l0._canvas.width; snap.height = l0._canvas.height;
+      var sx = snap.getContext('2d');
+      ovs.forEach(function (l) { sx.globalAlpha = parseFloat(l._canvas.style.opacity || 1); sx.drawImage(l._canvas, 0, 0); });
+      var TX = new Float32Array(cols * rows), TY = new Float32Array(cols * rows);
+      for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+        var lp = map.latLngToLayerPoint([g.b.n - j * (g.b.n - g.b.s) / (rows - 1), g.b.w + i * (g.b.e - g.b.w) / (cols - 1)]);
+        TX[j * cols + i] = lp.x - l0._min.x; TY[j * cols + i] = lp.y - l0._min.y;
+      }
+      V3.tex = { cv: snap, TX: TX, TY: TY };
+    }
+    var pb = $('v3p'); if (pb) { pb.style.display = V3.tex ? '' : 'none'; pb.classList.toggle('on', V3.pdf && !!V3.tex); }
     // jalur trip (warna menurut kecepatan)
     V3.trk = [];
     var v = S.mapView, zmid = (g.mn + g.mx) / 2, md = Math.max(g.W, g.H), lift = md * 0.004 / Math.max(1, ex) * 1;
@@ -1761,8 +1777,9 @@
     var leg = $('v3leg');
     if (leg) leg.innerHTML = V3.color === 'h' ? '<span>' + Math.round(g.mn) + ' mdpl</span><i class="gbar" style="background:' + HzDem.GRAD_CSS + '"></i><span>' + Math.round(g.mx) + ' mdpl</span>' : '<span>0%</span><i class="gbar" style="background:' + HzDem.GRAD_CSS + '"></i><span>15%+</span>';
   }
-  function draw3d() {
+  function draw3d(withTex) {
     var g = V3.g, cv = $('v3c'); if (!g || !cv || !V3.q) return;
+    var useTex = !!(withTex && V3.pdf && V3.tex && !V3.moving);
     var w = cv.clientWidth, h = cv.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
     if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
     var ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1790,6 +1807,24 @@
       ctx.fillStyle = 'rgb(' + (col[q * 3] | 0) + ',' + (col[q * 3 + 1] | 0) + ',' + (col[q * 3 + 2] | 0) + ')';
       ctx.beginPath(); ctx.moveTo(SX[a0], SY[a0]); ctx.lineTo(SX[a0 + 1], SY[a0 + 1]); ctx.lineTo(SX[a0 + cols + 1], SY[a0 + cols + 1]); ctx.lineTo(SX[a0 + cols], SY[a0 + cols]); ctx.closePath();
       ctx.fill(); ctx.stroke();
+      if (useTex) {
+        var T = V3.tex, ta = a0, tb = a0 + 1, tc = a0 + cols, td = a0 + cols + 1;
+        var ux = T.TX[tb] - T.TX[ta], uy = T.TY[tb] - T.TY[ta], vx = T.TX[tc] - T.TX[ta], vy = T.TY[tc] - T.TY[ta], det = ux * vy - uy * vx;
+        if (Math.abs(det) > 1e-6) {
+          var Sux = SX[a0 + 1] - SX[a0], Suy = SY[a0 + 1] - SY[a0], Svx = SX[a0 + cols] - SX[a0], Svy = SY[a0 + cols] - SY[a0];
+          var m11 = (Sux * vy - Svx * uy) / det, m12 = (Suy * vy - Svy * uy) / det, m21 = (-Sux * vx + Svx * ux) / det, m22 = (-Suy * vx + Svy * ux) / det;
+          var bx0 = Math.floor(Math.min(T.TX[ta], T.TX[tb], T.TX[tc], T.TX[td])), by0 = Math.floor(Math.min(T.TY[ta], T.TY[tb], T.TY[tc], T.TY[td])),
+              bx1 = Math.ceil(Math.max(T.TX[ta], T.TX[tb], T.TX[tc], T.TX[td])), by1 = Math.ceil(Math.max(T.TY[ta], T.TY[tb], T.TY[tc], T.TY[td]));
+          bx0 = Math.max(0, bx0); by0 = Math.max(0, by0); bx1 = Math.min(T.cv.width, bx1); by1 = Math.min(T.cv.height, by1);
+          if (bx1 > bx0 && by1 > by0) {
+            ctx.setTransform(m11 * dpr, m12 * dpr, m21 * dpr, m22 * dpr, (SX[a0] - m11 * T.TX[ta] - m21 * T.TY[ta]) * dpr, (SY[a0] - m12 * T.TX[ta] - m22 * T.TY[ta]) * dpr);
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.drawImage(T.cv, bx0, by0, bx1 - bx0, by1 - by0, bx0, by0, bx1 - bx0, by1 - by0);
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          }
+        }
+      }
     }
     // jalur
     V3.trk.forEach(function (tr) {

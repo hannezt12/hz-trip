@@ -112,7 +112,7 @@ input[type=text],input[type=date],input[type=month],select{height:46px;width:100
 #drawer a{display:flex;align-items:center;height:52px;padding:0 20px;font-size:max(11px,calc(18px * var(--fs,1)));cursor:pointer}
 #drawer a.on{background:var(--sf);font-weight:600}
 #drawer a.off{color:var(--off)}
-#drawer .ver{margin-top:auto;padding:0 20px;font-size:max(11px,calc(12px * var(--fs,1)));color:var(--tx2)}
+#drawer .ver{line-height:1.5;margin-top:auto;padding:0 20px;font-size:max(11px,calc(12px * var(--fs,1)));color:var(--tx2)}
 #sheet{position:fixed;left:0;right:0;bottom:0;max-height:88%;overflow-y:auto;background:var(--card2);border-top:1px solid var(--line);border-radius:22px 22px 0 0;z-index:70;transform:translateY(105%);transition:transform .2s;padding:10px 16px calc(20px + env(safe-area-inset-bottom,0px))}
 #sheet.on{transform:none}
 #sheet .grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 8px}
