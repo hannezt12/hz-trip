@@ -146,6 +146,17 @@
       });
       out.push('</Folder>');
     }
+    if (opts.shapes && opts.shapes.length) {
+      out.push('<Folder><name>Gambar dan ukur</name>');
+      opts.shapes.forEach(function (s) {
+        var cc = (s.color || '#FFFFFF').replace('#', ''), kc = 'ff' + cc.slice(4, 6) + cc.slice(2, 4) + cc.slice(0, 2);
+        var co = s.pts.map(function (q) { return q[1] + ',' + q[0] + ',0'; });
+        if (s.closed) co.push(s.pts[0][1] + ',' + s.pts[0][0] + ',0');
+        out.push('<Placemark><name>' + xe(s.label || s.name) + '</name><Style><LineStyle><color>' + kc + '</color><width>2.5</width></LineStyle>' + (s.closed ? '<PolyStyle><color>40' + kc.slice(2) + '</color></PolyStyle>' : '') + '</Style>' +
+          (s.closed ? '<Polygon><outerBoundaryIs><LinearRing><coordinates>' + co.join(' ') + '</coordinates></LinearRing></outerBoundaryIs></Polygon>' : '<LineString><coordinates>' + co.join(' ') + '</coordinates></LineString>') + '</Placemark>');
+      });
+      out.push('</Folder>');
+    }
     out.push('</Document></kml>');
     return out.join('\n');
   }

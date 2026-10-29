@@ -399,6 +399,68 @@
     });
   }
 
+  // ---------- ukur garis / poligon (datar dan mengikuti permukaan lereng) ----------
+  function measure(pts, closed) {
+    var Z = 14, R = Math.PI / 180, lat0 = pts[0][0], lng0 = pts[0][1], kx = 111320 * Math.cos(lat0 * R), ky = 111320, i, j;
+    var xy = pts.map(function (p) { return [(p[1] - lng0) * kx, (p[0] - lat0) * ky]; });
+    var line = closed ? pts.concat([pts[0]]) : pts, lxy = closed ? xy.concat([xy[0]]) : xy;
+    // titik sampel sepanjang garis (tiap <= 10 m)
+    var sp = [], flat = 0;
+    for (i = 0; i < line.length - 1; i++) {
+      var dx = lxy[i + 1][0] - lxy[i][0], dy = lxy[i + 1][1] - lxy[i][1], L = Math.hypot(dx, dy), n = Math.max(1, Math.ceil(L / 10));
+      for (j = (i ? 1 : 0); j <= n; j++) sp.push({ lat: line[i][0] + (line[i + 1][0] - line[i][0]) * j / n, lng: line[i][1] + (line[i + 1][1] - line[i][1]) * j / n, s: flat + L * j / n });
+      flat += L;
+    }
+    var area = 0, cells = [], c = 0;
+    if (closed && pts.length >= 3) {
+      for (i = 0; i < xy.length; i++) { var a = xy[i], b = xy[(i + 1) % xy.length]; area += a[0] * b[1] - b[0] * a[1]; }
+      area = Math.abs(area) / 2;
+      c = Math.max(5, Math.sqrt(area / 2500));
+      var x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      xy.forEach(function (q) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); });
+      for (var y = y0 + c / 2; y < y1; y += c) for (var x = x0 + c / 2; x < x1; x += c) {
+        var ins = false;
+        for (i = 0, j = xy.length - 1; i < xy.length; j = i++) {
+          var yi = xy[i][1], xi = xy[i][0], yj = xy[j][1], xj = xy[j][0];
+          if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) ins = !ins;
+        }
+        if (ins) cells.push([lat0 + y / ky, lng0 + x / kx]);
+      }
+    }
+    var need = sp.map(function (q) { return [q.lat, q.lng]; });
+    cells.forEach(function (q) { need.push(q); });
+    return ensure(Z, need).then(function () {
+      var r = { flat: flat, closed: !!closed, n: pts.length }, zs = [];
+      var dl = 0, gain = 0, loss = 0, prev = null, okN = 0;
+      sp.forEach(function (q, k) {
+        var e = elev(q.lat, q.lng, Z); q.e = e;
+        if (e === e) { okN++; zs.push(e); }
+        if (k) {
+          var p0 = sp[k - 1], ds = q.s - p0.s;
+          if (e === e && p0.e === p0.e) { var dz = e - p0.e; dl += Math.sqrt(ds * ds + dz * dz); if (dz > 0) gain += dz; else loss -= dz; }
+          else dl += ds;
+        }
+      });
+      r.elevOk = okN >= sp.length * 0.8;
+      r.slope = r.elevOk ? dl : null;
+      if (r.elevOk) { r.gain = gain; r.loss = loss; r.eStart = sp[0].e; r.eEnd = sp[sp.length - 1].e; }
+      if (zs.length) { r.zmin = Math.min.apply(null, zs); r.zmax = Math.max.apply(null, zs); }
+      if (closed && area > 0) {
+        r.area = area;
+        var d = 10, fsum = 0, fn = 0, psum = 0;
+        cells.forEach(function (q) {
+          var dLat = d / ky, dLng = d / kx;
+          var e0 = elev(q[0], q[1], Z), n_ = elev(q[0] + dLat, q[1], Z), s_ = elev(q[0] - dLat, q[1], Z), e_ = elev(q[0], q[1] + dLng, Z), w_ = elev(q[0], q[1] - dLng, Z);
+          if (!(e0 === e0 && n_ === n_ && s_ === s_ && e_ === e_ && w_ === w_)) return;
+          var gx = (e_ - w_) / (2 * d), gy = (n_ - s_) / (2 * d);
+          fsum += Math.sqrt(1 + gx * gx + gy * gy); psum += 100 * Math.hypot(gx, gy); fn++;
+        });
+        if (fn >= cells.length * 0.6 && fn > 0) { r.areaSlope = area * fsum / fn; r.pct = psum / fn; }
+      }
+      return r;
+    });
+  }
+
   // ---------- info lereng di satu titik ----------
   function info(lat, lng, src) {
     var Z = 14, d = 30, dLat = d / 111320, dLng = dLat / Math.cos(lat * Math.PI / 180);
@@ -712,5 +774,5 @@
   function meshLayer(o) { o = o || {}; o.mode = 'mesh'; o.pane = 'meshPane'; o.z = 262; return new (layerClass())(o); }
   function slopeLayer(o) { o = o || {}; o.mode = 'slope'; o.pane = 'slopePane'; o.z = 255; return new (layerClass())(o); }
 
-  root.HzDem = { meshLayer: meshLayer, sampleGrid: sampleGrid, inLake: inLake, gradRGB: gradRGB, GRAD_CSS: GRAD_CSS, elev: elev, setSources: setSources, source: source, setLakes: setLakes, lakeLevel: lakeLevel, hasAnyLocal: function () { return cov.length > 0; }, hachLayer: hachLayer, slopeLayer: slopeLayer, SLOPE_CLASSES: SLOPE_CLASSES, rampColor: rampColor, contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
+  root.HzDem = { measure: measure, meshLayer: meshLayer, sampleGrid: sampleGrid, inLake: inLake, gradRGB: gradRGB, GRAD_CSS: GRAD_CSS, elev: elev, setSources: setSources, source: source, setLakes: setLakes, lakeLevel: lakeLevel, hasAnyLocal: function () { return cov.length > 0; }, hachLayer: hachLayer, slopeLayer: slopeLayer, SLOPE_CLASSES: SLOPE_CLASSES, rampColor: rampColor, contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
 })(window);

@@ -915,5 +915,46 @@
     return { close: close };
   }
 
-  root.HzOverlay = { openPdf: openPdf, clean: clean, affOf: affOf, infoAff: infoAff, tune: tune, importPdf: importPdf, delOverlay: delOverlay, makeLayer: makeLayer, affineOf: affineOf, toLLFn: toLLFn, info: info, residual: residual, calibrate: calibrate, TS: TS };
+  // ---------- ekspor / impor satu peta (.hzpeta): [4 byte panjang][JSON header][data kotak gambar] ----------
+  function exportOverlay(o) {
+    var tiles = [];
+    (o.levels || []).forEach(function (l, lv) { for (var ty = 0; ty < l.rows; ty++) for (var tx = 0; tx < l.cols; tx++) tiles.push([lv, tx, ty]); });
+    var parts = [], idx = [], i = 0;
+    function next() {
+      if (i >= tiles.length) return Promise.resolve();
+      var t = tiles[i++], k = t.join('|');
+      return getTile(o.id + '|' + k).then(function (b) {
+        if (!b) throw new Error('Data peta tidak lengkap, tidak bisa diekspor');
+        parts.push(b); idx.push([k, b.size, b.type || 'image/png']);
+        return next();
+      });
+    }
+    return next().then(function () {
+      var meta = { name: o.name, W: o.W, H: o.H, levels: o.levels, cal: o.cal, edit: o.edit, bytes: o.bytes };
+      var hd = new TextEncoder().encode(JSON.stringify({ app: 'hztrip-peta', v: 1, meta: meta, tiles: idx })), len = new Uint8Array(4);
+      new DataView(len.buffer).setUint32(0, hd.length);
+      return new Blob([len, hd].concat(parts), { type: 'application/octet-stream' });
+    });
+  }
+  function importOverlayFile(file) {
+    return file.slice(0, 4).arrayBuffer().then(function (b4) {
+      var n = new DataView(b4).getUint32(0);
+      if (!n || n > 8000000) throw new Error('Bukan berkas peta HZ Trip');
+      return file.slice(4, 4 + n).arrayBuffer().then(function (hb) {
+        var h; try { h = JSON.parse(new TextDecoder().decode(hb)); } catch (e) { throw new Error('Bukan berkas peta HZ Trip'); }
+        if (!h || h.app !== 'hztrip-peta' || !h.meta || !h.tiles) throw new Error('Bukan berkas peta HZ Trip');
+        var id = 'p' + Date.now().toString(36), off = 4 + n, i = 0;
+        function nx() {
+          if (i >= h.tiles.length) return Promise.resolve();
+          var t = h.tiles[i++], blob = file.slice(off, off + t[1], t[2]); off += t[1];
+          return putTile(id + '|' + t[0], blob).then(nx);
+        }
+        return nx().then(function () {
+          var m = h.meta; m.id = id; m.on = true; return m;
+        }).catch(function (e) { delOverlay(id); throw e; });
+      });
+    });
+  }
+
+  root.HzOverlay = { exportOverlay: exportOverlay, importOverlayFile: importOverlayFile, openPdf: openPdf, clean: clean, affOf: affOf, infoAff: infoAff, tune: tune, importPdf: importPdf, delOverlay: delOverlay, makeLayer: makeLayer, affineOf: affineOf, toLLFn: toLLFn, info: info, residual: residual, calibrate: calibrate, TS: TS };
 })(window);
