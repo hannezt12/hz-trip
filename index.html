@@ -90,6 +90,23 @@
       </div>
     </section>
 
+    <!-- Data peta -->
+    <section class="view" id="v-data">
+      <div class="row" style="margin-bottom:10px"><div class="seg" id="dpTabs"><button data-tab="danau">Danau</button><button data-tab="gambar">Gambar</button><button data-tab="batas">Batas</button><button data-tab="pdf">Peta PDF</button></div></div>
+      <div class="dpp" id="dp-danau"></div>
+      <div class="dpp" id="dp-gambar"></div>
+      <div class="dpp" id="dp-batas"></div>
+      <div class="dpp" id="dp-pdf">
+      <div class="card"><div id="ovList" class="muted">Belum ada.</div>
+        <button class="btn" id="ovAdd" style="margin-top:10px;width:100%">+ Tambah peta dari PDF</button>
+        <button class="btn" id="ovImp" style="margin-top:8px;width:100%">Impor peta dari ponsel lain (.hzpeta)</button>
+        <input type="file" id="ovHz" multiple style="display:none">
+        <input type="file" id="ovFile" accept="application/pdf,.pdf" style="display:none">
+        <div class="muted" style="margin-top:8px">PDF diubah jadi gambar beresolusi tinggi di ponsel, lalu dipasang di peta lewat 2–3 titik acuan. Tampil di Lintasan dan peta mini; bisa dipakai tanpa internet.</div></div>
+
+      </div>
+    </section>
+
     <!-- Pengaturan -->
     <section class="view" id="v-set">
       <div id="setMenu"></div>
@@ -126,12 +143,7 @@
       <div class="spage" id="sp-peta">
         <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Peta</b></div>
       <div class="h">PETA SAYA (PDF)</div>
-      <div class="card"><div id="ovList" class="muted">Belum ada.</div>
-        <button class="btn" id="ovAdd" style="margin-top:10px;width:100%">+ Tambah peta dari PDF</button>
-        <button class="btn" id="ovImp" style="margin-top:8px;width:100%">Impor peta dari ponsel lain (.hzpeta)</button>
-        <input type="file" id="ovHz" multiple style="display:none">
-        <input type="file" id="ovFile" accept="application/pdf,.pdf" style="display:none">
-        <div class="muted" style="margin-top:8px">PDF diubah jadi gambar beresolusi tinggi di ponsel, lalu dipasang di peta lewat 2–3 titik acuan. Tampil di Lintasan dan peta mini; bisa dipakai tanpa internet.</div></div>
+      <div class="card"><div class="muted">Daftar peta PDF (tambah, kalibrasi, ekspor, impor, hapus) sekarang ada di menu Data peta.</div><button class="btn" id="ovGo" style="margin-top:10px;width:100%">Buka Data peta › Peta PDF</button></div>
 
       <div class="h">DATA KETINGGIAN (DEMNAS)</div>
       <div class="card"><div class="muted" id="demInfo">Memeriksa…</div>
@@ -221,7 +233,8 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">by Yohanes div2<br>Versi 0.9.1</div>
+  <a data-go="data">Data peta</a>
+  <div class="ver">by Yohanes div2<br>Versi 0.9.2</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>

@@ -143,10 +143,10 @@
   }
 
   // ---------- navigasi ----------
-  var TITLES = { spido: 'SPIDOMETER', lintasan: 'LINTASAN', riwayat: 'RIWAYAT', set: 'PENGATURAN' };
+  var TITLES = { spido: 'SPIDOMETER', lintasan: 'LINTASAN', riwayat: 'RIWAYAT', set: 'PENGATURAN', data: 'DATA PETA' };
   function go(v) {
     S.view = v;
-    ['spido', 'lintasan', 'riwayat', 'set'].forEach(function (n) { $('v-' + n).classList.toggle('on', n === v); });
+    ['spido', 'lintasan', 'riwayat', 'set', 'data'].forEach(function (n) { $('v-' + n).classList.toggle('on', n === v); });
     $('main').classList.toggle('map', v === 'lintasan');
     $('main').classList.toggle('pg', v === 'spido');
     if (v !== 'spido') spSetActive(false); else spResetMain();
@@ -162,6 +162,7 @@
     if (S.spPushed && v !== 'set') { S.spPushed = false; try { history.back(); } catch (e) {} }
     if (v === 'set') { showSet(null); renderOv(); renderSettings(); syncStatus(); renderCacheInfo(); renderHidden(); }
     if (v === 'spido') { syncStatus(); renderSpido(); renderUnitCard(); }
+    if (v === 'data') renderData();
     $('main').scrollTop = 0;
   }
   function openDrawer() { $('drawer').classList.add('on'); $('scrim').classList.add('on'); }
@@ -1109,7 +1110,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.9.1'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.9.2'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1557,7 +1558,7 @@
   function contourColor() {
     return S.settings.mapMode === 'osm' ? ['', '', 'rgba(255,255,255,.9)', 1] : ['', '', 'rgba(0,0,0,.75)', 0];
   }
-  function meshWanted() { return !!S.settings.mesh && S.settings.mapMode === 'osm'; }
+  function meshWanted() { return false; }
   function legendSync() {
     var m = map; if (!m) return;
     if (DM.leg) { m.removeControl(DM.leg); DM.leg = null; }
@@ -1619,30 +1620,46 @@
     m.getContainer().appendChild(panel);
     L.DomEvent.disableClickPropagation(panel); L.DomEvent.disableScrollPropagation(panel);
     function row(id, label, sub) { return '<div class="trow"><button type="button" class="tsw" data-t="' + id + '" role="switch"><span class="tl">' + label + (sub ? '<small>' + sub + '</small>' : '') + '</span><span class="tk"></span></button></div>'; }
-    panel.innerHTML = '<div class="tt">ALAT PETA</div>' + row('contour', 'Kontur') + row('slopeLayer', 'Kemiringan (warna)') +
-      row('hach', 'Arsiran') + '<div class="tseg" id="tHk"><button type="button" data-k="down">Arah turun</button><button type="button" data-k="row">Arah row</button></div>' +
+    function ic(p) { return '<svg viewBox="0 0 24 24">' + p + '</svg>'; }
+    var IC = {
+      contour: ic('<path d="M3 8c3-3 6 2 9-1s6 2 9-1M3 13c3-3 6 2 9-1s6 2 9-1M3 18c3-3 6 2 9-1s6 2 9-1"/>'),
+      slopeLayer: ic('<path d="M3 19L21 6v13z"/><path d="M8 19v-3M12 19v-6M16 19v-9"/>'),
+      hach: ic('<path d="M4 6l4 3M4 12l4 3M10 5l4 3M10 11l4 3M16 4l4 3M16 10l4 3M4 18l4 3"/>'),
+      v3d: ic('<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9"/>'),
+      slopeTap: ic('<path d="M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z"/><path d="M12 8v4M12 14.5v.5"/>'),
+      prof: ic('<path d="M3 20h18M4 16l4-5 3 3 4-7 5 6"/>'),
+      useNas: ic('<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>'),
+      useFree: ic('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>'),
+      lakesOn: ic('<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>'),
+      shpOn: ic('<path d="M5 17l3-10 9 3 2 8z"/><circle cx="5" cy="17" r="1.5"/><circle cx="8" cy="7" r="1.5"/><circle cx="17" cy="10" r="1.5"/>'),
+      batDesa: ic('<path d="M4 7l5-3 6 3 5-2v12l-5 2-6-3-5 3z"/><path d="M9 4v13M15 7v13"/>'),
+      batKec: ic('<path d="M3 5h18v14H3z"/><path d="M3 12h18M12 5v14"/>'),
+      draw: ic('<path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/>'),
+      batCfg: ic('<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>'),
+      dataGo: ic('<path d="M5 5h14M5 12h14M5 19h14"/>')
+    };
+    function tile(id, label, st, badge) { return '<button type="button" class="tile' + (st ? ' st' : '') + '" data-t="' + id + '">' + IC[id] + '<span>' + label + '</span>' + (badge ? '<i class="tbd" id="bd_' + id + '"></i>' : '') + '</button>'; }
+    panel.innerHTML = '<div class="tt">LAPISAN</div><div class="tgrid">' + tile('contour', 'Kontur', 1) + tile('slopeLayer', 'Lereng', 1) + tile('hach', 'Arsiran', 1) + tile('v3d', '3D', 1) + tile('slopeTap', 'Info lereng', 1) + tile('prof', 'Profil', 1) + '</div>' +
+      '<div class="tseg" id="tHk"><button type="button" data-k="down">Arah turun</button><button type="button" data-k="row">Searah kontur</button></div>' +
       '<div class="tseg" id="tHs"><button type="button" data-s="detail">Detail</button><button type="button" data-s="umum">Umum</button></div>' +
-      row('mesh', 'Jaring (mesh)', 'hanya mode Peta') + row('v3d', 'Tampilan 3D', 'hanya mode Peta') +
-      row('slopeTap', 'Info lereng', 'ketuk titik di peta') + row('prof', 'Profil ketinggian') +
-      '<div class="tt" style="margin-top:6px">SUMBER DATA</div>' + row('useNas', 'DEMNAS', '<span id="tNasSub"></span>') + row('useFree', 'DEM gratis', '±30 m, perlu internet') +
-      '<div class="tt" style="margin-top:6px">DANAU</div>' + row('lakesOn', 'Koreksi danau') + '<div class="trow"><button type="button" class="tbtn" data-t="lakes" id="tLakes">Kelola danau</button></div>' +
-      '<div class="tt" style="margin-top:6px">GAMBAR & UKUR</div>' + row('shpOn', 'Tampilkan gambar') + '<div class="trow"><button type="button" class="tbtn" data-t="shapes" id="tShp">Gambar & ukur</button></div>' +
-      '<div class="tt" style="margin-top:6px">BATAS WILAYAH</div>' + row('batDesa', 'Desa', 'nama muncul di zoom tertentu') + row('batKec', 'Kecamatan') +
-      '<div class="trow"><button type="button" class="tbtn" data-t="batCfg">Pengaturan batas wilayah  ›</button></div>';
+      '<div class="tt" style="margin-top:6px">SUMBER DATA</div><div class="tgrid">' + tile('useNas', 'DEMNAS', 1) + tile('useFree', 'DEM gratis', 1) + '</div><div class="tnote" id="tNasSub"></div>' +
+      '<div class="tt">TAMPIL</div><div class="tgrid g4">' + tile('lakesOn', 'Danau', 1, 1) + tile('shpOn', 'Gambar', 1, 1) + tile('batDesa', 'Desa', 1) + tile('batKec', 'Kec.', 1) + '</div>' +
+      '<div class="tt">ALAT</div><div class="tgrid">' + tile('draw', 'Gambar baru') + tile('batCfg', 'Atur batas') + tile('dataGo', 'Data peta') + '</div>';
     function state(id) {
       return id === 'contour' ? !!S.settings.contour : id === 'slopeLayer' ? !!S.settings.slopeLayer : id === 'hach' ? !!S.settings.hach : id === 'slopeTap' ? !!m._slopeOn :
-        id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'mesh' ? !!S.settings.mesh : id === 'v3d' ? V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : !!S.profOpen;
+        id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'v3d' ? V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : !!S.profOpen;
     }
     function sync() {
       var any = false;
       var osmOnly = S.settings.mapMode !== 'osm';
-      ['mesh', 'v3d'].forEach(function (t) { var e = panel.querySelector('.tsw[data-t=' + t + ']'); if (e) e.classList.toggle('dis', osmOnly); });
-      panel.querySelectorAll('.tsw').forEach(function (b) { var on = state(b.getAttribute('data-t')); b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); if (on) any = true; });
+      ['v3d'].forEach(function (t) { var e = panel.querySelector('[data-t=' + t + ']'); if (e) e.classList.toggle('dis', osmOnly); });
+      panel.querySelectorAll('.tsw, .tile.st').forEach(function (b) { var on = state(b.getAttribute('data-t')); b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); if (on) any = true; });
       var hs = S.settings.hachSmooth || 'detail';
+      $('tHk').style.display = $('tHs').style.display = S.settings.hach ? '' : 'none';
       panel.querySelectorAll('#tHs button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-s') === hs); });
-      if ($('tNasSub')) $('tNasSub').textContent = window.HzDem && HzDem.hasAnyLocal() ? 'data impor, ±8 m' : 'belum diimpor (Pengaturan > Peta)';
-      $('tShp').textContent = 'Gambar & ukur (' + shapesList().length + ')  ›';
-      $('tLakes').textContent = 'Kelola danau (' + lakesList().length + ')  ›';
+      if ($('tNasSub')) $('tNasSub').textContent = 'DEMNAS: ' + (window.HzDem && HzDem.hasAnyLocal() ? 'data impor, ±8 m' : 'belum diimpor (Pengaturan > Peta)') + ' · DEM gratis ±30 m';
+      if ($('bd_shpOn')) $('bd_shpOn').textContent = shapesList().length || '';
+      if ($('bd_lakesOn')) $('bd_lakesOn').textContent = lakesList().length || '';
       var k = S.settings.hachKind || 'down';
       panel.querySelectorAll('#tHk button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-k') === k); });
       if (DM.main) DM.main.classList.toggle('hason', any);
@@ -1653,8 +1670,10 @@
       if (k) { S.settings.hachKind = k.getAttribute('data-k'); saveSettings(); if (!S.settings.hach) setHach(true); else if (DM.hach) DM.hach.redraw(); sync(); return; }
       var sm = e.target.closest && e.target.closest('#tHs button');
       if (sm) { S.settings.hachSmooth = sm.getAttribute('data-s'); saveSettings(); if (!S.settings.hach) setHach(true); else if (DM.hach) DM.hach.redraw(); sync(); return; }
-      var b = e.target.closest && e.target.closest('.tsw, .tbtn'); if (!b) return;
+      var b = e.target.closest && e.target.closest('.tsw, .tbtn, .tile'); if (!b) return;
       var id = b.getAttribute('data-t');
+      if (id === 'draw') { closeP(); drawStart(); return; }
+      if (id === 'dataGo') { closeP(); go('data'); return; }
       if (id === 'lakes') { closeP(); openLakes(); return; }
       if (id === 'shapes') { closeP(); openShapes(); return; }
       if (id === 'shpOn') { S.settings.shapesOn = S.settings.shapesOn === false; saveSettings(); applyShapes(); sync(); return; }
@@ -1663,10 +1682,9 @@
       if (id === 'contour') setContour(!S.settings.contour);
       else if (id === 'slopeLayer') setSlopeLayer(!S.settings.slopeLayer);
       else if (id === 'hach') setHach(!S.settings.hach);
-      else if (id === 'mesh' || id === 'v3d') {
-        if (S.settings.mapMode !== 'osm') { toast('Hanya tersedia di mode Peta (bukan Satelit)'); return; }
-        if (id === 'mesh') { S.settings.mesh = !S.settings.mesh; saveSettings(); syncMode(); }
-        else if (V3.on) close3d(); else open3d();
+      else if (id === 'v3d') {
+        if (S.settings.mapMode !== 'osm') { toast('3D hanya tersedia di mode Peta (bukan Satelit)'); return; }
+        if (V3.on) close3d(); else open3d();
       }
       else if (id === 'useNas') setSource('nas', S.settings.useNas === false);
       else if (id === 'useFree') setSource('free', S.settings.useFree === false);
@@ -2035,7 +2053,61 @@
         saveSettings(); batRedraw();
       };
     });
-    $('bX').onclick = closeSheet;
+    $('bX').onclick = function () { closeSheet(); if (S.view === 'data') renderData(); };
+  }
+  // ---------- halaman Data peta ----------
+  function viewOnMap(pts) {
+    mapKeep = true; go('lintasan');
+    setTimeout(function () { if (map && pts && pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 19 }); }, 900);
+  }
+  function afterShape() { if (S.view === 'data') { closeSheet(); renderData(); } else openShapes(); }
+  function delLake(i) {
+    var l = lakesList()[i]; if (!l) return;
+    askConfirm('Hapus tanda "' + l.name + '"?', 'Kontur dan arah panah di sekitarnya kembali mengikuti data asli.', 'Hapus', function () { lakesList().splice(i, 1); saveSettings(); applyLakes(); demRedraw(); if (S.view === 'data') renderData(); else openLakes(); });
+  }
+  function renderData() {
+    var tab = S.dpTab || 'danau';
+    document.querySelectorAll('#dpTabs button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === tab); });
+    document.querySelectorAll('.dpp').forEach(function (e) { e.classList.toggle('on', e.id === 'dp-' + tab); });
+    var box = $('dp-' + tab);
+    if (tab === 'danau') {
+      var ls = lakesList();
+      box.innerHTML = (ls.length ? ls.map(function (l, i) {
+        return '<div class="card"><div class="dprow" style="margin-top:0"><input type="text" data-lk="' + i + '" value="' + esc(l.name) + '" maxlength="30"><button class="btn sm" data-lv="' + i + '">Lihat</button><button class="btn sm danger" data-ld="' + i + '">Hapus</button></div><div class="muted" data-lm="' + i + '" style="margin-top:6px"></div></div>';
+      }).join('') : '<div class="card muted">Belum ada tanda danau.</div>') +
+        '<div class="muted" style="margin-top:10px">Di dalam tanda, permukaan dianggap datar di bawah tepinya, jadi panah di tepi menunjuk ke dalam. Dipakai oleh kontur, kemiringan, arsiran, Info lereng, dan profil. Matikan dengan ikon Danau di Alat peta.</div>' +
+        '<button class="btn pri" id="dpNewL" style="width:100%;margin-top:12px;height:50px">+ Tandai danau baru</button>';
+      ls.forEach(function (l, i) {
+        function show(m) { var e = box.querySelector('[data-lm="' + i + '"]'); if (e && m && m.area) e.textContent = 'Luas datar ' + fmtArea(m.area) + (m.areaSlope ? ' · permukaan lereng ' + fmtArea(m.areaSlope) : '') + ' · keliling ' + fmtLen(m.flat); }
+        if (l.m) show(l.m); else if (window.HzDem) HzDem.measure(l.pts, true).then(function (m) { l.m = m; saveSettings(); show(m); }).catch(function () {});
+      });
+      box.querySelectorAll('input[data-lk]').forEach(function (inp) { inp.onchange = function () { var l = lakesList()[+inp.getAttribute('data-lk')]; if (l) { l.name = inp.value.trim() || l.name; saveSettings(); drawLakes(); } }; });
+      box.querySelectorAll('[data-lv]').forEach(function (b) { b.onclick = function () { var l = lakesList()[+b.getAttribute('data-lv')]; if (l) viewOnMap(l.pts); }; });
+      box.querySelectorAll('[data-ld]').forEach(function (b) { b.onclick = function () { delLake(+b.getAttribute('data-ld')); }; });
+      $('dpNewL').onclick = function () { mapKeep = true; go('lintasan'); setTimeout(drawStart, 700); };
+    } else if (tab === 'gambar') {
+      var sh = shapesList();
+      box.innerHTML = (sh.length ? sh.map(function (s, i) {
+        return '<div class="card"><div class="dprow" style="margin-top:0"><div class="nm"><b>' + esc(s.name) + '</b><small>' + (s.type === 'line' ? 'Garis' : 'Area') + (s.m ? ' · ' + (s.type === 'line' ? fmtLen(s.m.flat) : (s.m.area ? fmtArea(s.m.area) + ' (datar)' + (s.m.areaSlope ? ' · ' + fmtArea(s.m.areaSlope) + ' (lereng)' : '') : '')) : '') + '</small></div><button class="btn sm" data-sv="' + i + '">Lihat</button><button class="btn sm" data-se="' + i + '">Buka</button></div></div>';
+      }).join('') : '<div class="card muted">Belum ada gambar.</div>') +
+        '<div class="muted" style="margin-top:10px">Garis mengukur panjang. Area menandai wilayah dan mengukur luas (datar dan mengikuti lereng). Tampil di peta dan 3D.</div>' +
+        '<button class="btn pri" id="dpNewS" style="width:100%;margin-top:12px;height:50px">+ Gambar baru</button>';
+      box.querySelectorAll('[data-sv]').forEach(function (b) { b.onclick = function () { var s = shapesList()[+b.getAttribute('data-sv')]; if (s) viewOnMap(s.pts); }; });
+      box.querySelectorAll('[data-se]').forEach(function (b) { b.onclick = function () { openShape(+b.getAttribute('data-se')); }; });
+      $('dpNewS').onclick = function () { mapKeep = true; go('lintasan'); setTimeout(drawStart, 700); };
+    } else if (tab === 'batas') {
+      var bs = batSet(), fi = window.HzBatas ? HzBatas.fileInfo() : [];
+      box.innerHTML = '<div class="card"><div class="dprow" style="margin-top:0"><div class="nm"><b>Desa</b><small>' + (bs.desa ? 'tampil di peta' : 'mati') + '</small></div><button class="btn sm" data-bt="desa">' + (bs.desa ? 'Matikan' : 'Nyalakan') + '</button></div>' +
+        '<div class="dprow"><div class="nm"><b>Kecamatan</b><small>' + (bs.kec ? 'tampil di peta' : 'mati') + '</small></div><button class="btn sm" data-bt="kec">' + (bs.kec ? 'Matikan' : 'Nyalakan') + '</button></div></div>' +
+        '<div class="h">BERKAS IMPOR</div><div class="card">' + (fi.length ? fi.map(function (x, i) { return '<div class="dprow" style="margin-top:' + (i ? 8 : 0) + 'px"><div class="nm"><b>' + esc(x.name) + '</b><small>' + (x.kind === 'desa' ? 'Desa' : 'Kecamatan') + ' · ' + x.n + ' poligon</small></div><button class="btn sm danger" data-bd="' + i + '">Hapus</button></div>'; }).join('') : '<div class="muted">Belum ada berkas.</div>') + '</div>' +
+        '<div class="h">LAYANAN ONLINE</div><div class="card"><div class="muted" style="word-break:break-all">' + (bs.base ? esc(bs.base) : 'Belum diatur.') + '</div></div>' +
+        '<button class="btn pri" id="dpBat" style="width:100%;margin-top:12px;height:50px">Pengaturan batas wilayah</button>';
+      box.querySelectorAll('[data-bt]').forEach(function (b) { b.onclick = function () { var k = b.getAttribute('data-bt'); bs[k] = !bs[k]; saveSettings(); batRedraw(); renderData(); }; });
+      box.querySelectorAll('[data-bd]').forEach(function (b) { b.onclick = function () { var x = HzBatas.fileInfo()[+b.getAttribute('data-bd')]; if (x) HzBatas.removeFile(x.kind, x.name).then(function () { batRedraw(); renderData(); }); }; });
+      $('dpBat').onclick = openBat;
+    } else if (tab === 'pdf') {
+      renderOv();
+    }
   }
   function lakesList() { return S.settings.lakes || (S.settings.lakes = []); }
   function applyLakes() {
@@ -2151,8 +2223,8 @@
     $('shT').onchange = function () { s.note = $('shT').value.trim(); saveSettings(); };
     $('shC').onclick = function (e) { var c = e.target.getAttribute && e.target.getAttribute('data-c'); if (!c) return; s.color = c; saveSettings(); applyShapes(); openShape(i); };
     $('shV').onclick = function () { closeSheet(); if (map) map.fitBounds(L.latLngBounds(s.pts), { padding: [50, 50], maxZoom: 19 }); };
-    $('shD').onclick = function () { askConfirm('Hapus "' + s.name + '"?', 'Gambar ini dihapus dari peta dan tampilan 3D.', 'Hapus', function () { shapesList().splice(i, 1); saveSettings(); applyShapes(); openShapes(); }); };
-    $('shX').onclick = function () { closeSheet(); openShapes(); };
+    $('shD').onclick = function () { askConfirm('Hapus "' + s.name + '"?', 'Gambar ini dihapus dari peta dan tampilan 3D.', 'Hapus', function () { shapesList().splice(i, 1); saveSettings(); applyShapes(); afterShape(); }); };
+    $('shX').onclick = function () { if (S.view === 'data') afterShape(); else { closeSheet(); openShapes(); } };
   }
   function drawStart() {
     if (!map || !window.HzDem) return;
@@ -2990,6 +3062,8 @@
     $('toMap').onclick = function () { showMap(S.hDay, -1); };
     $('hidList').onclick = onHidden;
     $('miniX').onclick = function () { closeMini(); };
+    $('dpTabs').onclick = function (e) { var t = e.target.getAttribute && e.target.getAttribute('data-tab'); if (t) { S.dpTab = t; renderData(); } };
+    $('ovGo').onclick = function () { S.dpTab = 'pdf'; go('data'); };
     $('ovAdd').onclick = function () { $('ovFile').value = ''; $('ovFile').click(); };
     $('ovFile').onchange = function () { if (this.files && this.files[0]) importOv(this.files[0]); };
     $('ovImp').onclick = function () { $('ovHz').value = ''; $('ovHz').click(); };
