@@ -47,6 +47,7 @@
           <div id="spHud"><div class="spv"><b id="spSpd">–</b><small>km/j</small></div></div>
           <div id="spNote"></div>
           <button class="locbtn" id="spToMain" aria-label="Ke Spidometer"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 18a9 9 0 1 1 17 0"/><path d="M12 17l4.2-5.6"/><circle cx="12" cy="17" r="1.3"/><path d="M5.6 12.4l1.2.7M12 7.2v1.4M18.4 12.4l-1.2.7"/></svg></button>
+          <button class="locbtn" id="spBat" aria-label="Batas wilayah"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l5-3 6 3 5-2v12l-5 2-6-3-5 3z"/><path d="M9 4v13M15 7v13"/></svg></button>
           <button class="locbtn" id="spLoc" aria-label="Posisi saya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>
         </div>
         <div id="spBar"><button class="btn sm on" id="spFol">Ikuti: ya</button><button class="btn sm on" id="spZoom">Zoom otomatis: ya</button><button class="btn sm" id="spAwake">Layar menyala: tidak</button></div>
@@ -139,6 +140,10 @@
         <button class="btn" id="demDel" style="margin-top:8px;width:100%;display:none">Hapus data ketinggian</button>
         <div class="muted" style="margin-top:8px">Pilih satu atau beberapa lembar DEMNAS (.tif, koordinat derajat/EPSG:4326). Dibaca di ponsel, disimpan terpisah dari cache peta dan tidak ikut cadangan, jadi simpan berkas aslinya. Sumber: DEMNAS, Badan Informasi Geospasial (BIG).</div></div>
 
+      <div class="h">DETAIL SATELIT</div>
+      <div class="card"><div class="muted">Zoom terdalam yang punya foto asli di areamu. Di atas angka ini foto hanya diperbesar (buram), tapi peta tetap bisa di-zoom lebih dekat tanpa tulisan "data not yet available". Kalau foto masih tajam, naikkan; kalau muncul tulisan itu, turunkan.</div>
+        <div class="opts" id="satNat" style="margin-top:8px"></div></div>
+
       <div class="h">CACHE PETA</div>
       <div class="card"><div class="muted" id="tcInfo">Menghitung…</div>
         <div class="muted" style="margin-top:6px">Peta satelit dan peta jalan yang pernah Anda lihat tersimpan di ponsel, jadi bisa dibuka lagi tanpa internet. Batas 300 MB; yang paling lama dibuang lebih dulu.</div>
@@ -214,7 +219,7 @@
   <a data-go="riwayat">Riwayat</a>
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
-  <div class="ver">by Yohanes div2<br>Versi 0.8.9</div>
+  <div class="ver">by Yohanes div2<br>Versi 0.9.0</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
@@ -228,6 +233,7 @@
 <script src="ekspor.js"></script>
 <script src="peta.js"></script>
 <script src="dem.js"></script>
+<script src="batas.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

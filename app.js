@@ -1069,8 +1069,13 @@
     $('demAdd').disabled = true; $('demErr').textContent = '';
     nx();
   }
+  function renderSatNat() {
+    var box = $('satNat'); if (!box) return;
+    var cur = S.settings.satNative || 17;
+    box.innerHTML = [16, 17, 18, 19].map(function (v) { return '<button class="opt' + (cur === v ? ' on' : '') + '" data-sn="' + v + '">' + v + '</button>'; }).join('');
+  }
   function renderCacheInfo() {
-    renderDemInfo();
+    renderDemInfo(); renderSatNat();
     if (!$('tcInfo')) return;
     TC.stats().then(function (s) { $('tcInfo').textContent = 'Cache peta: ' + (s.bytes / 1048576).toFixed(1).replace('.', ',') + ' MB · ' + s.n + ' kotak peta'; });
   }
@@ -1104,7 +1109,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.8.9'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.9.0'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1338,17 +1343,28 @@
     demButtons(map);
     return true;
   }
+  // foto satelit hanya ada sampai zoom tertentu: di atasnya gambar diperbesar (maxNativeZoom), peta tetap bisa di-zoom sampai 22
+  function tileOpts(md) { return { maxZoom: 22, maxNativeZoom: md === 'sat' ? (S.settings.satNative || 17) : 19, attribution: TILES[md][1] }; }
+  function zoomInd(m) {
+    var C = L.Control.extend({ options: { position: 'topleft' }, onAdd: function () {
+      var e = L.DomUtil.create('div', 'zind leaflet-control');
+      function u() { e.textContent = 'zoom ' + m.getZoom(); }
+      m.on('zoomend', u); u(); return e;
+    } });
+    new C().addTo(m);
+  }
   function setBase(m, force) {
     if (!m) return;
     if (m._base) { m.removeLayer(m._base); m._base = null; }
     var md = force || (S.settings.mapMode === 'sat' ? 'sat' : 'osm');
-    if (TILES[md]) m._base = new (cachedLayerClass())(TILES[md][0], { maxZoom: 19, attribution: TILES[md][1] }).addTo(m);
+    if (TILES[md]) m._base = new (cachedLayerClass())(TILES[md][0], tileOpts(md)).addTo(m);
   }
   function setTiles() {
     if (!map) return;
     setBase(map);
     syncOverlays(map);
     if (DM.syncMode) DM.syncMode();
+    batRedraw();
     document.querySelectorAll('#mapSeg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-map') === S.settings.mapMode); });
   }
   function gapText(g) { return 'Berhenti ' + T.hm(g.from) + '–' + T.hm(g.to) + ' (' + T.durText((g.to - g.from) / 1000) + ')'; }
@@ -1609,10 +1625,12 @@
       row('mesh', 'Jaring (mesh)', 'hanya mode Peta') + row('v3d', 'Tampilan 3D', 'hanya mode Peta') +
       row('slopeTap', 'Info lereng', 'ketuk titik di peta') + row('prof', 'Profil ketinggian') +
       '<div class="tt" style="margin-top:6px">SUMBER DATA</div>' + row('useNas', 'DEMNAS', '<span id="tNasSub"></span>') + row('useFree', 'DEM gratis', '±30 m, perlu internet') +
-      '<div class="tt" style="margin-top:6px">DANAU</div>' + row('lakesOn', 'Koreksi danau') + '<div class="trow"><button type="button" class="tbtn" data-t="lakes" id="tLakes">Kelola danau</button></div>';
+      '<div class="tt" style="margin-top:6px">DANAU</div>' + row('lakesOn', 'Koreksi danau') + '<div class="trow"><button type="button" class="tbtn" data-t="lakes" id="tLakes">Kelola danau</button></div>' +
+      '<div class="tt" style="margin-top:6px">BATAS WILAYAH</div>' + row('batDesa', 'Desa', 'nama muncul di zoom tertentu') + row('batKec', 'Kecamatan') +
+      '<div class="trow"><button type="button" class="tbtn" data-t="batCfg">Pengaturan batas wilayah  ›</button></div>';
     function state(id) {
       return id === 'contour' ? !!S.settings.contour : id === 'slopeLayer' ? !!S.settings.slopeLayer : id === 'hach' ? !!S.settings.hach : id === 'slopeTap' ? !!m._slopeOn :
-        id === 'mesh' ? !!S.settings.mesh : id === 'v3d' ? V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : !!S.profOpen;
+        id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'mesh' ? !!S.settings.mesh : id === 'v3d' ? V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : !!S.profOpen;
     }
     function sync() {
       var any = false;
@@ -1636,6 +1654,8 @@
       var b = e.target.closest && e.target.closest('.tsw, .tbtn'); if (!b) return;
       var id = b.getAttribute('data-t');
       if (id === 'lakes') { closeP(); openLakes(); return; }
+      if (id === 'batCfg') { closeP(); openBat(); return; }
+      if (id === 'batDesa' || id === 'batKec') { var bb = batSet(); bb[id === 'batDesa' ? 'desa' : 'kec'] = !bb[id === 'batDesa' ? 'desa' : 'kec']; saveSettings(); batRedraw(); sync(); return; }
       if (id === 'contour') setContour(!S.settings.contour);
       else if (id === 'slopeLayer') setSlopeLayer(!S.settings.slopeLayer);
       else if (id === 'hach') setHach(!S.settings.hach);
@@ -1667,6 +1687,8 @@
     new Ctl().addTo(m);
     // tombol lama dipertahankan sebagai penampung status (tidak tampil)
     DM.btnL = document.createElement('button'); DM.btnS = document.createElement('button'); DM.btnK = document.createElement('button'); DM.btnP = document.createElement('button');
+    if (window.HzBatas && !DM.bat) DM.bat = HzBatas.attach(m, batCfg, toast);
+    zoomInd(m);
     if (window.HzDem) HzDem.setSources(S.settings.useNas !== false, S.settings.useFree !== false);
     applyLakes();
     if (S.settings.contour) setContour(true);
@@ -1878,6 +1900,107 @@
     if (window.HzDem) HzDem.setSources(nas, free);
     demRedraw();
     toast(nas && free ? 'DEMNAS + DEM gratis' : nas ? 'DEMNAS saja' : 'DEM gratis saja');
+  }
+  // ---------- batas wilayah ----------
+  function batSet() { return S.settings.bat || (S.settings.bat = {}); }
+  function batCfg() {
+    var b = S.settings.bat || {};
+    return { desa: !!b.desa, kec: !!b.kec, online: b.online !== false, file: b.file !== false, base: b.base || '', desaId: b.desaId == null ? null : b.desaId, kecId: b.kecId == null ? null : b.kecId,
+      fDesa: b.fDesa || '', fKec: b.fKec || '', minDesa: b.minDesa || 13, minKec: b.minKec || 10, osm: S.settings.mapMode === 'osm' };
+  }
+  function batRedraw() {
+    [DM.bat, SP.bat].forEach(function (x) { if (x) x.redraw(); });
+    var on = !!(S.settings.bat && (S.settings.bat.desa || S.settings.bat.kec));
+    if ($('spBat')) $('spBat').classList.toggle('on', on);
+    if (DM.sync) DM.sync();
+  }
+  var BAT_BASES = []; (function () { for (var i = 1; i <= 10; i++) BAT_BASES.push('https://geoportal.bps.go.id/server/rest/services/LCRPGR/MA' + (i < 10 ? '0' : '') + i + '_BatasWilayah/MapServer'); })();
+  function guessField(fields, kind) {
+    var re = kind === 'kec' ? /^(wadmkc|nama_?kec|nm_?kec|kecamatan|namobj|nama|name)/i : /^(wadmkd|namobj|nama_?desa|nm_?desa|desa|nama_?kel|nm_?kel|nama|name)/i;
+    for (var i = 0; i < fields.length; i++) if (re.test(fields[i])) return fields[i];
+    return fields[0] || '';
+  }
+  function openBat() {
+    var b = batSet(), imKind = 'desa';
+    function stepRow(id, label, v) { return '<div class="row" style="align-items:center;margin-top:6px"><div style="flex:1">' + label + '</div><button class="btn" data-st="' + id + '-" style="width:44px">−</button><b id="' + id + 'V" style="min-width:30px;text-align:center">' + v + '</b><button class="btn" data-st="' + id + '+" style="width:44px">+</button></div>'; }
+    openSheet('<div class="grab"></div><div class="st">BATAS WILAYAH</div>' +
+      '<div class="muted" style="margin:4px 0 8px">Hanya tampil di peta, tidak dicatat di trip. Batas dari data pemerintah bisa bergeser dari batas di lapangan, jadi anggap sebagai petunjuk.</div>' +
+      '<div class="h">SUMBER</div>' +
+      '<label><input type="checkbox" id="bOn"' + (b.online !== false ? ' checked' : '') + '> Layanan online (garis penuh)</label>' +
+      '<label><input type="checkbox" id="bFi"' + (b.file !== false ? ' checked' : '') + '> Berkas impor (garis putus-putus)</label>' +
+      '<div class="h" style="margin-top:12px">LAYANAN ONLINE (ArcGIS MapServer)</div>' +
+      '<input type="text" id="bUrl" placeholder="https://…/MapServer" value="' + esc(b.base || '') + '">' +
+      '<div class="row" style="margin-top:8px"><button class="btn" id="bFind" style="flex:1.4">Cari otomatis di lokasi peta</button><button class="btn" id="bTest" style="flex:1">Muat layer</button></div>' +
+      '<div class="muted" id="bMsg" style="margin-top:6px;white-space:pre-wrap"></div>' +
+      '<div style="margin-top:8px"><div class="muted">Layer desa</div><select id="bSd"></select><div class="muted" style="margin-top:4px">Kolom nama desa (kosong = otomatis)</div><input type="text" id="bFd" value="' + esc(b.fDesa || '') + '"></div>' +
+      '<div style="margin-top:8px"><div class="muted">Layer kecamatan</div><select id="bSk"></select><div class="muted" style="margin-top:4px">Kolom nama kecamatan (kosong = otomatis)</div><input type="text" id="bFk" value="' + esc(b.fKec || '') + '"></div>' +
+      '<div class="h" style="margin-top:12px">IMPOR BERKAS (GeoJSON atau KML)</div>' +
+      '<div class="row"><button class="btn" id="bImD" style="flex:1">Impor batas desa</button><button class="btn" id="bImK" style="flex:1">Impor batas kecamatan</button></div>' +
+      '<input type="file" id="bFile" multiple style="display:none"><div class="muted" id="bList" style="margin-top:6px"></div>' +
+      '<div class="h" style="margin-top:12px">TAMPILAN NAMA</div>' + stepRow('bZd', 'Nama desa mulai zoom', b.minDesa || 13) + stepRow('bZk', 'Nama kecamatan mulai zoom', b.minKec || 10) +
+      '<button class="btn" id="bX" style="width:100%;margin-top:12px">Tutup</button>');
+    var layers = [];
+    function fillSel(id, sel, guessId) {
+      var s = $(id); s.innerHTML = '<option value="">(tidak dipakai)</option>' + layers.map(function (l) { return '<option value="' + l.id + '">' + esc(l.id + ' · ' + l.name) + '</option>'; }).join('');
+      s.value = sel != null ? String(sel) : (guessId != null ? String(guessId) : '');
+    }
+    function selCur() { fillSel('bSd', b.desaId, null); fillSel('bSk', b.kecId, null); }
+    function renderList() {
+      var f = HzBatas.fileInfo();
+      $('bList').innerHTML = f.length ? f.map(function (x, i) { return esc((x.kind === 'desa' ? 'Desa' : 'Kecamatan') + ': ' + x.name) + ' · ' + x.n + ' poligon <a href="#" data-rm="' + i + '" style="color:var(--r)">hapus</a>'; }).join('<br>') : 'Belum ada berkas.';
+    }
+    selCur(); renderList();
+    if (b.base) arcLayersSafe();
+    function arcLayersSafe() { HzBatas.arcLayers(b.base).then(function (l) { layers = l; selCur(); }).catch(function () {}); }
+    function saveSel() {
+      b.online = $('bOn').checked; b.file = $('bFi').checked; b.base = $('bUrl').value.trim();
+      b.desaId = $('bSd').value === '' ? null : +$('bSd').value; b.kecId = $('bSk').value === '' ? null : +$('bSk').value;
+      b.fDesa = $('bFd').value.trim(); b.fKec = $('bFk').value.trim();
+      saveSettings(); HzBatas.clearArcCache && 0; batRedraw();
+    }
+    ['bOn', 'bFi'].forEach(function (i) { $(i).onchange = saveSel; });
+    ['bSd', 'bSk', 'bFd', 'bFk', 'bUrl'].forEach(function (i) { $(i).onchange = saveSel; });
+    $('bSd').addEventListener('change', function () { if (this.value !== '') HzBatas.arcFields($('bUrl').value.trim(), this.value).then(function (f) { if (!$('bFd').value) { $('bFd').value = guessField(f, 'desa'); saveSel(); } }).catch(function () {}); });
+    $('bSk').addEventListener('change', function () { if (this.value !== '') HzBatas.arcFields($('bUrl').value.trim(), this.value).then(function (f) { if (!$('bFk').value) { $('bFk').value = guessField(f, 'kec'); saveSel(); } }).catch(function () {}); });
+    $('bTest').onclick = function () {
+      var u = $('bUrl').value.trim(); if (!u) { $('bMsg').textContent = 'Isi alamat layanan dulu, atau pakai Cari otomatis.'; return; }
+      $('bMsg').textContent = 'Memuat daftar layer…';
+      HzBatas.arcLayers(u).then(function (l) {
+        layers = l; b.base = u; fillSel('bSd', null, HzBatas.guessLayer(l, 'desa')); fillSel('bSk', null, HzBatas.guessLayer(l, 'kec'));
+        $('bMsg').textContent = l.length + ' layer ditemukan. Pilih layer desa dan kecamatan.'; saveSel();
+        $('bSd').dispatchEvent(new Event('change')); $('bSk').dispatchEvent(new Event('change'));
+      }).catch(function (e) { $('bMsg').textContent = 'Gagal: ' + (e && e.message || e); });
+    };
+    $('bFind').onclick = function () {
+      if (!map) return; var c = map.getCenter(); $('bMsg').textContent = 'Mencari layanan yang memuat lokasi peta…';
+      HzBatas.discover(c.lat, c.lng, BAT_BASES, function (base) { $('bMsg').textContent = 'Memeriksa ' + base.replace(/^.*LCRPGR\//, '') + '…'; }).then(function (r) {
+        if (!r) { $('bMsg').textContent = 'Tidak ditemukan otomatis. Isi alamat layanan sendiri lalu tekan Muat layer.'; return; }
+        layers = r.layers; $('bUrl').value = r.base; b.base = r.base; fillSel('bSd', null, r.desaId); fillSel('bSk', null, r.kecId);
+        $('bMsg').textContent = 'Ditemukan: ' + r.base.replace(/^.*LCRPGR\//, ''); saveSel();
+        $('bSd').dispatchEvent(new Event('change')); $('bSk').dispatchEvent(new Event('change'));
+      });
+    };
+    $('bImD').onclick = function () { imKind = 'desa'; $('bFile').value = ''; $('bFile').click(); };
+    $('bImK').onclick = function () { imKind = 'kec'; $('bFile').value = ''; $('bFile').click(); };
+    $('bFile').onchange = function () {
+      var fl = Array.prototype.slice.call(this.files || []), i = 0, msgs = [];
+      $('bMsg').textContent = 'Membaca berkas…';
+      (function nx() {
+        if (i >= fl.length) { $('bMsg').textContent = msgs.join('\n'); renderList(); batRedraw(); return; }
+        var f = fl[i++];
+        HzBatas.importFile(f, imKind, imKind === 'kec' ? $('bFk').value.trim() : $('bFd').value.trim()).then(function (r) { msgs.push(f.name + ': ' + r.n + ' poligon' + (r.named < r.n ? ' (' + (r.n - r.named) + ' tanpa nama)' : '')); }, function (e) { msgs.push(f.name + ': ' + (e && e.message || e)); }).then(nx);
+      })();
+    };
+    $('bList').onclick = function (e) { var t = e.target.closest && e.target.closest('a[data-rm]'); if (!t) return; e.preventDefault(); var x = HzBatas.fileInfo()[+t.getAttribute('data-rm')]; if (x) HzBatas.removeFile(x.kind, x.name).then(function () { renderList(); batRedraw(); }); };
+    $('sheet').querySelectorAll('button[data-st]').forEach(function (bt) {
+      bt.onclick = function () {
+        var s = bt.getAttribute('data-st'), id = s.slice(0, -1), up = s.slice(-1) === '+';
+        if (id === 'bZd') { b.minDesa = Math.max(10, Math.min(19, (b.minDesa || 13) + (up ? 1 : -1))); $('bZdV').textContent = b.minDesa; }
+        else { b.minKec = Math.max(6, Math.min(16, (b.minKec || 10) + (up ? 1 : -1))); $('bZkV').textContent = b.minKec; }
+        saveSettings(); batRedraw();
+      };
+    });
+    $('bX').onclick = closeSheet;
   }
   function lakesList() { return S.settings.lakes || (S.settings.lakes = []); }
   function applyLakes() {
@@ -2284,6 +2407,8 @@
     if (!window.L) return false;
     SP.map = L.map('spMap', { zoomControl: false, preferCanvas: true, attributionControl: true }).setView([-4.95, 105.2], 17);
     setBase(SP.map, 'sat');
+    zoomInd(SP.map);
+    if (window.HzBatas) SP.bat = HzBatas.attach(SP.map, function () { var c = batCfg(); c.osm = false; return c; }, toast);
     SP.lay = L.layerGroup().addTo(SP.map);
     SP.map.on('dragstart', function () { if (SP.follow) { SP.follow = false; spBtns(); } });
     SP.map.on('zoomstart', function () { if (!SP.zoomBusy && !SP.autoPaused) { SP.autoPaused = true; } });
@@ -2437,6 +2562,7 @@
     });
     $('spToMain').onclick = function () { spShow('main'); };
     $('spLoc').onclick = spLocate;
+    $('spBat').onclick = function () { var bb = batSet(), on = !(bb.desa || bb.kec); bb.desa = on; bb.kec = on; saveSettings(); batRedraw(); toast(on ? 'Batas desa dan kecamatan nyala' : 'Batas wilayah mati'); };
     $('spFol').onclick = function () { SP.follow = !SP.follow; if (SP.follow && SP.cur) SP.map.setView(SP.cur, SP.map.getZoom(), { animate: true }); spBtns(); };
     $('spZoom').onclick = function () { SP.zoomAuto = !SP.zoomAuto; if (SP.zoomAuto) SP.autoPaused = false; spBtns(); };
     $('spAwake').onclick = function () { S.settings.spAwake = !S.settings.spAwake; saveSettings(); spBtns(); spAwake(true); };
@@ -2731,6 +2857,10 @@
     $('demAdd').onclick = function () { $('demFile').value = ''; $('demFile').click(); };
     $('demFile').onchange = function () { demImport($('demFile').files); };
     $('demDel').onclick = function () { askConfirm('Hapus data ketinggian?', 'Data DEMNAS di ponsel dihapus. Berkas .tif asli Anda tidak terpengaruh dan bisa diimpor lagi.', 'Hapus', function () { HzDem.clearLocal().then(function () { demAfter(); toast('Data ketinggian dihapus'); }); }); };
+    $('satNat').onclick = function (e) {
+      var v = e.target.getAttribute && e.target.getAttribute('data-sn'); if (!v) return;
+      S.settings.satNative = +v; saveSettings(); renderSatNat(); setTiles(); if (SP.map) setBase(SP.map, 'sat');
+    };
     $('tcClear').onclick = function () { askConfirm('Bersihkan cache peta?', 'Peta yang tersimpan dihapus. Peta akan diunduh lagi saat Anda melihatnya dengan internet.', 'Bersihkan', function () { TC.clear().then(function () { renderCacheInfo(); toast('Cache peta dibersihkan'); }); }); };
     $('radiusSel').onchange = function () { S.settings.radius = +this.value; saveSettings(); pushSchedule(); };
     $('driverIn').onchange = function () { S.settings.driver = this.value.trim(); saveSettings(); };
