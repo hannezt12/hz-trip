@@ -437,5 +437,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .blkpop .ib2{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:none;color:inherit;font:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none}
 .blkpop .bl{margin-top:4px;opacity:.92}.blkpop .bl small{opacity:.7}
 .blkpop .tseg{margin:6px 0 0}
-.vx{width:18px;height:18px;border-radius:50%;background:#fff;border:3px solid #4DA3FF;margin:2px;box-sizing:border-box}.vx.sel{background:#FFD84D}
+.vx{width:20px;height:20px;border-radius:50%;background:#00D4FF;border:3px solid #06202B;margin:3px;box-sizing:border-box;box-shadow:0 0 0 1.5px #fff}
 .vm{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.75);margin:6px}
+
+.lkbar.bot{top:auto;bottom:64px;left:10px;right:10px}

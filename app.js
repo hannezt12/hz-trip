@@ -1110,7 +1110,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.9.6'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.9.7'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -2224,31 +2224,46 @@
     });
   }
   // penyunting titik poligon / garis
+  var NEON = '#00D4FF';
   function editPoly(pts, closed, done) {
-    var work = pts.map(function (p) { return p.slice(); }), sel = -1, g = L.layerGroup().addTo(map), bar = document.createElement('div'), shape = null;
-    DM.edit = true; bar.className = 'lkbar';
-    bar.innerHTML = '<span id="epT">Geser titik putih. Ketuk titik kecil di tengah sisi untuk menambah titik.</span><button type="button" id="epDel">Hapus titik</button><button type="button" id="epOk" class="pri">Selesai</button><button type="button" id="epNo">Batal</button>';
+    var work = pts.map(function (p) { return p.slice(); }), mode = 'geser', g = L.layerGroup().addTo(map), bar = document.createElement('div'), under = null, shape = null, min = closed ? 3 : 2;
+    DM.edit = true; bar.className = 'lkbar bot';
+    bar.innerHTML = '<span id="epT"></span><div class="tseg" style="flex:1 1 100%;margin:0"><button type="button" data-m="geser">Geser</button><button type="button" data-m="tambah">+ Titik</button><button type="button" data-m="hapus">− Titik</button></div><button type="button" id="epOk" class="pri">Simpan</button><button type="button" id="epNo">Batal</button>';
     map.getContainer().appendChild(bar); L.DomEvent.disableClickPropagation(bar);
-    function ico(cls) { return L.divIcon({ className: '', html: '<div class="' + cls + '"></div>', iconSize: closeCls(cls) }); }
-    function closeCls(cls) { return cls.indexOf('vx') === 0 ? [22, 22] : [22, 22]; }
+    var hint = { geser: 'Seret titik untuk menggeser posisinya', tambah: 'Ketuk dekat sisi untuk menambah titik', hapus: 'Ketuk sebuah titik untuk menghapusnya' };
+    function info() { $('epT').textContent = work.length + ' titik · ' + hint[mode]; bar.querySelectorAll('.tseg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-m') === mode); }); }
+    function ico() { return L.divIcon({ className: '', html: '<div class="vx"></div>', iconSize: [26, 26] }); }
     function rebuild() {
       g.clearLayers();
-      shape = (closed ? L.polygon(work, { color: '#FFFFFF', weight: 2, fillOpacity: 0.05, interactive: false }) : L.polyline(work, { color: '#FFFFFF', weight: 2, interactive: false })).addTo(g);
+      var o1 = { color: '#06202B', weight: 6, opacity: 0.55, interactive: false, fill: false }, o2 = { color: NEON, weight: 2.6, fillColor: NEON, fillOpacity: closed ? 0.08 : 0, interactive: false };
+      under = (closed ? L.polygon(work, o1) : L.polyline(work, o1)).addTo(g);
+      shape = (closed ? L.polygon(work, o2) : L.polyline(work, o2)).addTo(g);
       work.forEach(function (p, i) {
-        var mk = L.marker(p, { draggable: true, icon: ico('vx' + (i === sel ? ' sel' : '')), zIndexOffset: 500 }).addTo(g);
-        mk.on('drag', function (e) { var ll = e.target.getLatLng(); work[i] = [ll.lat, ll.lng]; shape.setLatLngs(work); });
-        mk.on('click', function () { sel = i; rebuild(); });
+        var mk = L.marker(p, { draggable: mode === 'geser', icon: ico(), zIndexOffset: 500 }).addTo(g);
+        mk.on('drag', function (e) { var ll = e.target.getLatLng(); work[i] = [ll.lat, ll.lng]; shape.setLatLngs(work); under.setLatLngs(work); });
+        mk.on('click', function (e) {
+          L.DomEvent.stop(e);
+          if (mode !== 'hapus') return;
+          if (work.length <= min) { toast('Minimal ' + min + ' titik, tidak bisa dihapus lagi'); return; }
+          work.splice(i, 1); rebuild();
+        });
       });
-      var ne = closed ? work.length : work.length - 1, k;
-      for (k = 0; k < ne; k++) {
-        (function (k) {
-          var a = work[k], b2 = work[(k + 1) % work.length], mm = L.marker([(a[0] + b2[0]) / 2, (a[1] + b2[1]) / 2], { icon: ico('vm') }).addTo(g);
-          mm.on('click', function () { work.splice(k + 1, 0, [(a[0] + b2[0]) / 2, (a[1] + b2[1]) / 2]); sel = k + 1; rebuild(); });
-        })(k);
-      }
+      info();
     }
-    function end(res) { g.remove(); bar.remove(); DM.edit = false; done(res); }
-    $('epDel').onclick = function () { var min = closed ? 3 : 2; if (sel < 0) { toast('Ketuk satu titik dulu'); return; } if (work.length <= min) { toast('Titik tidak boleh kurang'); return; } work.splice(sel, 1); sel = -1; rebuild(); };
+    function segDist(pp, a, b) {
+      var dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy, t = l2 ? Math.max(0, Math.min(1, ((pp.x - a.x) * dx + (pp.y - a.y) * dy) / l2)) : 0;
+      return Math.hypot(pp.x - (a.x + t * dx), pp.y - (a.y + t * dy));
+    }
+    function onClick(e) {
+      if (mode !== 'tambah') return;
+      var cp = map.latLngToContainerPoint(e.latlng), best = -1, bd = Infinity, n = work.length, ne = closed ? n : n - 1, k;
+      for (k = 0; k < ne; k++) { var d = segDist(cp, map.latLngToContainerPoint(work[k]), map.latLngToContainerPoint(work[(k + 1) % n])); if (d < bd) { bd = d; best = k; } }
+      if (best < 0) return;
+      work.splice(best + 1, 0, [e.latlng.lat, e.latlng.lng]); rebuild();
+    }
+    map.on('click', onClick);
+    bar.querySelector('.tseg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-m'); if (m) { mode = m; rebuild(); } };
+    function end(res) { map.off('click', onClick); g.remove(); bar.remove(); DM.edit = false; done(res); }
     $('epOk').onclick = function () { end(work.map(function (p) { return [+p[0].toFixed(6), +p[1].toFixed(6)]; })); };
     $('epNo').onclick = function () { end(null); };
     rebuild();
@@ -2486,7 +2501,7 @@
     });
   }
   // ---------- gambar dan ukur (garis, area, danau) ----------
-  var SHP_COL = ['#FF7AD9', '#B79CFF', '#5EE0FF', '#FFFFFF', '#00E5C0'];
+  var SHP_COL = ['#00D4FF', '#FF7AD9', '#B79CFF', '#FFFFFF', '#00E5C0'];
   function shapesList() { return S.settings.shapes || (S.settings.shapes = []); }
   function nf(v, d) { return v.toFixed(d).replace('.', ','); }
   function fmtLen(m) { return m < 1000 ? Math.round(m) + ' m' : nf(m / 1000, 2) + ' km'; }
@@ -2570,19 +2585,19 @@
     if (!map || !window.HzDem) return;
     if (DM.closePanel) DM.closePanel();
     map._slopeOn = false; if (DM.sync) DM.sync();
-    var pts = [], pl = L.polyline([], { color: '#FFFFFF', weight: 2 }).addTo(map), mk = L.layerGroup().addTo(map), bar = document.createElement('div');
+    var pts = [], pl = L.polyline([], { color: NEON, weight: 3 }).addTo(map), pl0 = L.polyline([], { color: '#06202B', weight: 6, opacity: 0.55, interactive: false }).addTo(map), mk = L.layerGroup().addTo(map), bar = document.createElement('div');
     bar.className = 'lkbar';
     bar.innerHTML = '<span id="lkT"></span><button type="button" id="lkU">Urung</button><button type="button" id="lkL" class="pri">Garis</button><button type="button" id="lkA" class="pri">Area</button><button type="button" id="lkD" class="pri">Danau</button><button type="button" id="lkB" class="pri">Blok</button><button type="button" id="lkC">Batal</button>';
     map.getContainer().appendChild(bar);
     L.DomEvent.disableClickPropagation(bar);
     function upd() {
-      pl.setLatLngs(pts.length > 2 ? pts.concat([pts[0]]) : pts);
+      pl.setLatLngs(pts.length > 2 ? pts.concat([pts[0]]) : pts); pl0.setLatLngs(pts.length > 2 ? pts.concat([pts[0]]) : pts); pl.bringToFront();
       var t = 'Ketuk titik di peta (' + pts.length + ')';
       if (pts.length > 1) { var q = flatQ(pts, false); t += ' · garis ' + fmtLen(q.len); if (pts.length > 2) t += ' · area ' + fmtArea(flatQ(pts, true).area); }
       $('lkT').textContent = t;
     }
-    function dot(q) { L.circleMarker(q, { radius: 4, color: '#FFFFFF', weight: 2, fillOpacity: 1 }).addTo(mk); }
-    function end() { map._lakeDraw = null; map.removeLayer(pl); map.removeLayer(mk); bar.remove(); }
+    function dot(q) { L.circleMarker(q, { radius: 5, color: '#06202B', weight: 2, fillColor: NEON, fillOpacity: 1 }).addTo(mk); }
+    function end() { map._lakeDraw = null; map.removeLayer(pl); map.removeLayer(pl0); map.removeLayer(mk); bar.remove(); }
     map._lakeDraw = { tap: function (ll) { var q = [+ll.lat.toFixed(6), +ll.lng.toFixed(6)]; pts.push(q); dot(q); upd(); } };
     $('lkU').onclick = function () { pts.pop(); mk.clearLayers(); pts.forEach(dot); upd(); };
     $('lkC').onclick = end;
@@ -2590,7 +2605,7 @@
       var n = shapesList().filter(function (x) { return x.type === type; }).length + 1, p = pts.slice();
       toast('Menghitung…');
       HzDem.measure(p, type === 'area').catch(function () { return null; }).then(function (m) {
-        var s = { id: Date.now(), type: type, name: (type === 'line' ? 'Garis ' : 'Area ') + n, pts: p, color: type === 'line' ? '#FFFFFF' : '#FF7AD9', note: '', m: m };
+        var s = { id: Date.now(), type: type, name: (type === 'line' ? 'Garis ' : 'Area ') + n, pts: p, color: type === 'line' ? '#00D4FF' : '#FF7AD9', note: '', m: m };
         shapesList().push(s); S.settings.shapesOn = true; saveSettings(); end(); applyShapes(); openShape(shapesList().length - 1);
       });
     }
