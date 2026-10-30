@@ -1110,7 +1110,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.9.3'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.9.4'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -2168,7 +2168,7 @@
     el.className = 'blkpop'; map.getContainer().appendChild(el); DM.pop = el; L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);
     var PEN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16 5l3 3L8 19z"/></svg>';
     el.innerHTML = '<div class="bh"><b>' + esc(b.name) + '</b><button type="button" class="ib2" id="bpE" aria-label="Edit blok">' + PEN + '</button><button type="button" class="ib2" id="bpX" aria-label="Tutup">✕</button></div>' +
-      '<div class="bl">' + nf(blkHa(b), 2) + ' ha · ' + (b.dir == null ? 'arah row belum diatur' : 'arah ' + Math.round(b.dir) + '° · jarak ' + nf(blkSp(b), 2) + ' m') + ' · <small>' + blkStatusText(b) + '</small></div>' +
+      '<div class="bl">' + nf(blkHa(b), 2) + ' ha' + (b.luasCat ? ' (tercatat ' + nf(+b.luasCat, 2) + ')' : '') + ' · ' + (b.dir == null ? 'arah row belum diatur' : 'arah ' + Math.round(b.dir) + '° · jarak ' + nf(blkSp(b), 2) + ' m') + ' · <small>' + blkStatusText(b) + '</small></div>' +
       '<div class="bl" id="bpR">Menghitung…</div><div class="bl" id="bpA"></div><div class="bl" id="bpD"></div>' + (b.note ? '<div class="bl"><small>' + esc(b.note) + '</small></div>' : '') +
       '<div class="tseg" id="bpM"><button type="button" data-m="datar">Datar</button><button type="button" data-m="kontur">Kontur</button></div>' +
       (mode === 'kontur' ? '<div class="tseg"><button type="button" id="bpG">Edit garis pedoman</button>' + (b.guide ? '<button type="button" id="bpG0">Atur ulang pedoman</button>' : '') + '</div>' : '');
@@ -2288,7 +2288,12 @@
     var bl = blocksList(), cfg = detCfg(), ovs = ovList().map(function (o, i) { return { o: o, i: i }; }).filter(function (x) { return x.o.cal; });
     var conf = bl.filter(function (b) { return b.conf; }).length, set = bl.filter(function (b) { return b.dir != null; }).length;
     box.innerHTML = '<div class="card"><div class="muted">' + (bl.length ? bl.length + ' blok · ' + set + ' sudah diatur arahnya · ' + conf + ' terkonfirmasi' : 'Belum ada blok.') + '</div></div>' +
-      '<div class="h">DETEKSI DARI PETA PDF</div><div class="card">' +
+      '<div class="h">IMPOR DARI LOGBOOK.HZ</div><div class="card">' +
+      (ovs.length ? '<select id="lgOv">' + ovs.map(function (x) { return '<option value="' + x.i + '">' + esc(x.o.name) + '</option>'; }).join('') + '</select>' +
+        '<button class="btn pri" id="lgGo" style="width:100%;margin-top:10px;height:48px">Pilih berkas blok (.json)</button><input type="file" id="lgFile" accept=".json,application/json" style="display:none">' +
+        '<div class="muted" style="margin-top:8px">Berkas dibuat oleh tombol Ekspor blok di Logbook.HZ (tab Peta). Peta PDF yang dipilih harus gambar peta yang sama dengan yang dipakai di Logbook.HZ. Blok ditampilkan dulu untuk diperiksa. Blok yang namanya sudah ada hanya diperbarui bentuknya, arah row tetap.</div>'
+        : '<div class="muted">Belum ada peta PDF yang dikalibrasi. Tambahkan di tab PDF.</div>') + '</div>' +
+      '<div class="h">DETEKSI OTOMATIS (EKSPERIMEN)</div><div class="card">' +
       (ovs.length ? '<select id="dtOv">' + ovs.map(function (x) { return '<option value="' + x.i + '">' + esc(x.o.name) + '</option>'; }).join('') + '</select>' +
         '<div class="muted" style="margin-top:10px">Ketajaman garis: <b id="dtTv">' + cfg.thr + '</b> <small>(naikkan kalau garis batas tipis atau pucat tidak terbaca)</small></div><input type="range" id="dtT" min="100" max="240" value="' + cfg.thr + '">' +
         '<div class="muted" style="margin-top:6px">Tutup celah garis: <b id="dtCv">' + cfg.close + '</b> px <small>(naikkan kalau blok menyatu karena garis putus)</small></div><input type="range" id="dtC" min="0" max="4" value="' + cfg.close + '">' +
@@ -2307,11 +2312,34 @@
       $('dtT').onchange = $('dtC').onchange = function () { saveSettings(); };
       $('dtGo').onclick = function () { saveSettings(); detectRun(+$('dtOv').value); };
     }
+    if ($('lgGo')) {
+      $('lgGo').onclick = function () { $('lgFile').value = ''; $('lgFile').click(); };
+      $('lgFile').onchange = function () { if (this.files && this.files[0]) importLoghz(this.files[0], +$('lgOv').value); };
+    }
     $('rwSp').onchange = function () { var v = +this.value; if (v >= 0.5 && v <= 5) { S.settings.rowSp = v; saveSettings(); RC.rows = {}; } };
     $('depT').onchange = function () { var v = +this.value; if (v >= 0.1 && v <= 3) { S.settings.depThr = v; saveSettings(); RC.dep = {}; } };
     box.querySelectorAll('[data-bv]').forEach(function (x) { x.onclick = function () { var b = blocksList()[+x.getAttribute('data-bv')]; if (b) needMap(b.pts, function () { map.fitBounds(L.latLngBounds(b.pts), { padding: [50, 50], maxZoom: 19 }); openBlockPop(b); }); }; });
     box.querySelectorAll('[data-be]').forEach(function (x) { x.onclick = function () { var b = blocksList()[+x.getAttribute('data-be')]; if (b) openBlockEdit(b); }; });
     if ($('bkAll')) $('bkAll').onclick = function () { askConfirm('Hapus semua blok?', bl.length + ' blok dihapus dari aplikasi. Peta PDF tidak terpengaruh.', 'Hapus', function () { S.settings.blocks = []; saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); renderData(); }); };
+  }
+  function importLoghz(file, idx) {
+    var o = ovList()[idx]; if (!o || !o.cal) { toast('Pilih peta yang sudah dikalibrasi'); return; }
+    file.text().then(function (t) {
+      var d; try { d = JSON.parse(t); } catch (e) { throw new Error('Bukan berkas JSON'); }
+      if (!d || d.app !== 'loghz-blok' || !d.blocks) throw new Error('Bukan berkas blok dari Logbook.HZ');
+      if (d.imgW && d.imgH) {
+        var rr = (d.imgW / d.imgH) / (o.W / o.H);
+        if (Math.abs(rr - 1) > 0.03) toast('Peringatan: rasio gambar berbeda (Logbook ' + d.imgW + '×' + d.imgH + ', PDF ' + o.W + '×' + o.H + '). Periksa letak blok di peta.');
+      }
+      var toLL = HzOverlay.toLLFn(HzOverlay.affOf(o));
+      var res = d.blocks.filter(function (b) { return b && b.points && b.points.length >= 3; }).map(function (b) {
+        var lu = parseFloat(String(b.luas == null ? '' : b.luas).replace(',', '.'));
+        return { name: String(b.label || '').trim(), luas: isFinite(lu) ? lu : null, on: true, pts: b.points.map(function (p) { var l = toLL(p.x / 100 * o.W, p.y / 100 * o.H); return [+l.lat.toFixed(7), +l.lng.toFixed(7)]; }) };
+      });
+      if (!res.length) throw new Error('Tidak ada blok di berkas');
+      res.sort(function (p, q) { return p.name < q.name ? -1 : p.name > q.name ? 1 : 0; });
+      detectPreview(res, o);
+    }).catch(function (e) { toast('Impor gagal: ' + (e && e.message || e)); });
   }
   function detectRun(idx) {
     var o = ovList()[idx], cfg = detCfg(); if (!o || !o.cal) { toast('Pilih peta yang sudah dikalibrasi'); return; }
@@ -2338,12 +2366,18 @@
       function cnt() { return res.filter(function (r) { return r.on; }).length; }
       function paint() { polys.forEach(function (pl, i) { pl.setStyle({ color: res[i].on ? '#FFD84D' : '#777', dashArray: res[i].on ? null : '4 4', fillOpacity: res[i].on ? 0.15 : 0.03 }); }); $('lkT').textContent = cnt() + ' dari ' + res.length + ' blok dipilih. Ketuk blok untuk batal pilih.'; $('dpSave').textContent = 'Simpan (' + cnt() + ')'; }
       bar.innerHTML = '<span id="lkT"></span><button type="button" id="dpSave" class="pri">Simpan</button><button type="button" id="dpAgain">Ulang</button><button type="button" id="dpNo">Batal</button>';
-      res.forEach(function (r, i) { var pl = L.polygon(r.pts, { weight: 2, interactive: true }).addTo(g); pl.on('click', function (e) { L.DomEvent.stop(e); r.on = !r.on; paint(); }); polys.push(pl); });
+      res.forEach(function (r, i) { var pl = L.polygon(r.pts, { weight: 2, interactive: true }).addTo(g); if (r.name) pl.bindTooltip(esc(r.name), { permanent: true, direction: 'center', className: 'lktip' }); pl.on('click', function (e) { L.DomEvent.stop(e); r.on = !r.on; paint(); }); polys.push(pl); });
       function end() { g.remove(); bar.remove(); DM.prev = false; }
       $('dpSave').onclick = function () {
-        var n = nextBlockNo(), k = 0;
-        res.forEach(function (r) { if (!r.on) return; blocksList().push({ id: Date.now() + k, name: 'Blok ' + (n + k), pts: r.pts, ovId: o.id, dir: null, sp: null, margin: 0, conf: false, note: '' }); k++; });
-        S.settings.blkOn = true; saveSettings(); end(); drawBlocks(); toast(k + ' blok disimpan'); S.dpTab = 'blok'; go('data');
+        var n = nextBlockNo(), k = 0, up = 0;
+        res.forEach(function (r) {
+          if (!r.on) return;
+          var ex = r.name ? blocksList().filter(function (b) { return b.name.toLowerCase() === r.name.toLowerCase(); })[0] : null;
+          if (ex) { ex.pts = r.pts; ex.ovId = o.id; if (r.luas) ex.luasCat = r.luas; up++; return; }
+          blocksList().push({ id: Date.now() + k, name: r.name || 'Blok ' + (n + k), pts: r.pts, ovId: o.id, dir: null, sp: null, margin: 0, conf: false, note: '', luasCat: r.luas || null }); k++;
+        });
+        RC.rows = {}; RC.dep = {}; RC.guide = {};
+        S.settings.blkOn = true; saveSettings(); end(); drawBlocks(); drawRows(); toast(k + ' blok baru' + (up ? ', ' + up + ' diperbarui' : '') + ' disimpan'); S.dpTab = 'blok'; go('data');
       };
       $('dpAgain').onclick = function () { end(); S.dpTab = 'blok'; go('data'); };
       $('dpNo').onclick = end;
