@@ -1110,7 +1110,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.9.5'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.9.6'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -1125,7 +1125,7 @@
     showSet(key);
     try { history.pushState({ sp: key }, ''); S.spPushed = true; } catch (e) { S.spPushed = false; }
     $('main').scrollTop = 0;
-    if (key === 'peta') { renderOv(); renderCacheInfo(); }
+    if (key === 'peta') { renderOv(); renderCacheInfo(); renderBlkInfo(); }
     if (key === 'data') { renderHidden(); renderBackupInfo(); renderThinInfo(); }
     if (key === 'latar') { syncStatus(); renderDiag(); }
     if (key === 'tampil') { applyTheme(); applyFont(); }
@@ -1650,7 +1650,7 @@
       '<div class="tt" style="margin-top:6px">SUMBER DATA</div><div class="tgrid">' + tile('useNas', 'DEMNAS', 1) + tile('useFree', 'DEM gratis', 1) + '</div><div class="tnote" id="tNasSub"></div>' +
       '<div class="tt">TAMPIL</div><div class="tgrid">' + tile('blkOn', 'Blok', 1, 1) + tile('rowOn', 'Arah row', 1) + tile('lakesOn', 'Danau', 1, 1) + tile('shpOn', 'Gambar', 1, 1) + tile('batDesa', 'Desa', 1) + tile('batKec', 'Kecamatan', 1) + '</div>' +
       '<div class="tseg" id="tRm"><button type="button" data-m="datar">Datar</button><button type="button" data-m="kontur">Kontur</button></div>' +
-      '<div class="tt">ALAT</div><div class="tgrid">' + tile('draw', 'Gambar baru') + tile('detect', 'Deteksi blok') + tile('batCfg', 'Atur batas') + tile('dataGo', 'Data peta') + '</div>';
+      '<div class="tt">ALAT</div><div class="tgrid">' + tile('draw', 'Gambar baru') + tile('detect', 'Impor blok') + tile('batCfg', 'Atur batas') + tile('dataGo', 'Data peta') + '</div>';
     function state(id) {
       return id === 'contour' ? !!S.settings.contour : id === 'slopeLayer' ? !!S.settings.slopeLayer : id === 'hach' ? !!S.settings.hach : id === 'slopeTap' ? !!m._slopeOn :
         id === 'blkOn' ? S.settings.blkOn !== false : id === 'rowOn' ? !!S.settings.rowOn : id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'v3d' ? V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : !!S.profOpen;
@@ -1727,7 +1727,7 @@
     zoomInd(m);
     if (window.HzDem) HzDem.setSources(S.settings.useNas !== false, S.settings.useFree !== false);
     applyLakes(); drawShapes(); drawBlocks(); drawRows();
-    var rwT = null; m.on('moveend', function () { clearTimeout(rwT); rwT = setTimeout(drawRows, 250); }); m.on('zoomend', drawBlocks);
+    var rwT = null; m.on('moveend', function () { clearTimeout(rwT); rwT = setTimeout(drawRows, 250); }); var bkT = null; m.on('moveend', function () { clearTimeout(bkT); bkT = setTimeout(drawBlocks, 300); });
     if (S.settings.contour) setContour(true);
     if (S.settings.slopeLayer) setSlopeLayer(true);
     if (S.settings.hach) setHach(true);
@@ -2079,6 +2079,7 @@
     S.settings.blocks = blocksList().filter(function (b) { return !isScanBlk(b); });
     RC.rows = {}; RC.dep = {}; RC.guide = {}; saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); return n;
   }
+  function renderBlkInfo() { var e = $('blkInfo'); if (e) e.textContent = blocksList().length ? blocksList().length + ' blok tersimpan.' : 'Belum ada blok.'; }
   function blkStatus(b) { return b.dir == null ? 'none' : (b.conf ? 'conf' : 'set'); }
   function blkStatusText(b) { return { none: 'arah belum diatur', set: 'arah diatur', conf: 'terkonfirmasi' }[blkStatus(b)]; }
   function blkSp(b) { return +(b.sp || S.settings.rowSp || 1.5); }
@@ -2093,19 +2094,37 @@
     }
     return ins;
   }
+  function bbOf(b) {
+    if (b._bb) return b._bb;
+    var s = 90, w = 180, n = -90, e = -180; b.pts.forEach(function (p) { if (p[0] < s) s = p[0]; if (p[0] > n) n = p[0]; if (p[1] < w) w = p[1]; if (p[1] > e) e = p[1]; });
+    try { Object.defineProperty(b, '_bb', { value: [s, w, n, e], enumerable: false, writable: true, configurable: true }); } catch (x) {}
+    return [s, w, n, e];
+  }
+  function bbHit(b, bd) { var q = bbOf(b); return !(q[2] < bd.getSouth() || q[0] > bd.getNorth() || q[3] < bd.getWest() || q[1] > bd.getEast()); }
   function blockAt(ll) {
     var best = null, ba = Infinity;
-    blocksList().forEach(function (b) { if (llPip(ll, b.pts)) { var ar = blkHa(b); if (ar < ba) { ba = ar; best = b; } } });
+    blocksList().forEach(function (b) { var q = bbOf(b); if (ll.lat < q[0] || ll.lat > q[2] || ll.lng < q[1] || ll.lng > q[3]) return; if (llPip(ll, b.pts)) { var ar = blkHa(b); if (ar < ba) { ba = ar; best = b; } } });
     return best;
   }
   function drawBlocks() {
     if (!map) return;
     if (DM.blkLayer) { map.removeLayer(DM.blkLayer); DM.blkLayer = null; }
-    if (S.settings.blkOn === false || !blocksList().length) return;
-    var g = L.layerGroup(), z = map.getZoom();
-    blocksList().forEach(function (b) {
+    var all = blocksList();
+    if (S.settings.blkOn === false || !all.length) return;
+    var z = map.getZoom(); if (z < 15) return;
+    // pengaman: kalau penggambaran sebelumnya tidak selesai (macet lalu aplikasi ditutup paksa), blok dimatikan
+    if (all.length > 150) {
+      var bad = null; try { bad = localStorage.getItem('hz_bd'); } catch (e) {}
+      if (bad === '1') { try { localStorage.removeItem('hz_bd'); } catch (e) {} S.settings.blkOn = false; saveSettings(); toast('Blok dimatikan karena aplikasi sempat macet. Nyalakan lagi lewat Alat peta > Blok.'); return; }
+      try { localStorage.setItem('hz_bd', '1'); } catch (e) {}
+      setTimeout(function () { try { localStorage.removeItem('hz_bd'); } catch (e) {} }, 60);
+    }
+    var bd = map.getBounds(), vis = all.filter(function (b) { return bbHit(b, bd); }), g = L.layerGroup(), cc = map.getCenter();
+    if (vis.length > 120) { vis.sort(function (p, q) { var a1 = bbOf(p), b1 = bbOf(q); return Math.hypot((a1[0] + a1[2]) / 2 - cc.lat, (a1[1] + a1[3]) / 2 - cc.lng) - Math.hypot((b1[0] + b1[2]) / 2 - cc.lat, (b1[1] + b1[3]) / 2 - cc.lng); }); vis = vis.slice(0, 120); }
+    var lab = z >= 16 ? vis.slice(0, 40) : [];
+    vis.forEach(function (b) {
       var st = blkStatus(b), l = L.polygon(b.pts, { color: BLK_COL[st], weight: 1.3, dashArray: st === 'none' ? '4 4' : null, fillOpacity: 0.05, interactive: false });
-      if (z >= 15) l.bindTooltip(esc(blkLabel(b)), { permanent: true, direction: 'center', className: 'lktip' });
+      if (lab.indexOf(b) >= 0) l.bindTooltip(esc(blkLabel(b)), { permanent: true, direction: 'center', className: 'lktip' });
       l.addTo(g);
     });
     g.addTo(map); DM.blkLayer = g;
@@ -2150,7 +2169,7 @@
     if (map.getZoom() < 16) { if (hint) toast('Dekatkan peta (zoom 16 ke atas) untuk melihat row'); return; }
     var mode = S.settings.rowMode || 'datar', id = DM.rowSeq, bd = map.getBounds(), g = L.layerGroup().addTo(map), vis;
     DM.rowLayer = g;
-    vis = blocksList().filter(function (b) { return bd.intersects(L.latLngBounds(b.pts)) && (mode === 'kontur' || b.dir != null); }).slice(0, mode === 'kontur' ? 4 : 30);
+    vis = blocksList().filter(function (b) { return bbHit(b, bd) && (mode === 'kontur' || b.dir != null); }).slice(0, mode === 'kontur' ? 4 : 30);
     if (mode === 'kontur' && vis.length) toast('Menghitung row kontur…');
     var i = 0;
     (function nx() {
@@ -2283,7 +2302,7 @@
         $('lkC').onclick = function () { end(); openBlockEdit(b); };
       });
     };
-    $('beB').onclick = function () { closeSheet(); needMap(b.pts, function () { closeBlockPop(); editPoly(b.pts, true, function (res) { if (res) { b.pts = res; saveSettings(); } drawBlocks(); drawRows(); openBlockPop(b); openBlockEdit(b); }); }); };
+    $('beB').onclick = function () { closeSheet(); needMap(b.pts, function () { closeBlockPop(); editPoly(b.pts, true, function (res) { if (res) { b.pts = res; delete b._bb; saveSettings(); } drawBlocks(); drawRows(); openBlockPop(b); openBlockEdit(b); }); }); };
     $('beD2').onclick = function () { askConfirm('Hapus "' + b.name + '"?', 'Blok dihapus dari peta. Peta PDF tidak terpengaruh.', 'Hapus', function () { var i = blocksList().indexOf(b); if (i >= 0) blocksList().splice(i, 1); saveSettings(); closeBlockPop(); closeSheet(); drawBlocks(); drawRows(); if (S.view === 'data') renderData(); }); };
     $('beX').onclick = function () { closeSheet(); if (S.view === 'data') renderData(); };
     if (S.view === 'lintasan' && map && !DM.pop) openBlockPop(b);
@@ -2293,31 +2312,26 @@
   function renderBlokTab(box) {
     var bl = blocksList(), cfg = detCfg(), ovs = ovList().map(function (o, i) { return { o: o, i: i }; }).filter(function (x) { return x.o.cal; });
     var conf = bl.filter(function (b) { return b.conf; }).length, set = bl.filter(function (b) { return b.dir != null; }).length;
+    var PG = 30, q = (S.blkQ || '').toLowerCase(), fl = q ? bl.filter(function (b) { return (b.name || '').toLowerCase().indexOf(q) >= 0; }) : bl, pages = Math.max(1, Math.ceil(fl.length / PG)), pg = Math.min(Math.max(0, S.blkPg || 0), pages - 1);
+    S.blkPg = pg;
+    var listHtml = '<div class="row" style="gap:6px"><input type="text" id="bkQ" placeholder="Cari no blok (mis. 12 BS)" value="' + esc(S.blkQ || '') + '"><button class="btn sm" id="bkQb">Cari</button></div>' +
+      (fl.length ? fl.slice(pg * PG, pg * PG + PG).map(function (b) { var i = bl.indexOf(b); return '<div class="card"><div class="dprow" style="margin-top:0"><div class="nm"><b>' + esc(b.name) + '</b><small>' + nf(blkHa(b), 1) + ' ha · ' + (b.dir == null ? 'arah belum diatur' : 'arah ' + Math.round(b.dir) + '° · ' + nf(blkSp(b), 2) + ' m') + ' · ' + blkStatusText(b) + '</small></div><button class="btn sm" data-bv="' + i + '">Lihat</button><button class="btn sm" data-be="' + i + '">Edit</button></div></div>'; }).join('') +
+        '<div class="row" style="margin-top:10px;gap:6px;align-items:center"><button class="btn sm" id="bkPv"' + (pg ? '' : ' disabled') + '>‹</button><div class="muted" style="flex:1;text-align:center">Hal ' + (pg + 1) + ' / ' + pages + ' · ' + fl.length + ' blok</div><button class="btn sm" id="bkNx"' + (pg < pages - 1 ? '' : ' disabled') + '>›</button></div>' +
+        (bl.filter(isScanBlk).length ? '<button class="btn" id="bkScan" style="width:100%;margin-top:12px;color:var(--r)">Hapus blok hasil deteksi (' + bl.filter(isScanBlk).length + ')</button>' : '') + '<button class="btn" id="bkAll" style="width:100%;margin-top:12px;color:var(--r)">Hapus semua blok</button>'
+        : '<div class="card muted">' + (bl.length ? 'Tidak ada yang cocok.' : 'Belum ada.') + '</div>');
     box.innerHTML = '<div class="card"><div class="muted">' + (bl.length ? bl.length + ' blok · ' + set + ' sudah diatur arahnya · ' + conf + ' terkonfirmasi' : 'Belum ada blok.') + '</div></div>' +
       '<div class="h">IMPOR DARI LOGBOOK.HZ</div><div class="card">' +
       (ovs.length ? '<select id="lgOv">' + ovs.map(function (x) { return '<option value="' + x.i + '">' + esc(x.o.name) + '</option>'; }).join('') + '</select>' +
         '<button class="btn pri" id="lgGo" style="width:100%;margin-top:10px;height:48px">Pilih berkas blok (.json)</button><input type="file" id="lgFile" accept=".json,application/json" style="display:none">' +
         '<div class="muted" style="margin-top:8px">Berkas dibuat oleh tombol Ekspor blok di Logbook.HZ (tab Peta). Peta PDF yang dipilih harus gambar peta yang sama dengan yang dipakai di Logbook.HZ. Blok ditampilkan dulu untuk diperiksa. Blok yang namanya sudah ada hanya diperbarui bentuknya, arah row tetap.</div>'
         : '<div class="muted">Belum ada peta PDF yang dikalibrasi. Tambahkan di tab PDF.</div>') + '</div>' +
-      '<div class="h">DETEKSI OTOMATIS (EKSPERIMEN)</div><div class="card">' +
-      (ovs.length ? '<select id="dtOv">' + ovs.map(function (x) { return '<option value="' + x.i + '">' + esc(x.o.name) + '</option>'; }).join('') + '</select>' +
-        '<div class="muted" style="margin-top:10px">Ketajaman garis: <b id="dtTv">' + cfg.thr + '</b> <small>(naikkan kalau garis batas tipis atau pucat tidak terbaca)</small></div><input type="range" id="dtT" min="100" max="240" value="' + cfg.thr + '">' +
-        '<div class="muted" style="margin-top:6px">Tutup celah garis: <b id="dtCv">' + cfg.close + '</b> px <small>(naikkan kalau blok menyatu karena garis putus)</small></div><input type="range" id="dtC" min="0" max="4" value="' + cfg.close + '">' +
-        '<div class="muted" style="margin-top:6px">Luas minimum blok (ha)</div><input type="number" id="dtM" step="0.5" min="0.1" value="' + cfg.minHa + '">' +
-        '<button class="btn pri" id="dtGo" style="width:100%;margin-top:10px;height:48px">Deteksi blok</button>' +
-        '<div class="muted" style="margin-top:8px">Aplikasi mencari daerah tertutup garis batas, lalu menampilkannya dulu di peta untuk kamu periksa. Nama blok diisi otomatis (Blok 1, 2, …) dan bisa kamu ganti. Peta harus sudah dikalibrasi.</div>'
-        : '<div class="muted">Belum ada peta PDF yang dikalibrasi. Tambahkan di tab PDF.</div>') + '</div>' +
       '<div class="h">JARAK ROW BAWAAN</div><div class="card"><div class="row"><input type="number" id="rwSp" step="0.05" min="0.5" max="5" value="' + (S.settings.rowSp || 1.5) + '"><span class="muted" style="padding:0 8px">m</span></div>' +
       '<div class="muted" style="margin-top:8px">Batas kedalaman cekungan (m)</div><input type="number" id="depT" step="0.1" min="0.1" max="3" value="' + (S.settings.depThr || 0.3) + '"></div>' +
-      '<div class="h">DAFTAR BLOK</div>' +
-      (bl.length ? bl.map(function (b, i) { return '<div class="card"><div class="dprow" style="margin-top:0"><div class="nm"><b>' + esc(b.name) + '</b><small>' + nf(blkHa(b), 1) + ' ha · ' + (b.dir == null ? 'arah belum diatur' : 'arah ' + Math.round(b.dir) + '° · ' + nf(blkSp(b), 2) + ' m') + ' · ' + blkStatusText(b) + '</small></div><button class="btn sm" data-bv="' + i + '">Lihat</button><button class="btn sm" data-be="' + i + '">Edit</button></div></div>'; }).join('') + (bl.filter(isScanBlk).length ? '<button class="btn" id="bkScan" style="width:100%;margin-top:12px;color:var(--r)">Hapus blok hasil deteksi (' + bl.filter(isScanBlk).length + ')</button>' : '') + '<button class="btn" id="bkAll" style="width:100%;margin-top:12px;color:var(--r)">Hapus semua blok</button>' : '<div class="card muted">Belum ada.</div>');
-    if ($('dtT')) {
-      $('dtT').oninput = function () { $('dtTv').textContent = this.value; cfg.thr = +this.value; };
-      $('dtC').oninput = function () { $('dtCv').textContent = this.value; cfg.close = +this.value; };
-      $('dtM').onchange = function () { cfg.minHa = Math.max(0.1, +this.value || 1); };
-      $('dtT').onchange = $('dtC').onchange = function () { saveSettings(); };
-      $('dtGo').onclick = function () { saveSettings(); detectRun(+$('dtOv').value); };
-    }
+      '<div class="h">DAFTAR BLOK</div>' + listHtml;
+    function bq() { S.blkQ = $('bkQ').value.trim(); S.blkPg = 0; renderBlokTab(box); }
+    if ($('bkQ')) { $('bkQ').onchange = bq; $('bkQb').onclick = bq; }
+    if ($('bkPv')) $('bkPv').onclick = function () { S.blkPg = Math.max(0, (S.blkPg || 0) - 1); renderBlokTab(box); };
+    if ($('bkNx')) $('bkNx').onclick = function () { S.blkPg = (S.blkPg || 0) + 1; renderBlokTab(box); };
     if ($('lgGo')) {
       $('lgGo').onclick = function () { $('lgFile').value = ''; $('lgFile').click(); };
       $('lgFile').onchange = function () { if (this.files && this.files[0]) importLoghz(this.files[0], +$('lgOv').value); };
@@ -2348,21 +2362,6 @@
       detectPreview(res, o);
     }).catch(function (e) { toast('Impor gagal: ' + (e && e.message || e)); });
   }
-  function detectRun(idx) {
-    var o = ovList()[idx], cfg = detCfg(); if (!o || !o.cal) { toast('Pilih peta yang sudah dikalibrasi'); return; }
-    toast('Membaca peta…');
-    setTimeout(function () {
-      HzOverlay.rasterAt(o, 2200).then(function (img) {
-        var af = HzOverlay.affOf(o), toLL = HzOverlay.toLLFn(af), mpp = HzOverlay.infoAff(af, o.cal[0].lat).mpp * img.scale;
-        var minPx = Math.max(60, cfg.minHa * 10000 / (mpp * mpp));
-        var polys = HzBlok.detect({ w: img.w, h: img.h, data: img.data }, { thr: cfg.thr, close: cfg.close, minPx: minPx, maxFrac: 0.35 });
-        var res = polys.map(function (p) { return { pts: p.px.map(function (q) { var l = toLL(q[0] * img.scale, q[1] * img.scale); return [+l.lat.toFixed(7), +l.lng.toFixed(7)]; }), on: true }; });
-        if (!res.length) { toast('Tidak ada blok terdeteksi. Coba naikkan ketajaman garis atau turunkan luas minimum.'); return; }
-        res.sort(function (p, q) { var ca = p.pts[0], cb = q.pts[0], ra = Math.round(-ca[0] / 0.003), rb = Math.round(-cb[0] / 0.003); return ra !== rb ? ra - rb : ca[1] - cb[1]; });
-        detectPreview(res, o);
-      }).catch(function (e) { toast('Deteksi gagal: ' + (e && e.message || e)); });
-    }, 50);
-  }
   function detectPreview(res, o) {
     var all = []; res.forEach(function (r) { r.pts.forEach(function (p) { all.push(p); }); });
     needMap(all, function () {
@@ -2380,7 +2379,7 @@
         res.forEach(function (r) {
           if (!r.on) return;
           var ex = r.name ? blocksList().filter(function (b) { return b.name.toLowerCase() === r.name.toLowerCase(); })[0] : null;
-          if (ex) { ex.pts = r.pts; ex.ovId = o.id; if (r.luas) ex.luasCat = r.luas; up++; return; }
+          if (ex) { ex.pts = r.pts; delete ex._bb; ex.ovId = o.id; if (r.luas) ex.luasCat = r.luas; up++; return; }
           blocksList().push({ id: Date.now() + k, src: r.name ? 'loghz' : 'scan', name: r.name || 'Blok ' + (n + k), pts: r.pts, ovId: o.id, dir: null, sp: null, margin: 0, conf: false, note: '', luasCat: r.luas || null }); k++;
         });
         RC.rows = {}; RC.dep = {}; RC.guide = {};
@@ -2532,10 +2531,10 @@
     g.addTo(map); DM.shapeLayer = g;
   }
   function applyShapes() { drawShapes(); if (V3.on) open3d(true); }
-  function shapeItems() {
+  function shapeItems(noBlocks) {
     var out = [];
     if (S.settings.shapesOn !== false) shapesList().forEach(function (s) { out.push({ name: s.name, pts: s.pts, closed: s.type !== 'line', color: s.color || '#FF7AD9', label: shapeText(s) }); });
-    if (S.settings.blkOn !== false) blocksList().forEach(function (b) { out.push({ name: b.name, pts: b.pts, closed: true, color: BLK_COL[blkStatus(b)], label: blkLabel(b) }); });
+    if (S.settings.blkOn !== false && !noBlocks && map) { var mbd = map.getBounds(); blocksList().filter(function (b) { return bbHit(b, mbd); }).slice(0, 60).forEach(function (b) { out.push({ name: b.name, pts: b.pts, closed: true, color: BLK_COL[blkStatus(b)], label: blkLabel(b) }); }); }
     if (S.settings.lakesOn !== false) lakesList().forEach(function (l) { out.push({ name: l.name, pts: l.pts, closed: true, color: '#7FD8FF', label: l.name + (l.m && l.m.area ? ' · ' + fmtArea(l.m.area) : '') }); });
     return out;
   }
@@ -3266,7 +3265,7 @@
   }
   // siapkan ketinggian + kontur untuk KML (butuh data ketinggian); selalu lanjut walau gagal
   function kmlPrep(ds, withC) {
-    var opts = { title: 'HZ Trip ' + ds[0].ymd, ramp: window.HzDem && HzDem.rampColor, shapes: shapeItems() };
+    var opts = { title: 'HZ Trip ' + ds[0].ymd, ramp: window.HzDem && HzDem.rampColor, shapes: shapeItems(true) };
     if (!window.HzDem) return Promise.resolve(opts);
     var all = [];
     ds.forEach(function (day) { day.trips.forEach(function (x) { tripPts(day.pts, x.t).forEach(function (q) { all.push(q); }); }); });
@@ -3412,6 +3411,10 @@
     $('hidList').onclick = onHidden;
     $('miniX').onclick = function () { closeMini(); };
     $('dpTabs').onclick = function (e) { var t = e.target.getAttribute && e.target.getAttribute('data-tab'); if (t) { S.dpTab = t; renderData(); } };
+    $('blkDelAll').onclick = function () {
+      var n = blocksList().length; if (!n) { toast('Belum ada blok'); return; }
+      askConfirm('Hapus semua ' + n + ' blok?', 'Semua blok dihapus dari aplikasi. Peta PDF dan data lain tidak terpengaruh. Blok bisa diimpor lagi dari Logbook.HZ.', 'Hapus', function () { S.settings.blocks = []; RC.rows = {}; RC.dep = {}; RC.guide = {}; saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); renderBlkInfo(); toast('Semua blok dihapus'); });
+    };
     $('ovGo').onclick = function () { S.dpTab = 'pdf'; go('data'); };
     $('ovAdd').onclick = function () { $('ovFile').value = ''; $('ovFile').click(); };
     $('ovFile').onchange = function () { if (this.files && this.files[0]) importOv(this.files[0]); };
