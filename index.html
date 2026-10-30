@@ -92,9 +92,10 @@
 
     <!-- Data peta -->
     <section class="view" id="v-data">
-      <div class="row" style="margin-bottom:10px"><div class="seg" id="dpTabs"><button data-tab="danau">Danau</button><button data-tab="gambar">Gambar</button><button data-tab="batas">Batas</button><button data-tab="pdf">Peta PDF</button></div></div>
+      <div class="row" style="margin-bottom:10px"><div class="seg" id="dpTabs"><button data-tab="danau">Danau</button><button data-tab="gambar">Gambar</button><button data-tab="blok">Blok</button><button data-tab="batas">Batas</button><button data-tab="pdf">PDF</button></div></div>
       <div class="dpp" id="dp-danau"></div>
       <div class="dpp" id="dp-gambar"></div>
+      <div class="dpp" id="dp-blok"></div>
       <div class="dpp" id="dp-batas"></div>
       <div class="dpp" id="dp-pdf">
       <div class="card"><div id="ovList" class="muted">Belum ada.</div>
@@ -234,7 +235,7 @@
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
   <a data-go="data">Data peta</a>
-  <div class="ver">by Yohanes div2<br>Versi 0.9.2</div>
+  <div class="ver">by Yohanes div2<br>Versi 0.9.3</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
@@ -249,6 +250,7 @@
 <script src="peta.js"></script>
 <script src="dem.js"></script>
 <script src="batas.js"></script>
+<script src="blok.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

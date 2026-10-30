@@ -916,7 +916,23 @@
   }
 
   // ---------- ekspor / impor satu peta (.hzpeta): [4 byte panjang][JSON header][data kotak gambar] ----------
-  function exportOverlay(o) {
+  // gambar peta pada tingkat resolusi tertentu (untuk deteksi blok)
+  function rasterAt(o, maxSide) {
+    var lv = 0; while (lv < o.levels.length - 1 && Math.max(o.levels[lv].w, o.levels[lv].h) > maxSide) lv++;
+    var L = o.levels[lv], cv = document.createElement('canvas'), jobs = [], tx, ty;
+    cv.width = L.w; cv.height = L.h; var ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, L.w, L.h);
+    for (ty = 0; ty < L.rows; ty++) for (tx = 0; tx < L.cols; tx++) jobs.push([tx, ty]);
+    var i = 0;
+    function next() {
+      if (i >= jobs.length) return Promise.resolve();
+      var j = jobs[i++];
+      return getTile(o.id + '|' + lv + '|' + j[0] + '|' + j[1]).then(function (b) {
+        if (!b) return null; return createImageBitmap(b);
+      }).then(function (bm) { if (bm) { ctx.drawImage(bm, j[0] * TS, j[1] * TS); if (bm.close) bm.close(); } return next(); });
+    }
+    return next().then(function () { return { lv: lv, w: L.w, h: L.h, scale: Math.pow(2, lv), data: ctx.getImageData(0, 0, L.w, L.h).data }; });
+  }
+  function exportOverlay(o, extra) {
     var tiles = [];
     (o.levels || []).forEach(function (l, lv) { for (var ty = 0; ty < l.rows; ty++) for (var tx = 0; tx < l.cols; tx++) tiles.push([lv, tx, ty]); });
     var parts = [], idx = [], i = 0;
@@ -931,7 +947,7 @@
     }
     return next().then(function () {
       var meta = { name: o.name, W: o.W, H: o.H, levels: o.levels, cal: o.cal, edit: o.edit, bytes: o.bytes };
-      var hd = new TextEncoder().encode(JSON.stringify({ app: 'hztrip-peta', v: 1, meta: meta, tiles: idx })), len = new Uint8Array(4);
+      var hd = new TextEncoder().encode(JSON.stringify({ app: 'hztrip-peta', v: 1, meta: meta, extra: extra || null, tiles: idx })), len = new Uint8Array(4);
       new DataView(len.buffer).setUint32(0, hd.length);
       return new Blob([len, hd].concat(parts), { type: 'application/octet-stream' });
     });
@@ -950,11 +966,11 @@
           return putTile(id + '|' + t[0], blob).then(nx);
         }
         return nx().then(function () {
-          var m = h.meta; m.id = id; m.on = true; return m;
+          var m = h.meta; m.id = id; m.on = true; m._extra = h.extra || null; return m;
         }).catch(function (e) { delOverlay(id); throw e; });
       });
     });
   }
 
-  root.HzOverlay = { exportOverlay: exportOverlay, importOverlayFile: importOverlayFile, openPdf: openPdf, clean: clean, affOf: affOf, infoAff: infoAff, tune: tune, importPdf: importPdf, delOverlay: delOverlay, makeLayer: makeLayer, affineOf: affineOf, toLLFn: toLLFn, info: info, residual: residual, calibrate: calibrate, TS: TS };
+  root.HzOverlay = { rasterAt: rasterAt, exportOverlay: exportOverlay, importOverlayFile: importOverlayFile, openPdf: openPdf, clean: clean, affOf: affOf, infoAff: infoAff, tune: tune, importPdf: importPdf, delOverlay: delOverlay, makeLayer: makeLayer, affineOf: affineOf, toLLFn: toLLFn, info: info, residual: residual, calibrate: calibrate, TS: TS };
 })(window);
