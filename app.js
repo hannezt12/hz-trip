@@ -1110,7 +1110,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.9.4'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.9.5'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + CHEV + '</button>'; }).join('');
@@ -2073,6 +2073,12 @@
   // ---------- blok kebun ----------
   var BLK_COL = { none: '#9AA5AD', set: '#7FD8FF', conf: '#B79CFF' }, RC = { guide: {}, rows: {}, dep: {} };
   function blocksList() { return S.settings.blocks || (S.settings.blocks = []); }
+  function isScanBlk(b) { return b.src === 'scan' || (!b.src && /^Blok \d+$/.test(b.name || '') && !b.luasCat); }
+  function delScanBlocks() {
+    var n = blocksList().filter(isScanBlk).length;
+    S.settings.blocks = blocksList().filter(function (b) { return !isScanBlk(b); });
+    RC.rows = {}; RC.dep = {}; RC.guide = {}; saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); return n;
+  }
   function blkStatus(b) { return b.dir == null ? 'none' : (b.conf ? 'conf' : 'set'); }
   function blkStatusText(b) { return { none: 'arah belum diatur', set: 'arah diatur', conf: 'terkonfirmasi' }[blkStatus(b)]; }
   function blkSp(b) { return +(b.sp || S.settings.rowSp || 1.5); }
@@ -2304,7 +2310,7 @@
       '<div class="h">JARAK ROW BAWAAN</div><div class="card"><div class="row"><input type="number" id="rwSp" step="0.05" min="0.5" max="5" value="' + (S.settings.rowSp || 1.5) + '"><span class="muted" style="padding:0 8px">m</span></div>' +
       '<div class="muted" style="margin-top:8px">Batas kedalaman cekungan (m)</div><input type="number" id="depT" step="0.1" min="0.1" max="3" value="' + (S.settings.depThr || 0.3) + '"></div>' +
       '<div class="h">DAFTAR BLOK</div>' +
-      (bl.length ? bl.map(function (b, i) { return '<div class="card"><div class="dprow" style="margin-top:0"><div class="nm"><b>' + esc(b.name) + '</b><small>' + nf(blkHa(b), 1) + ' ha · ' + (b.dir == null ? 'arah belum diatur' : 'arah ' + Math.round(b.dir) + '° · ' + nf(blkSp(b), 2) + ' m') + ' · ' + blkStatusText(b) + '</small></div><button class="btn sm" data-bv="' + i + '">Lihat</button><button class="btn sm" data-be="' + i + '">Edit</button></div></div>'; }).join('') + '<button class="btn" id="bkAll" style="width:100%;margin-top:12px;color:var(--r)">Hapus semua blok</button>' : '<div class="card muted">Belum ada.</div>');
+      (bl.length ? bl.map(function (b, i) { return '<div class="card"><div class="dprow" style="margin-top:0"><div class="nm"><b>' + esc(b.name) + '</b><small>' + nf(blkHa(b), 1) + ' ha · ' + (b.dir == null ? 'arah belum diatur' : 'arah ' + Math.round(b.dir) + '° · ' + nf(blkSp(b), 2) + ' m') + ' · ' + blkStatusText(b) + '</small></div><button class="btn sm" data-bv="' + i + '">Lihat</button><button class="btn sm" data-be="' + i + '">Edit</button></div></div>'; }).join('') + (bl.filter(isScanBlk).length ? '<button class="btn" id="bkScan" style="width:100%;margin-top:12px;color:var(--r)">Hapus blok hasil deteksi (' + bl.filter(isScanBlk).length + ')</button>' : '') + '<button class="btn" id="bkAll" style="width:100%;margin-top:12px;color:var(--r)">Hapus semua blok</button>' : '<div class="card muted">Belum ada.</div>');
     if ($('dtT')) {
       $('dtT').oninput = function () { $('dtTv').textContent = this.value; cfg.thr = +this.value; };
       $('dtC').oninput = function () { $('dtCv').textContent = this.value; cfg.close = +this.value; };
@@ -2320,6 +2326,7 @@
     $('depT').onchange = function () { var v = +this.value; if (v >= 0.1 && v <= 3) { S.settings.depThr = v; saveSettings(); RC.dep = {}; } };
     box.querySelectorAll('[data-bv]').forEach(function (x) { x.onclick = function () { var b = blocksList()[+x.getAttribute('data-bv')]; if (b) needMap(b.pts, function () { map.fitBounds(L.latLngBounds(b.pts), { padding: [50, 50], maxZoom: 19 }); openBlockPop(b); }); }; });
     box.querySelectorAll('[data-be]').forEach(function (x) { x.onclick = function () { var b = blocksList()[+x.getAttribute('data-be')]; if (b) openBlockEdit(b); }; });
+    if ($('bkScan')) $('bkScan').onclick = function () { askConfirm('Hapus blok hasil deteksi?', bl.filter(isScanBlk).length + ' blok hasil deteksi otomatis dihapus. Blok dari Logbook.HZ dan blok gambar sendiri tidak terhapus.', 'Hapus', function () { toast(delScanBlocks() + ' blok dihapus'); renderData(); }); };
     if ($('bkAll')) $('bkAll').onclick = function () { askConfirm('Hapus semua blok?', bl.length + ' blok dihapus dari aplikasi. Peta PDF tidak terpengaruh.', 'Hapus', function () { S.settings.blocks = []; saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); renderData(); }); };
   }
   function importLoghz(file, idx) {
@@ -2374,10 +2381,12 @@
           if (!r.on) return;
           var ex = r.name ? blocksList().filter(function (b) { return b.name.toLowerCase() === r.name.toLowerCase(); })[0] : null;
           if (ex) { ex.pts = r.pts; ex.ovId = o.id; if (r.luas) ex.luasCat = r.luas; up++; return; }
-          blocksList().push({ id: Date.now() + k, name: r.name || 'Blok ' + (n + k), pts: r.pts, ovId: o.id, dir: null, sp: null, margin: 0, conf: false, note: '', luasCat: r.luas || null }); k++;
+          blocksList().push({ id: Date.now() + k, src: r.name ? 'loghz' : 'scan', name: r.name || 'Blok ' + (n + k), pts: r.pts, ovId: o.id, dir: null, sp: null, margin: 0, conf: false, note: '', luasCat: r.luas || null }); k++;
         });
         RC.rows = {}; RC.dep = {}; RC.guide = {};
         S.settings.blkOn = true; saveSettings(); end(); drawBlocks(); drawRows(); toast(k + ' blok baru' + (up ? ', ' + up + ' diperbarui' : '') + ' disimpan'); S.dpTab = 'blok'; go('data');
+        var old = blocksList().filter(isScanBlk).length;
+        if (old && res.some(function (r) { return r.name; })) setTimeout(function () { askConfirm('Hapus ' + old + ' blok hasil deteksi lama?', 'Blok hasil deteksi otomatis (Blok 1, 2, …) bertumpuk dengan blok dari Logbook.HZ. Blok dari Logbook dan blok yang kamu gambar sendiri tidak terhapus.', 'Hapus', function () { toast(delScanBlocks() + ' blok deteksi dihapus'); renderData(); }); }, 400);
       };
       $('dpAgain').onclick = function () { end(); S.dpTab = 'blok'; go('data'); };
       $('dpNo').onclick = end;
@@ -2588,7 +2597,7 @@
     }
     $('lkB').onclick = function () {
       if (pts.length < 3) { toast('Minimal 3 titik'); return; }
-      var b = { id: Date.now(), name: 'Blok ' + nextBlockNo(), pts: pts.slice(), ovId: null, dir: null, sp: null, margin: 0, conf: false, note: '' };
+      var b = { id: Date.now(), src: 'manual', name: 'Blok ' + nextBlockNo(), pts: pts.slice(), ovId: null, dir: null, sp: null, margin: 0, conf: false, note: '' };
       blocksList().push(b); S.settings.blkOn = true; saveSettings(); end(); drawBlocks(); openBlockPop(b); openBlockEdit(b);
     };
     $('lkL').onclick = function () { if (pts.length < 2) { toast('Minimal 2 titik'); return; } saveShape('line'); };
