@@ -60,12 +60,18 @@
       ? (window.Capacitor.registerPlugin ? window.Capacitor.registerPlugin('HzTrip') : window.Capacitor.Plugins.HzTrip)
       : mockPlugin();
   } catch (e) { Plug = null; }
-  window.addEventListener('error', function (e) { showErr(e.message); });
-  window.addEventListener('unhandledrejection', function (e) { showErr(e.reason && e.reason.message || e.reason); });
+  // lokasi galat (file:baris) supaya sumbernya mudah dilacak di ponsel mana pun
+  function where(e) {
+    var st = e && e.error && e.error.stack || e && e.stack || '', m = /([\w.\-]+\.js):(\d+):(\d+)/.exec(String(st)) || (e && e.filename ? [0, String(e.filename).split('/').pop(), e.lineno, e.colno] : null);
+    return m ? ' [' + m[1] + ':' + m[2] + ':' + m[3] + ']' : '';
+  }
+  window.addEventListener('error', function (e) { showErr(e.message + where(e)); });
+  window.addEventListener('unhandledrejection', function (e) { var r = e.reason; showErr((r && r.message || r) + where(r)); });
   function showErr(m) {
     var b = document.getElementById('errBar');
-    if (!b) { b = document.createElement('div'); b.id = 'errBar'; b.className = 'warn'; b.style.cssText = 'position:fixed;left:12px;right:12px;top:60px;z-index:99'; document.body.appendChild(b); }
-    b.textContent = 'Galat: ' + m;
+    if (!b) { b = document.createElement('div'); b.id = 'errBar'; b.className = 'warn'; b.style.cssText = 'position:fixed;left:12px;right:12px;top:60px;z-index:99'; b.onclick = function () { b.style.display = 'none'; }; document.body.appendChild(b); }
+    b.style.display = ''; b.textContent = 'Galat: ' + m + ' (ketuk untuk menutup)';
+    try { var lg = JSON.parse(localStorage.getItem('hz_errlog') || '[]'); lg.push(new Date().toISOString().slice(0, 19) + ' ' + m); localStorage.setItem('hz_errlog', JSON.stringify(lg.slice(-20))); } catch (x) {}
   }
   if (!Plug) { HA.ok = false; showErr('Plugin perekam tidak ditemukan'); return; }
 
