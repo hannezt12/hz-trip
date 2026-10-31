@@ -222,6 +222,7 @@
   }
   function drawStart() {
     if (!HA.map || !window.HzDem) return;
+    HA.pbStopForEdit();
     if (HA.DM.closePanel) HA.DM.closePanel();
     HA.map._slopeOn = false; if (HA.DM.sync) HA.DM.sync();
     var pts = [], pl = L.polyline([], { color: HA.NEON, weight: 3 }).addTo(HA.map), pl0 = L.polyline([], { color: '#06202B', weight: 6, opacity: 0.55, interactive: false }).addTo(HA.map), mk = L.layerGroup().addTo(HA.map), bar = document.createElement('div');

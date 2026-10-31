@@ -129,6 +129,7 @@
       blkOn: ic('<path d="M3 4h8v8H3zM13 4h8v5h-8zM13 11h8v9h-8zM3 14h8v6H3z"/>'),
       rowOn: ic('<path d="M5 4l-2 16M10 4L8 20M15 4l-2 16M20 4l-2 16"/>'),
       detect: ic('<path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 8h8v8H8z"/>'),
+      play: ic('<path d="M8 5v14l11-7z"/>'),
       dataGo: ic('<path d="M5 5h14M5 12h14M5 19h14"/>')
     };
     function tile(id, label, st, badge) { return '<button type="button" class="tile' + (st ? ' st' : '') + '" data-t="' + id + '">' + IC[id] + '<span>' + label + '</span>' + (badge ? '<i class="tbd" id="bd_' + id + '"></i>' : '') + '</button>'; }
@@ -138,10 +139,11 @@
       '<div class="tt" style="margin-top:6px">SUMBER DATA</div><div class="tgrid">' + tile('useNas', 'DEMNAS', 1) + tile('useFree', 'DEM gratis', 1) + '</div><div class="tnote" id="tNasSub"></div>' +
       '<div class="tt">TAMPIL</div><div class="tgrid">' + tile('blkOn', 'Blok', 1, 1) + tile('rowOn', 'Arah row', 1) + tile('lakesOn', 'Danau', 1, 1) + tile('shpOn', 'Gambar', 1, 1) + tile('batDesa', 'Desa', 1) + tile('batKec', 'Kecamatan', 1) + '</div>' +
       '<div class="tseg" id="tRm"><button type="button" data-m="datar">Datar</button><button type="button" data-m="kontur">Kontur</button></div>' +
+      '<div class="tt">LINTASAN</div><div class="tgrid">' + tile('play', 'Putar', 1) + '</div>' +
       '<div class="tt">ALAT</div><div class="tgrid">' + tile('draw', 'Gambar baru') + tile('detect', 'Impor blok') + tile('batCfg', 'Atur batas') + tile('dataGo', 'Data peta') + '</div>';
     function state(id) {
       return id === 'contour' ? !!S.settings.contour : id === 'slopeLayer' ? !!S.settings.slopeLayer : id === 'hach' ? !!S.settings.hach : id === 'slopeTap' ? !!m._slopeOn :
-        id === 'blkOn' ? S.settings.blkOn !== false : id === 'rowOn' ? !!S.settings.rowOn : id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'v3d' ? HA.V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : !!S.profOpen;
+        id === 'blkOn' ? S.settings.blkOn !== false : id === 'rowOn' ? !!S.settings.rowOn : id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'play' ? !!HA.PB.open : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'v3d' ? HA.V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : !!S.profOpen;
     }
     function sync() {
       var any = false;
@@ -171,7 +173,8 @@
       if (sm) { S.settings.hachSmooth = sm.getAttribute('data-s'); saveSettings(); if (!S.settings.hach) setHach(true); else if (HA.DM.hach) HA.DM.hach.redraw(); sync(); return; }
       var b = e.target.closest && e.target.closest('.tsw, .tbtn, .tile'); if (!b) return;
       var id = b.getAttribute('data-t');
-      if (id === 'draw') { closeP(); drawStart(); return; }
+      if (id === 'play') { if (HA.PB.open) HA.pbClose(); else { closeP(); HA.pbOpen(); } sync(); return; }
+      if (id === 'draw') { if (HA.pbLocked('Tutup Putar dulu untuk menggambar')) return; closeP(); drawStart(); return; }
       if (id === 'detect') { closeP(); S.dpTab = 'blok'; go('data'); return; }
       if (id === 'blkOn') { S.settings.blkOn = S.settings.blkOn === false; saveSettings(); if (S.settings.blkOn === false) closeBlockPop(); drawBlocks(); sync(); return; }
       if (id === 'rowOn') { S.settings.rowOn = !S.settings.rowOn; saveSettings(); drawRows(true); sync(); return; }

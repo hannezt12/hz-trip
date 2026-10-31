@@ -293,7 +293,6 @@ input[type=time]{height:46px;width:100%;border:1px solid var(--line);border-radi
 /* v0.6.3: tata letak Lintasan, tema terang lembut, status bar hitam */
 body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top,0px);background:#000;z-index:9999;pointer-events:none}
 .mapmenu{width:44px;height:38px;border:1px solid var(--line);border-radius:12px;flex-shrink:0}
-#mapPlay{position:absolute;left:10px;bottom:26px;z-index:600;height:44px;background:var(--ov);border-color:var(--line);box-shadow:0 1px 6px rgba(0,0,0,.25)}
 .chips button.kind{border-color:var(--tx2);font-weight:600}
 :root[data-theme=light]{--acc:#3E5C76}
 :root[data-theme=light] .recbtn.start,:root[data-theme=light] .btn.pri,:root[data-theme=light] .trip.sel .cbx,:root[data-theme=light] .opt.on,:root[data-theme=light] .seg button.on,:root[data-theme=light] .chips button.on,:root[data-theme=light] .themeseg button.on,:root[data-theme=light] #pbFol.on{background:var(--acc);color:#fff;border-color:var(--acc)}
@@ -441,3 +440,12 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .vm{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.75);margin:6px}
 
 .lkbar.bot{top:auto;bottom:64px;left:10px;right:10px}
+
+/* panel blok yang bisa dilipat */
+.blkpop .bh b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.blkpop .bh b small.bha{font-weight:400;opacity:.75;font-size:.85em}
+.blkpop .bs{display:none;margin-top:2px;opacity:.85}
+.blkpop.fold .bs{display:block}
+.blkpop.fold #bpBody{display:none}
+.blkpop #bpT{transition:transform .15s}
+.blkpop.fold #bpT{transform:rotate(180deg)}

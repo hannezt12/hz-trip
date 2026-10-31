@@ -229,6 +229,10 @@
   }
 
   // ---------- putar ulang lintasan ----------
+  HA.pbOpen = pbOpen; HA.pbClose = pbClose;
+  // selama Putar terbuka, aksi yang mengedit dikunci; mulai mengedit menghentikan Putar
+  HA.pbLocked = function (msg) { if (HA.PB.open) { toast(msg || 'Tutup Putar dulu untuk mengedit'); return true; } return false; };
+  HA.pbStopForEdit = function () { if (HA.PB.open) { pbClose(); toast('Putar dihentikan karena sedang mengedit'); } };
   HA.PB = { open: false, seq: [], ax: [], pos: 0, len: 0, playing: false, mult: 10, follow: true, raf: 0, last: 0, mk: null, ring: null, cur: null };
   function pbZone(v) { return v < 60 ? COL.g : (v < 90 ? COL.y : COL.r); }
   function pbBuild() {
@@ -303,17 +307,21 @@
   }
   function pbOpen() {
     if (!HA.map) return;
-    HA.PB.open = true; $('pbBar').style.display = 'block'; $('pbHud').style.display = 'block'; $('mapPlay').style.display = 'none';
+    if (HA.DM && HA.DM.edit) { toast('Selesaikan edit dulu sebelum memutar'); return; }
+    if (HA.closeBlockPop) HA.closeBlockPop();
+    if ($('sheet').classList.contains('on')) closeSheet();
+    HA.PB.open = true; $('pbBar').style.display = 'block'; $('pbHud').style.display = 'block';
     pbBuild();
     if (!HA.PB.seq.length) { toast('Belum ada lintasan untuk diputar'); pbClose(); return; }
     var ll = HA.PB.seq.map(function (p) { return [p.lat, p.lng]; });
     HA.PB.snap = true;
     setTimeout(function () { HA.map.invalidateSize(); HA.map.fitBounds(ll, { padding: [40, 40], maxZoom: 17 }); pbDraw(false); }, 80);
-    pbSyncUi();
+    pbSyncUi(); if (HA.DM && HA.DM.sync) HA.DM.sync();
   }
   function pbClose() {
     HA.PB.open = false; pbPlay(false);
-    $('pbBar').style.display = 'none'; $('pbHud').style.display = 'none'; $('mapPlay').style.display = '';
+    $('pbBar').style.display = 'none'; $('pbHud').style.display = 'none';
+    if (HA.DM && HA.DM.sync) HA.DM.sync();
     if (HA.PB.mk && HA.map) HA.map.removeLayer(HA.PB.mk);
     HA.PB.mk = null; HA.PB.hd = 0;
     if (HA.map) setTimeout(function () { HA.map.invalidateSize(); }, 50);
@@ -324,7 +332,6 @@
     $('pbFol').textContent = HA.PB.follow ? 'Ikuti: ya' : 'Ikuti: tidak';
   }
   function pbInit() {
-    $('mapPlay').onclick = function () { pbOpen(); };
     $('pbX').onclick = pbClose;
     $('pbPlay').onclick = function () { pbPlay(!HA.PB.playing); };
     $('pbSl').oninput = function () { HA.PB.pos = HA.PB.len * (+this.value) / 1000; HA.PB.snap = true; pbDraw(true); };
@@ -342,7 +349,7 @@
     $('mmCs').onclick = function (e) { var v = e.target.getAttribute && e.target.getAttribute('data-cs'); if (!v) return; S.settings.contourStep = v; saveSettings(); document.querySelectorAll('#mmCs .opt').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-cs') === v); }); if (HA.DM.layer) HA.DM.layer.redraw(); };
     $('mmKc').onchange = function () { S.settings.kmlContour = this.checked; saveSettings(); };
     $('mmX').onclick = closeSheet;
-    $('mmOv').onclick = function () { closeSheet(); openOvSheet(); };
+    $('mmOv').onclick = function () { if (HA.pbLocked('Tutup Putar dulu untuk mengubah peta saya')) return; closeSheet(); openOvSheet(); };
     $('mmKml').onclick = function () { closeSheet(); mapKml(); };
   }
   // siapkan ketinggian + kontur untuk KML (butuh data ketinggian); selalu lanjut walau gagal

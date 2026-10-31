@@ -124,7 +124,7 @@
       if (m._lakeDraw) { m._lakeDraw.tap(e.latlng); return; }
       if (m._slopeOn) { slopeTap(m, e); return; }
       if (HA.DM.prev || HA.DM.edit) return;
-      if (m === HA.map && S.settings.blkOn !== false && blocksList().length) { var bb = blockAt(e.latlng); if (bb) { clear(); openBlockPop(bb); return; } else if (HA.DM.pop) closeBlockPop(); }
+      if (m === HA.map && !HA.PB.open && S.settings.blkOn !== false && blocksList().length) { var bb = blockAt(e.latlng); if (bb) { clear(); openBlockPop(bb); return; } else if (HA.DM.pop) closeBlockPop(); }
       var grp = groupFn(), pins = [];
       (grp || []).forEach(function (g) { (g._pins || []).forEach(function (p) { pins.push(p); }); });
       var near = pins.filter(function (p) { return m.latLngToContainerPoint(p.ll).distanceTo(e.containerPoint) <= 26; });

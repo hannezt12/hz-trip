@@ -217,7 +217,7 @@
     $('cfNo').onclick = closeSheet;
     $('cfYes').onclick = function () { closeSheet(); onOk(); };
   }
-  function closeSheet() { $('sheet').classList.remove('on'); $('scrim').classList.remove('on'); }
+  function closeSheet() { $('sheet').classList.remove('on'); $('scrim').classList.remove('on'); var h = HA.onSheetClose; HA.onSheetClose = null; if (h) h(); }
 
   // Tombol back Android (dipanggil dari MainActivity): true = sudah ditangani di halaman.
   window.hzBack = function () {
