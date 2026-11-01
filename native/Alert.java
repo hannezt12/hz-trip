@@ -161,6 +161,21 @@ final class Alert {
                 Intent i = new Intent(c, AlertActivity.class);
                 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION | Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 c.startActivity(i);
+                // Sebagian ponsel (Android 10+, MIUI/ColorOS/FuntouchOS) memblokir popup dari latar belakang tanpa galat.
+                // Bila popup tidak muncul dalam 1,5 detik, pakai notifikasi sebagai cadangan.
+                final Context cc = c.getApplicationContext();
+                new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            if (AlertActivity.cur == null && TripService.mode != TripService.M_REKAM) {
+                                TripService.diagTo(cc, "Popup diblokir ponsel, memakai notifikasi");
+                                postNotif(cc);
+                            }
+                        } catch (Throwable ignored3) {
+                        }
+                    }
+                }, 1500L);
                 return;
             } catch (Throwable t) {
                 TripService.diagTo(c, "Popup gagal: " + t.getMessage());

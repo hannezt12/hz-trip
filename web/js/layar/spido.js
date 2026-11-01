@@ -85,7 +85,7 @@
     var w = '';
     if (!S.perm) w += '<div class="warn">Izin lokasi belum diberikan. Tekan Mulai lalu pilih "Izinkan".</div>';
     else if (native && S.auto && !S.bg) w += '<div class="warn">Agar rekam otomatis jalan saat layar mati, izinkan lokasi "Selalu".<br><button class="btn sm" data-act="bg" style="margin-top:8px">Atur izin lokasi</button></div>';
-    if (native && S.auto && !S.overlay) w += '<div class="warn">Agar popup pengingat muncul di atas aplikasi lain, izinkan "Tampil di atas aplikasi lain".<br><button class="btn sm" data-act="over" style="margin-top:8px">Atur izin popup</button></div>';
+    if (native && S.auto && !S.overlay) w += '<div class="warn">Agar popup pengingat muncul di atas aplikasi lain, izinkan "Tampil di atas aplikasi lain". Di Xiaomi, Oppo, Vivo, dan Realme aktifkan juga "Tampilkan jendela pop-up saat berjalan di latar belakang" (Info aplikasi, Izin lainnya). Bila tetap diblokir, pengingat tampil sebagai notifikasi.<br><button class="btn sm" data-act="over" style="margin-top:8px">Atur izin popup</button></div>';
     if (native && !S.battFree) w += '<div class="warn">Penghematan baterai belum dimatikan untuk HZ Trip.<br><button class="btn sm" data-act="batt" style="margin-top:8px">Buka pengaturan baterai</button></div>';
     $('warnBox').innerHTML = w;
   }
