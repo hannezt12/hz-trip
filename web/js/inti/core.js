@@ -61,10 +61,7 @@
       : mockPlugin();
   } catch (e) { Plug = null; }
   // lokasi galat (file:baris) supaya sumbernya mudah dilacak di ponsel mana pun
-  function where(e) {
-    var st = e && e.error && e.error.stack || e && e.stack || '', m = /([\w.\-]+\.js):(\d+):(\d+)/.exec(String(st)) || (e && e.filename ? [0, String(e.filename).split('/').pop(), e.lineno, e.colno] : null);
-    return m ? ' [' + m[1] + ':' + m[2] + ':' + m[3] + ']' : '';
-  }
+  function where(e) { var st = String(e && e.error && e.error.stack || e && e.stack || ''), re = /([\w.\-]+\.js):(\d+):(\d+)/g, m, out = [], lib = /^(leaflet|geotiff|jspdf|pdf|capacitor)/i; while ((m = re.exec(st)) && out.length < 3) { if (!lib.test(m[1]) || !out.length) out.push(m[1] + ':' + m[2] + ':' + m[3]); } if (!out.length && e && e.filename) out.push(String(e.filename).split('/').pop() + ':' + e.lineno + ':' + e.colno); return out.length ? ' [' + out.join(' < ') + ']' : ''; }
   window.addEventListener('error', function (e) { showErr(e.message + where(e)); });
   window.addEventListener('unhandledrejection', function (e) { var r = e.reason; showErr((r && r.message || r) + where(r)); });
   function showErr(m) {

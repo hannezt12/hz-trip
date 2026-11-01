@@ -349,6 +349,7 @@
       },
       getEvents: function () { return { moveend: this._update, resize: this._update, viewreset: this._update, zoomanim: this._animZoom }; },
       _animZoom: function (e) {
+        if (!this._center || !this._canvas || !this._map) return;
         var m = this._map, scale = m.getZoomScale(e.zoom, this._zoom),
           viewHalf = m.getSize().multiplyBy(0.5 + PAD),
           cur = m.project(this._center, e.zoom),

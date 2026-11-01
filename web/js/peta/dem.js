@@ -548,6 +548,7 @@
       onRemove: function () { this._id++; L.DomUtil.remove(this._canvas); this._canvas = null; },
       getEvents: function () { return { moveend: this._update, resize: this._update, viewreset: this._update, zoomanim: this._animZoom }; },
       _animZoom: function (e) {
+        if (!this._center || !this._canvas || !this._map) return;
         var m = this._map, scale = m.getZoomScale(e.zoom, this._zoom), viewHalf = m.getSize().multiplyBy(0.5 + PAD),
           cur = m.project(this._center, e.zoom), off = viewHalf.multiplyBy(-scale).add(cur).subtract(m._getNewPixelOrigin(e.center, e.zoom));
         L.DomUtil.setTransform(this._canvas, off, scale);
