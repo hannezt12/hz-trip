@@ -17,6 +17,7 @@ jobs:
 
       # Hapus artifact lama PALING AWAL (sisakan 2, jadi 3 setelah upload baru)
       - name: Hapus artifact APK lama
+        continue-on-error: true   # galat sementara dari server GitHub tidak boleh menggagalkan build
         uses: actions/github-script@v7
         with:
           script: |
@@ -28,7 +29,15 @@ jobs:
               .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             for (const artifact of milikKita.slice(2)) {
               console.log('Menghapus artifact lama: id ' + artifact.id);
-              await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: artifact.id });
+              for (let i = 1; i <= 3; i++) {
+                try {
+                  await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: artifact.id });
+                  break;
+                } catch (e) {
+                  console.log('Percobaan ' + i + ' gagal: ' + (e.status || '') + ' ' + e.message);
+                  if (i < 3) await new Promise(r => setTimeout(r, 3000 * i));
+                }
+              }
             }
 
       - name: Siapkan Node.js
