@@ -16,6 +16,15 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(HzTripPlugin.class);
         super.onCreate(savedInstanceState);
         blackStatusBar();
+        lockTextZoom();
+    }
+
+    /** Ukuran teks WebView tidak ikut pengaturan font sistem; skala diatur CSS. */
+    private void lockTextZoom() {
+        try {
+            getBridge().getWebView().getSettings().setTextZoom(100);
+        } catch (Throwable ignored) {
+        }
     }
 
     /** Status bar selalu hitam dengan ikon terang (sinyal, baterai, jam), di tema gelap maupun terang. */
