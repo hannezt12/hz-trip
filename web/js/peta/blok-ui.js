@@ -95,7 +95,8 @@
   function bid(b) { return String(b.id != null ? b.id : b.name); }
   function gSig(b) { return b.guide ? b.guide.length + ':' + b.guide.reduce(function (s, p) { return s + p[0] * 1.1 + p[1] * 0.9; }, 0).toFixed(6) : 'a'; }
   function rowKey(b) { return ['k', bSig(b), gSig(b), blkSp(b), +b.margin || 0].join('|'); }
-  function depKey(b) { return [bSig(b), +S.settings.depThr || 0.3].join('|'); }
+  function humpThr() { return +S.settings.humpThr || 1; }
+  function depKey(b) { return [bSig(b), +S.settings.depThr || 0.3, humpThr(), 'v2'].join('|'); }
   function rcPut(map, key, val) { map[key] = val; var ks = Object.keys(map); if (ks.length > 80) delete map[ks[0]]; }
   // hitung row satu blok (di-cache). mode: 'datar' | 'kontur'; bg = pekerjaan latar (tidak menyerobot antrean)
   function computeRows(b, mode, bg) {
@@ -122,7 +123,7 @@
     var ck = bid(b) + '\u0001d|' + key;
     return HzBlok.cache.get(ck).then(function (hit) {
       if (hit) { rcPut(HA.RC.dep, key, hit); return hit; }
-      return HzBlok.depJob(b.pts, thr, bid(b) + '|' + key, !bg).then(function (r) {
+      return HzBlok.depJob(b.pts, thr, bid(b) + '|' + key, !bg, humpThr()).then(function (r) {
         rcPut(HA.RC.dep, key, r); HzBlok.cache.put(bid(b), 'd', ck, r); return r;
       });
     });
@@ -138,14 +139,82 @@
     var mpp = 156543.03 * Math.cos(HA.map.getCenter().lat * Math.PI / 180) / Math.pow(2, HA.map.getZoom());
     return Math.max(1, Math.ceil(4 / (sp / mpp)));
   }
-  function drawRowsInto(g, b, mode, res, dep) {
-    if (res && res.lines.length) {
-      var k = thinStep(blkSp(b)), ls = k > 1 ? res.lines.filter(function (_, i) { return i % k === 0; }) : res.lines;
-      L.polyline(ls, { color: '#FFFFFF', weight: 0.8, opacity: 0.9, interactive: false, smoothFactor: 0.5 }).addTo(g);
+  function kDens() { var d = +S.settings.kDens; return d === 1 || d === 3 ? d : 2; }
+  function shownLines(b, res, mode) {
+    var k = thinStep(blkSp(b)) * (mode === 'kontur' ? kDens() : 1);
+    return k > 1 ? res.lines.filter(function (_, i) { return i % k === 0; }) : res.lines;
+  }
+  function mPerPx() { return 156543.03 * Math.cos(HA.map.getCenter().lat * Math.PI / 180) / Math.pow(2, HA.map.getZoom()); }
+  // panah kecil (tanda ">") di sepanjang garis, menunjuk arah turun air. Jarang dan tipis supaya peta tidak ramai.
+  function drawArrows(g, lines, flow) {
+    if (!flow || !flow.a || !lines || !lines.length) return;
+    var mpp = mPerPx(), gap = 110 * mpp, L0 = 7 * mpp, out = [], cap = 150, R = Math.PI / 180;
+    function bearingAt(lat, lng) {
+      var i = Math.round((lng - flow.w) / (flow.e - flow.w) * (flow.cols - 1)), j = Math.round((flow.n - lat) / (flow.n - flow.s) * (flow.rows - 1));
+      if (i < 0 || j < 0 || i >= flow.cols || j >= flow.rows) return -1;
+      return flow.a[j * flow.cols + i];
     }
-    if (dep && mode === 'kontur') dep.list.forEach(function (d) {
+    function chevron(lat, lng, br) {
+      var cl = Math.cos(lat * R) || 1;
+      function pt(dir, m) { var rr = dir * R; return [lat + m * Math.cos(rr) / 111320, lng + m * Math.sin(rr) / (111320 * cl)]; }
+      var tip = pt(br, L0 * 0.5), c = [lat + (tip[0] - lat), lng + (tip[1] - lng)];
+      var l1 = [tip[0] + L0 * Math.cos((br + 150) * R) / 111320, tip[1] + L0 * Math.sin((br + 150) * R) / (111320 * cl)];
+      var l2 = [tip[0] + L0 * Math.cos((br - 150) * R) / 111320, tip[1] + L0 * Math.sin((br - 150) * R) / (111320 * cl)];
+      void c; return [l1, tip, l2];
+    }
+    var tot = 0; // panjang total garis tampak; jarak panah diperlebar bila jumlahnya akan melewati batas, supaya merata di seluruh blok
+    lines.forEach(function (ln) { for (var q0 = 1; q0 < ln.length; q0++) tot += Math.hypot((ln[q0][0] - ln[q0 - 1][0]) * 111320, (ln[q0][1] - ln[q0 - 1][1]) * 111320 * (Math.cos(ln[q0][0] * R) || 1)); });
+    gap = Math.max(gap, tot / (cap * 0.9));
+    lines.forEach(function (ln, li) {
+      if (out.length >= cap || ln.length < 2) return;
+      var acc = gap * ((li * 0.37) % 1), prev = ln[0], q, d, m, f;
+      for (q = 1; q < ln.length && out.length < cap; q++) {
+        var cur = ln[q], cl2 = Math.cos(prev[0] * R) || 1;
+        d = Math.hypot((cur[0] - prev[0]) * 111320, (cur[1] - prev[1]) * 111320 * cl2);
+        if (d > 0) {
+          m = acc;
+          while (m + 0 <= d && out.length < cap) {
+            f = m / d; var lat = prev[0] + (cur[0] - prev[0]) * f, lng = prev[1] + (cur[1] - prev[1]) * f, br = bearingAt(lat, lng);
+            if (br >= 0) out.push(chevron(lat, lng, br));
+            m += gap;
+          }
+          acc = m - d;
+        }
+        prev = cur;
+      }
+    });
+    if (out.length) L.polyline(out, { color: '#FFFFFF', weight: 1.7, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round', smoothFactor: 0 }).addTo(g);
+  }
+  function drawDepInto(g, dep) {
+    if (!dep) return;
+    dep.list.forEach(function (d) {
       L.polygon(d.poly, { color: '#5EE0FF', weight: 1, fillColor: '#5EE0FF', fillOpacity: 0.38, interactive: false }).bindTooltip('cekung ' + nf(d.depth, 1) + ' m', { permanent: HA.map.getZoom() >= 17, direction: 'center', className: 'lktip' }).addTo(g);
     });
+    (dep.hump || []).forEach(function (d) {
+      L.polygon(d.poly, { color: '#FFB020', weight: 1, fillColor: '#FFB020', fillOpacity: 0.34, interactive: false }).bindTooltip('cembung +' + nf(d.depth, 1) + ' m', { permanent: HA.map.getZoom() >= 17, direction: 'center', className: 'lktip' }).addTo(g);
+    });
+  }
+  function drawRowsInto(g, b, mode, res, dep) {
+    var ls = null;
+    if (res && res.lines.length) {
+      ls = shownLines(b, res, mode);
+      L.polyline(ls, { color: '#FFFFFF', weight: 0.8, opacity: 0.9, interactive: false, smoothFactor: 0.5 }).addTo(g);
+    }
+    if (dep && mode === 'kontur') {
+      drawDepInto(g, dep);
+      if (ls && dep.flow) drawArrows(g, ls, dep.flow);
+    }
+  }
+  // blok yang row-nya sudah tersimpan tetapi cekung/cembung belum dihitung (versi lama): dihitung pelan di latar, lalu digambar ulang
+  function fillDepBg(list, id) {
+    HA.DM.depBg = true; var ok = 0, k = 0;
+    HA.RC.depFail = HA.RC.depFail || {};
+    (function nx() {
+      if (k >= list.length) { HA.DM.depBg = false; if (ok && id === HA.DM.rowSeq) drawRows(); return; }
+      var b = list[k++], key = depKey(b);
+      if (HA.RC.depFail[key]) { setTimeout(nx, 0); return; }
+      computeDep(b, true).then(function (r) { if (r) ok++; }).catch(function () { HA.RC.depFail[key] = 1; }).then(function () { setTimeout(nx, 60); });
+    })();
   }
   // lapisan Arah row. Datar: semua blok yang tampak. Kontur: hanya blok yang hasilnya sudah tersimpan
   // (blok lain dihitung saat diketuk atau lewat "Siapkan kontur"), digambar satu per satu supaya tidak macet.
@@ -155,13 +224,14 @@
     HA.DM.rowSeq = (HA.DM.rowSeq || 0) + 1;
     if (!S.settings.rowOn || S.settings.blkOn === false || !blocksList().length) return;
     if (HA.map.getZoom() < 16) { if (hint) toast('Dekatkan peta (zoom 16 ke atas) untuk melihat row'); return; }
-    var mode = S.settings.rowMode || 'datar', id = HA.DM.rowSeq, bd = HA.map.getBounds(), cc = HA.map.getCenter(), g = L.layerGroup().addTo(HA.map), vis, i = 0, miss = 0;
+    var mode = S.settings.rowMode || 'datar', id = HA.DM.rowSeq, bd = HA.map.getBounds(), cc = HA.map.getCenter(), g = L.layerGroup().addTo(HA.map), vis, i = 0, miss = 0, need = [];
     HA.DM.rowLayer = g;
     vis = blocksList().filter(function (b) { return bbHit(b, bd) && (mode === 'kontur' || b.dir != null); });
     vis.sort(function (p, q) { var a1 = bbOf(p), b1 = bbOf(q); return Math.hypot((a1[0] + a1[2]) / 2 - cc.lat, (a1[1] + a1[3]) / 2 - cc.lng) - Math.hypot((b1[0] + b1[2]) / 2 - cc.lat, (b1[1] + b1[3]) / 2 - cc.lng); });
     vis = vis.slice(0, mode === 'kontur' ? 40 : 30);
     function fin() {
       if (id !== HA.DM.rowSeq) return;
+      if (need.length && !HA.DM.depBg) fillDepBg(need.slice(0, 6), id);
       if (mode === 'kontur' && miss && HA.DM.rowTipMode !== 'kontur') toast('Kontur belum dihitung untuk ' + miss + ' blok. Ketuk blok untuk menghitung, atau siapkan semua di Data peta > Blok.');
       HA.DM.rowTipMode = mode;
     }
@@ -176,7 +246,7 @@
       }
       Promise.all([peekRows(b), peekDep(b)]).then(function (r) {
         if (id !== HA.DM.rowSeq) return;
-        if (!r[0]) miss++; else if (b.id !== HA.DM.popId) drawRowsInto(g, b, 'kontur', r[0], r[1]);
+        if (!r[0]) miss++; else { if (!r[1] || !r[1].hump) need.push(b); if (b.id !== HA.DM.popId) drawRowsInto(g, b, 'kontur', r[0], r[1] && r[1].hump ? r[1] : null); }
       }).catch(function () {}).then(function () { setTimeout(nx, 0); });
     })();
   }
@@ -205,25 +275,29 @@
     el.innerHTML = '<div class="bh"><b>' + esc(b.name) + '<small class="bha"> · ' + nf(blkHa(b), 2) + ' ha</small></b><button type="button" class="ib2" id="bpE" aria-label="Edit blok">' + PEN + '</button><button type="button" class="ib2" id="bpT" aria-label="Lipat atau buka panel" aria-expanded="' + (HA.DM.bpFold ? 'false' : 'true') + '"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button><button type="button" class="ib2" id="bpX" aria-label="Tutup">✕</button></div>' +
       '<div class="bs" id="bpS"></div><div id="bpBody">' +
       '<div class="bl">' + nf(blkHa(b), 2) + ' ha' + (b.luasCat ? ' (tercatat ' + nf(+b.luasCat, 2) + ')' : '') + ' · ' + (b.dir == null ? 'arah row belum diatur' : 'arah ' + Math.round(b.dir) + '° · jarak ' + nf(blkSp(b), 2) + ' m') + ' · <small>' + blkStatusText(b) + '</small></div>' +
-      '<div class="bl" id="bpR">Menghitung…</div><div class="bl" id="bpA"></div><div class="bl" id="bpD"></div>' + (b.note ? '<div class="bl"><small>' + esc(b.note) + '</small></div>' : '') +
+      '<div class="bl" id="bpR">Menghitung…</div><div class="bl" id="bpA"></div><div class="bl" id="bpD"></div><div class="bl" id="bpH"></div>' + (b.note ? '<div class="bl"><small>' + esc(b.note) + '</small></div>' : '') +
       '<div class="tseg" id="bpM"><button type="button" data-m="datar">Datar</button><button type="button" data-m="kontur">Kontur</button></div>' +
-      (mode === 'kontur' ? '<div class="tseg"><button type="button" id="bpG">Edit garis pedoman</button>' + (b.guide ? '<button type="button" id="bpG0">Atur ulang pedoman</button>' : '') + '</div>' : '') + '</div>';
+      (mode === 'kontur' ? '<div class="tseg" id="bpK"><button type="button" data-k="1">Rapat</button><button type="button" data-k="2">Sedang</button><button type="button" data-k="3">Jarang</button></div><div class="tseg"><button type="button" id="bpG">Edit garis pedoman</button>' + (b.guide ? '<button type="button" id="bpG0">Atur ulang pedoman</button>' : '') + '</div>' : '') + '</div>';
     el.querySelectorAll('#bpM button').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-m') === mode); });
     $('bpX').onclick = function () { closeBlockPop(); };
     $('bpT').onclick = function () { HA.DM.bpFold = !HA.DM.bpFold; applyFold(); };
     function updSum() { var e = $('bpS'); if (e) e.textContent = [sumR, sumD].filter(Boolean).join(' · '); }
     $('bpE').onclick = function () { openBlockEdit(b); };
     $('bpM').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-m'); if (!m) return; S.settings.rowMode = m; saveSettings(); drawRows(); if (HA.DM.sync) HA.DM.sync(); openBlockPop(b); };
+    if ($('bpK')) {
+      $('bpK').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', +x.getAttribute('data-k') === kDens()); });
+      $('bpK').onclick = function (e) { var k = +(e.target.getAttribute && e.target.getAttribute('data-k')); if (!k) return; S.settings.kDens = k; saveSettings(); drawRows(); openBlockPop(b); };
+    }
     if ($('bpG')) $('bpG').onclick = function () { editGuide(b); };
     if ($('bpG0')) $('bpG0').onclick = function () { delete b.guide; saveSettings(); openBlockPop(b); };
     var lay = L.layerGroup().addTo(HA.map); HA.DM.popLayer = lay;
     if (mode === 'kontur') $('bpR').textContent = 'Menghitung kontur… (beberapa detik, aplikasi tetap bisa dipakai)';
-    var rowsP = computeRows(b, mode);
+    var rowsP = computeRows(b, mode), rowsRes = null;
     // cekungan dihitung setelah row selesai, supaya garis tampil lebih dulu
     var depP = rowsP.catch(function () { return null; }).then(function () { return computeDep(b); }).catch(function () { return null; });
     rowsP.then(function (r) {
       if (id !== HA.DM.popSeq || !$('bpR')) return;
-      sumR = r ? '≈' + r.n.toLocaleString('id-ID') + ' row' : 'arah row belum diatur'; updSum();
+      rowsRes = r; sumR = r ? '≈' + r.n.toLocaleString('id-ID') + ' row' : 'arah row belum diatur'; updSum();
       if (!r) $('bpR').innerHTML = 'Ketuk ikon pensil untuk mengatur arah row.';
       else { $('bpR').innerHTML = '<b>≈ ' + r.n.toLocaleString('id-ID') + ' row</b>' + (mode === 'kontur' ? ' mengikuti kontur' : '') + ' · rata-rata ' + Math.round(r.avg) + ' m · total ' + nf(r.total / 1000, 2) + ' km' + (mode === 'kontur' ? '<br><small>perkiraan dari garis pedoman dan jarak row</small>' : ''); drawRowsInto(lay, b, mode, r, null); }
     }).catch(function (e) { if (id === HA.DM.popSeq && $('bpR')) $('bpR').textContent = String(e && e.message || e); });
@@ -234,8 +308,12 @@
     }
     depP.then(function (d) {
       if (id !== HA.DM.popSeq || !$('bpD')) return;
-      if (d && mode === 'kontur') drawRowsInto(lay, b, mode, null, d);
-      sumD = d ? (d.list.length ? d.list.length + ' cekungan' : 'tanpa cekungan') : ''; updSum();
+      if (d && mode === 'kontur') { drawDepInto(lay, d); if (rowsRes && d.flow) drawArrows(lay, shownLines(b, rowsRes, mode), d.flow); }
+      sumD = d ? (d.list.length ? d.list.length + ' cekungan' : 'tanpa cekungan') + (d.hump && d.hump.length ? ' · ' + d.hump.length + ' cembung' : '') : ''; updSum();
+      if (d && $('bpH')) {
+        if (d.hump && d.hump.length) { var th = 0; d.hump.forEach(function (x) { th += x.area; }); $('bpH').innerHTML = '<b>Cembung: ' + d.hump.length + '</b> · tertinggi +' + nf(d.hump[0].depth, 1) + ' m dari sekitar · total ' + Math.round(th).toLocaleString('id-ID') + ' m²<br><small>bagian yang lebih tinggi, air mengalir menjauh. Panah di garis = arah turun air</small>'; }
+        else $('bpH').innerHTML = 'Cembung: tidak terdeteksi <small>(≥ ' + nf(humpThr(), 1) + ' m)</small>';
+      }
       if (!d) { $('bpD').innerHTML = '<small>Cekungan: data ketinggian belum tersedia</small>'; return; }
       if (!d.list.length) { $('bpD').innerHTML = 'Cekungan: tidak terdeteksi <small>(≥ ' + nf(+S.settings.depThr || 0.3, 1) + ' m)</small>'; return; }
       var tot = 0; d.list.forEach(function (x) { tot += x.area; });
@@ -364,7 +442,8 @@
         '<div class="muted" style="margin-top:8px">Berkas dibuat oleh tombol Ekspor blok di Logbook.HZ (tab Peta). Peta PDF yang dipilih harus gambar peta yang sama dengan yang dipakai di Logbook.HZ. Blok ditampilkan dulu untuk diperiksa. Blok yang namanya sudah ada hanya diperbarui bentuknya, arah row tetap.</div>'
         : '<div class="muted">Belum ada peta PDF yang dikalibrasi. Tambahkan di tab PDF.</div>') + '</div>' +
       '<div class="h">JARAK ROW BAWAAN</div><div class="card"><div class="row"><input type="number" id="rwSp" step="0.05" min="0.5" max="5" value="' + (S.settings.rowSp || 1.5) + '"><span class="muted" style="padding:0 8px">m</span></div>' +
-      '<div class="muted" style="margin-top:8px">Batas kedalaman cekungan (m)</div><input type="number" id="depT" step="0.1" min="0.1" max="3" value="' + (S.settings.depThr || 0.3) + '"></div>' +
+      '<div class="muted" style="margin-top:8px">Batas kedalaman cekungan (m)</div><input type="number" id="depT" step="0.1" min="0.1" max="3" value="' + (S.settings.depThr || 0.3) + '">' +
+      '<div class="muted" style="margin-top:8px">Batas tinggi cembung (m)</div><input type="number" id="humpT" step="0.1" min="0.3" max="5" value="' + (S.settings.humpThr || 1) + '"></div>' +
       (bl.length ? '<div class="h">KONTUR TERSIMPAN</div><div class="card"><div class="muted" id="kcInfo">Memeriksa…</div>' +
         '<button class="btn" id="kcGo" style="width:100%;margin-top:10px;height:46px">Siapkan kontur semua blok</button>' +
         '<button class="btn" id="kcClr" style="width:100%;margin-top:8px">Bersihkan kontur tersimpan</button>' +
@@ -380,6 +459,7 @@
     }
     if ($('kcGo')) kcWire(bl);
     $('rwSp').onchange = function () { var v = +this.value; if (v >= 0.5 && v <= 5) { S.settings.rowSp = v; saveSettings(); HA.RC.rows = {}; } };
+    if ($('humpT')) $('humpT').onchange = function () { var v = +this.value; if (v >= 0.3 && v <= 5) { S.settings.humpThr = v; saveSettings(); HA.RC.dep = {}; } };
     $('depT').onchange = function () { var v = +this.value; if (v >= 0.1 && v <= 3) { S.settings.depThr = v; saveSettings(); HA.RC.dep = {}; } };
     box.querySelectorAll('[data-bv]').forEach(function (x) { x.onclick = function () { var b = blocksList()[+x.getAttribute('data-bv')]; if (b) needMap(b.pts, function () { HA.map.fitBounds(L.latLngBounds(b.pts), { padding: [50, 50], maxZoom: 19 }); openBlockPop(b); }); }; });
     box.querySelectorAll('[data-be]').forEach(function (x) { x.onclick = function () { var b = blocksList()[+x.getAttribute('data-be')]; if (b) openBlockEdit(b); }; });

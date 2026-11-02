@@ -253,41 +253,76 @@
     return { s: s - dLat, n: n + dLat, w: w - dLng, e: e + dLng };
   }
   // murni (jalan di Worker): g = grid ketinggian, b = kotak, lake = topeng sel danau (atau null)
-  function depCalc(pts, g, b, thr, lake) {
+  // arah turun air per sel (derajat dari utara searah jarum jam; -1 = datar). z dihaluskan dua kali supaya derau DEM tidak mengacaukan arah.
+  function flowCalc(g) {
+    var cols = g.cols, rows = g.rows, n = cols * rows, a = new Int16Array(n), z = g.z, pass, i, j, k;
+    var cur = new Float32Array(n); for (k = 0; k < n; k++) cur[k] = z[k];
+    for (pass = 0; pass < 2; pass++) {
+      var nx = new Float32Array(n);
+      for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+        var s = 0, c = 0, dj, di;
+        for (dj = -1; dj <= 1; dj++) for (di = -1; di <= 1; di++) {
+          var x = i + di, y = j + dj; if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
+          var v = cur[y * cols + x]; if (v === v) { s += v; c++; }
+        }
+        nx[j * cols + i] = c ? s / c : NaN;
+      }
+      cur = nx;
+    }
+    for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+      k = j * cols + i;
+      var zl = cur[j * cols + Math.max(0, i - 1)], zr = cur[j * cols + Math.min(cols - 1, i + 1)], zn = cur[Math.max(0, j - 1) * cols + i], zs = cur[Math.min(rows - 1, j + 1) * cols + i];
+      if (zl !== zl || zr !== zr || zn !== zn || zs !== zs) { a[k] = -1; continue; }
+      var gE = (zr - zl) / (2 * g.dx), gN = (zn - zs) / (2 * g.dy);
+      if (Math.sqrt(gE * gE + gN * gN) < 0.003) { a[k] = -1; continue; }
+      a[k] = Math.round(((Math.atan2(-gE, -gN) * 180 / Math.PI) + 360) % 360) % 360;
+    }
+    return a;
+  }
+  // murni (jalan di Worker): g = grid ketinggian, b = kotak, lake = topeng sel danau (atau null)
+  // thr = kedalaman minimum cekungan; thrH = tinggi minimum cembung (gundukan); luas minimum cembung 300 m2
+  function depCalc(pts, g, b, thr, lake, thrH) {
     var c = cen(pts), P = proj(c[0], c[1]), xy = pts.map(P.xy);
     if (!isFinite(g.mn)) throw new Error('Data ketinggian belum tersedia di area ini (butuh internet)');
-    var cols = g.cols, rows = g.rows, dep = fillDepth(g.z, cols, rows), lab = new Int32Array(cols * rows), i, j, id = 0, comps = [], st = [];
+    var cols = g.cols, rows = g.rows;
     function cellLL(i2, j2) { return [b.n - j2 * (b.n - b.s) / (rows - 1), b.w + i2 * (b.e - b.w) / (cols - 1)]; }
-    function ok(i2, j2) {
-      var k = j2 * cols + i2; if (dep[k] < thr) return false;
-      if (lake && lake[k]) return false;
-      var ll = cellLL(i2, j2), q = P.xy(ll); return pip(q[0], q[1], xy);
-    }
-    var okm = new Uint8Array(cols * rows);
-    for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) okm[j * cols + i] = ok(i, j) ? 1 : 0;
-    for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
-      var k0 = j * cols + i; if (!okm[k0] || lab[k0]) continue;
-      id++; st.push(k0); lab[k0] = id; var cnt = 0, md = 0, sx = 0, sy = 0, bx0 = cols, by0 = rows, bx1 = 0, by1 = 0;
-      while (st.length) {
-        var c0 = st.pop(), cx = c0 % cols, cy = (c0 - cx) / cols, di, dj; cnt++; if (dep[c0] > md) md = dep[c0]; sx += cx; sy += cy;
-        if (cx < bx0) bx0 = cx; if (cx > bx1) bx1 = cx; if (cy < by0) by0 = cy; if (cy > by1) by1 = cy;
-        for (dj = -1; dj <= 1; dj++) for (di = -1; di <= 1; di++) {
-          var nx = cx + di, ny = cy + dj; if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
-          var nk = ny * cols + nx; if (okm[nk] && !lab[nk]) { lab[nk] = id; st.push(nk); }
-        }
+    // kumpulkan area (cekung / cembung) dari peta kedalaman/tinggi
+    function collect(dep, th, minM2) {
+      var lab = new Int32Array(cols * rows), i, j, id = 0, comps = [], st = [], okm = new Uint8Array(cols * rows);
+      for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+        var k = j * cols + i; if (dep[k] < th) continue;
+        if (lake && lake[k]) continue;
+        var q = P.xy(cellLL(i, j)); if (pip(q[0], q[1], xy)) okm[k] = 1;
       }
-      comps.push({ id: id, n: cnt, depth: md, cx: sx / cnt, cy: sy / cnt, bb: [bx0, by0, bx1, by1] });
+      for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+        var k0 = j * cols + i; if (!okm[k0] || lab[k0]) continue;
+        id++; st.push(k0); lab[k0] = id; var cnt = 0, md = 0, sx = 0, sy = 0, bx0 = cols, by0 = rows, bx1 = 0, by1 = 0;
+        while (st.length) {
+          var c0 = st.pop(), cx = c0 % cols, cy = (c0 - cx) / cols, di, dj; cnt++; if (dep[c0] > md) md = dep[c0]; sx += cx; sy += cy;
+          if (cx < bx0) bx0 = cx; if (cx > bx1) bx1 = cx; if (cy < by0) by0 = cy; if (cy > by1) by1 = cy;
+          for (dj = -1; dj <= 1; dj++) for (di = -1; di <= 1; di++) {
+            var nx = cx + di, ny = cy + dj; if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+            var nk = ny * cols + nx; if (okm[nk] && !lab[nk]) { lab[nk] = id; st.push(nk); }
+          }
+        }
+        comps.push({ id: id, n: cnt, depth: md, cx: sx / cnt, cy: sy / cnt, bb: [bx0, by0, bx1, by1] });
+      }
+      var out = [];
+      comps.forEach(function (cp) {
+        if (cp.n < 2 || cp.n * g.dx * g.dy < minM2) return;
+        var ring = traceMask(lab, cols, rows, cp.id, cp.bb[0], cp.bb[1], cp.bb[2], cp.bb[3]); if (!ring) return;
+        function gl(p) { var ll = cellLL(p[0] - 0.5, p[1] - 0.5); return [+ll[0].toFixed(7), +ll[1].toFixed(7)]; }
+        var cc = cellLL(cp.cx, cp.cy);
+        out.push({ area: cp.n * g.dx * g.dy, depth: cp.depth, c: cc, poly: ring.map(gl) });
+      });
+      out.sort(function (p, q) { return q.depth - p.depth; });
+      return out;
     }
-    var out = [];
-    comps.forEach(function (cp) {
-      if (cp.n < 2) return;
-      var ring = traceMask(lab, cols, rows, cp.id, cp.bb[0], cp.bb[1], cp.bb[2], cp.bb[3]); if (!ring) return;
-      function gl(p) { var ll = cellLL(p[0] - 0.5, p[1] - 0.5); return [+ll[0].toFixed(7), +ll[1].toFixed(7)]; }
-      var cc = cellLL(cp.cx, cp.cy);
-      out.push({ area: cp.n * g.dx * g.dy, depth: cp.depth, c: cc, poly: ring.map(gl) });
-    });
-    out.sort(function (p, q) { return q.depth - p.depth; });
-    return { list: out, res: Math.max(g.dx, g.dy) };
+    var list = collect(fillDepth(g.z, cols, rows), thr, 0);
+    var zi = new Float32Array(g.z.length), k2;
+    for (k2 = 0; k2 < zi.length; k2++) zi[k2] = g.z[k2] === g.z[k2] ? -g.z[k2] : NaN;
+    var hump = collect(fillDepth(zi, cols, rows), thrH > 0 ? thrH : 1, 300);
+    return { list: list, hump: hump, flow: { cols: cols, rows: rows, n: b.n, s: b.s, w: b.w, e: b.e, a: flowCalc(g) }, res: Math.max(g.dx, g.dy), v: 2 };
   }
   function lakeMaskOf(HZ, b, g) {
     if (!HZ.inLake) return null;
@@ -415,7 +450,7 @@
     if (!guide) guide = guideCalc(a.pts, a.gg, a.gb).guide;
     var r = rowsContour(a.pts, guide, a.sp, a.margin); r.guide = guide; return r;
   }
-  function depJobCalc(a) { return depCalc(a.pts, a.g, a.b, a.thr, a.lake); }
+  function depJobCalc(a) { return depCalc(a.pts, a.g, a.b, a.thr, a.lake, a.thrH); }
   var KIND = { kontur: konturCalc, dep: depJobCalc };
   function workerSrc() {
     return '(' + HZB.toString() + ')(self);\nself.onmessage=function(e){var d=e.data;try{var r=self.HzBlok._k[d.kind](d.args);self.postMessage({id:d.id,ok:true,r:r});}catch(x){self.postMessage({id:d.id,ok:false,msg:String(x&&x.message||x)});}};';
@@ -474,11 +509,11 @@
       return HZ.sampleGrid(b, 200).then(function (g) { return job('kontur', { pts: pts, guide: null, gg: g, gb: b, sp: sp, margin: margin }, front); });
     });
   }
-  function depJob(pts, thr, key, front) {
+  function depJob(pts, thr, key, front, thrH) {
     return once('d|' + key, function () {
       var HZ = root.HzDem; if (!HZ) return Promise.reject(new Error('Data ketinggian tidak tersedia'));
       var b = bboxOf(pts, 40);
-      return HZ.sampleGrid(b, 170).then(function (g) { return job('dep', { pts: pts, g: g, b: b, thr: thr, lake: lakeMaskOf(HZ, b, g) }, front); });
+      return HZ.sampleGrid(b, 170).then(function (g) { return job('dep', { pts: pts, g: g, b: b, thr: thr, thrH: thrH, lake: lakeMaskOf(HZ, b, g) }, front); });
     });
   }
 
