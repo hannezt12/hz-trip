@@ -62,32 +62,39 @@
     var onAuto = S.mode === 'siaga' || S.mode === 'cek', onNotif = !onAuto && S.notif;
     return '<div class="mrow2"><button class="btn' + (onAuto ? ' on' : '') + '" data-act="auto">Aktifkan otomatis</button><button class="btn' + (onNotif ? ' on' : '') + '" data-act="notif">Pengingat aktif</button></div>';
   }
+  // tulis ke DOM hanya bila isinya berubah: ketukan tidak hilang karena elemen diganti, dan lebih hemat
+  var LASTH = {};
+  function put(id, html) { var el = $(id); if (LASTH[id] !== html) { LASTH[id] = html; el.innerHTML = html; } }
+  function putTxt(id, t) { var el = $(id); if (LASTH[id] !== t) { LASTH[id] = t; el.textContent = t; } }
   function renderSpido() {
     var rec = S.mode === 'rekam';
     var fresh = rec && S.live.t && (Date.now() - S.live.t) < 5000;
     var v = fresh ? S.live.v : 0;
-    $('gNum').textContent = Math.round(v);
+    putTxt('gNum', String(Math.round(v)));
     $('gNum').style.color = fresh && v > 0 ? zc(v) : '';
     drawGauge(v);
     renderBkNote(false);
     var lt = S.liveTrip;
-    $('sMax').textContent = lt ? Math.round(lt.max) : '–';
-    $('sAvg').textContent = lt ? Math.round(lt.avg) : '–';
-    $('sKm').textContent = lt ? T.km1(lt.km) : '–';
+    putTxt('sMax', lt ? String(Math.round(lt.max)) : '–');
+    putTxt('sAvg', lt ? String(Math.round(lt.avg)) : '–');
+    putTxt('sKm', lt ? String(T.km1(lt.km)) : '–');
     var b = $('btnRec');
-    if (rec) { b.className = 'recbtn stop'; b.innerHTML = '<span class="dot"></span>Akhiri perekaman'; }
-    else { b.className = 'recbtn start'; b.textContent = 'Mulai merekam (manual)'; }
+    if (LASTH.rec !== rec) {
+      LASTH.rec = rec;
+      if (rec) { b.className = 'recbtn stop'; b.innerHTML = '<span class="dot"></span>Akhiri perekaman'; }
+      else { b.className = 'recbtn start'; b.textContent = 'Mulai merekam (manual)'; }
+    }
     var g = '';
     if (rec) g = !S.live.t ? 'Menunggu sinyal GPS…' : 'GPS ±' + Math.round(S.live.acc) + ' m · ' + S.live.count + ' titik';
-    $('gpsLine').textContent = g;
-    $('modeBox').innerHTML = modeHtml();
-    $('modeBtns').innerHTML = modeBtnsHtml();
+    putTxt('gpsLine', g);
+    put('modeBox', modeHtml());
+    put('modeBtns', modeBtnsHtml());
     var w = '';
     if (!S.perm) w += '<div class="warn">Izin lokasi belum diberikan. Tekan Mulai lalu pilih "Izinkan".</div>';
     else if (native && S.auto && !S.bg) w += '<div class="warn">Agar rekam otomatis jalan saat layar mati, izinkan lokasi "Selalu".<br><button class="btn sm" data-act="bg" style="margin-top:8px">Atur izin lokasi</button></div>';
     if (native && S.auto && !S.overlay) w += '<div class="warn">Agar popup pengingat muncul di atas aplikasi lain, izinkan "Tampil di atas aplikasi lain". Di Xiaomi, Oppo, Vivo, dan Realme aktifkan juga "Tampilkan jendela pop-up saat berjalan di latar belakang" (Info aplikasi, Izin lainnya). Bila tetap diblokir, pengingat tampil sebagai notifikasi.<br><button class="btn sm" data-act="over" style="margin-top:8px">Atur izin popup</button></div>';
     if (native && !S.battFree) w += '<div class="warn">Penghematan baterai belum dimatikan untuk HZ Trip.<br><button class="btn sm" data-act="batt" style="margin-top:8px">Buka pengaturan baterai</button></div>';
-    $('warnBox').innerHTML = w;
+    put('warnBox', w);
   }
 
   function recomputeLive() {

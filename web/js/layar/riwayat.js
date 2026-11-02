@@ -135,13 +135,24 @@
     return { t: t, unit: u, label: typeOf(u), check: T.classify(S.settings.schedule, t.start) !== T.classify(S.settings.schedule, t.end - 1000), hist: o.hist || [] };
   }
   // ---------- ringkasan 30 hari ----------
+  // Hasil hitung hari yang sudah lewat disimpan di memori. Titik mentah tetap utuh di berkas; yang disimpan hanya ringkasan.
+  // Tanda (sig) memuat splitSec, edit hari itu, trip tersembunyi, dan arsip; berubah salah satu -> dihitung ulang.
+  var SUMC = {};
+  function sumSig(ymd) {
+    var a = S.ov.arch && S.ov.arch[ymd];
+    return S.settings.splitSec + '|' + JSON.stringify(S.ov.days[ymd] || 0) + '|' + JSON.stringify((S.ov.hidden || []).filter(function (h) { return h.day === ymd; })) + '|' + (a ? JSON.stringify(a) : '');
+  }
   function daySumm(ymd) {
+    var sig = sumSig(ymd), c = SUMC[ymd];
+    if (c && c.sig === sig && ymd !== T.ymd(Date.now())) return Promise.resolve(c.v);
     return Plug.readDay({ date: ymd }).then(function (r) {
       var res = detectDay(ymd, r.text);
       var tr = edited(ymd, res);
       var km = 0, mx = 0, ws = 0, ds = 0;
       tr.forEach(function (t) { km += t.km; mx = Math.max(mx, t.max); ws += t.avg * t.durSec; ds += t.durSec; });
-      return { ymd: ymd, n: tr.length, km: km, max: mx, avg: ds ? ws / ds : 0, tr: tr, pts: res.points };
+      var v = { ymd: ymd, n: tr.length, km: km, max: mx, avg: ds ? ws / ds : 0, tr: tr, pts: res.points, sig: sig };
+      if (tr.length && ymd !== T.ymd(Date.now())) SUMC[ymd] = { sig: sig, v: { ymd: ymd, n: v.n, km: km, max: mx, avg: v.avg, tr: tr, sig: sig, climb: null } };
+      return v;
     }).catch(function () { return { ymd: ymd, n: 0, km: 0, max: 0, avg: 0 }; });
   }
   var BLN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
@@ -172,16 +183,26 @@
   // total naik per hari di daftar 30 hari (dihitung di latar belakang dari data ketinggian)
   function fillMonthClimb(rows) {
     var days = rows.filter(function (r) { return r.n; }), i = 0, stop = false;
+    function show(r, tot) {
+      var el = document.querySelector('#monthView .mrow[data-d="' + r.ymd + '"] .mt');
+      if (el) el.textContent = r.n + ' trip · ▲ ' + Math.round(tot) + ' m';
+    }
     function nx() {
       if (i >= days.length || stop || S.view !== 'riwayat' || S.hMode !== 'list') return;
-      var r = days[i++], tot = 0, got = 0, items = r.tr.map(function (t) { return { t: t, pts: r.pts }; });
-      climbSeq(items, function (it, c) { tot += c.up; got++; }).then(function () {
-        if (got < items.length) { if (!got) stop = true; }
-        if (got) {
-          var el = document.querySelector('#monthView .mrow[data-d="' + r.ymd + '"] .mt');
-          if (el) el.textContent = r.n + ' trip · ▲ ' + Math.round(tot) + ' m';
-        }
-        nx();
+      var r = days[i++];
+      if (r.climb != null) { show(r, r.climb); nx(); return; }
+      var pp = r.pts ? Promise.resolve(r.pts) : Plug.readDay({ date: r.ymd }).then(function (x) { return detectDay(r.ymd, x.text).points; }).catch(function () { return null; });
+      pp.then(function (pts) {
+        if (!pts) { nx(); return; }
+        var tot = 0, got = 0, items = r.tr.map(function (t) { return { t: t, pts: pts }; });
+        return climbSeq(items, function (it, c) { tot += c.up; got++; }).then(function () {
+          if (got < items.length) { if (!got) stop = true; }
+          if (got) {
+            show(r, tot);
+            if (got === items.length) { r.climb = tot; var c = SUMC[r.ymd]; if (c && c.sig === r.sig) c.v.climb = tot; }
+          }
+          nx();
+        });
       });
     }
     nx();

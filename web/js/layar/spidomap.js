@@ -88,7 +88,7 @@
   }
   function spRebuild() {
     if (!HA.SP.map) return;
-    HA.SP.lay.clearLayers(); HA.SP.lastSeg = null;
+    HA.SP.lay.clearLayers(); HA.SP.lastSeg = null; HA.SP.run = null;
     var pts = S.todayPts || [], res = T.detectTrips(pts, opts()), rec = S.mode === 'rekam', trips = res.trips, curT = rec && trips.length ? trips[trips.length - 1] : null;
     trips.forEach(function (t) {
       var tk = E.trackOf(res.points, t);
@@ -117,7 +117,12 @@
   function spOnFix(f) {
     var ll = [f.lat, f.lng];
     if (HA.SP.lastSeg) {
-      L.polyline([HA.SP.lastSeg, ll], { color: pbZone(f.v * 3.6), weight: 6, opacity: 0.95, lineCap: 'round', interactive: false }).addTo(HA.SP.lay);
+      // Titik berwarna sama disambung ke satu garis (maks 300 titik) supaya layer tidak menumpuk berjam-jam.
+      var zc2 = pbZone(f.v * 3.6), run = HA.SP.run;
+      if (run && run.col === zc2 && run.n < 300) { run.line.addLatLng(ll); run.n++; }
+      else {
+        run = HA.SP.run = { col: zc2, n: 2, line: L.polyline([HA.SP.lastSeg, ll], { color: zc2, weight: 6, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(HA.SP.lay) };
+      }
       if (f.v * 3.6 >= 5) spHeading(HA.SP.lastSeg, ll);
     }
     HA.SP.lastSeg = ll; HA.SP.from = HA.SP.cur || ll; HA.SP.to = ll; HA.SP.t0 = performance.now();
