@@ -120,6 +120,7 @@
       prof: ic('<path d="M3 20h18M4 16l4-5 3 3 4-7 5 6"/>'),
       useNas: ic('<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>'),
       useFree: ic('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>'),
+      linesOn: ic('<path d="M4 20 L10 4 M14 4 L20 20"/>'),
       lakesOn: ic('<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>'),
       shpOn: ic('<path d="M5 17l3-10 9 3 2 8z"/><circle cx="5" cy="17" r="1.5"/><circle cx="8" cy="7" r="1.5"/><circle cx="17" cy="10" r="1.5"/>'),
       batDesa: ic('<path d="M4 7l5-3 6 3 5-2v12l-5 2-6-3-5 3z"/><path d="M9 4v13M15 7v13"/>'),
@@ -137,13 +138,13 @@
       '<div class="tseg" id="tHk"><button type="button" data-k="down">Arah turun</button><button type="button" data-k="row">Searah kontur</button></div>' +
       '<div class="tseg" id="tHs"><button type="button" data-s="detail">Detail</button><button type="button" data-s="umum">Umum</button></div>' +
       '<div class="tt" style="margin-top:6px">SUMBER DATA</div><div class="tgrid">' + tile('useNas', 'DEMNAS', 1) + tile('useFree', 'DEM gratis', 1) + '</div><div class="tnote" id="tNasSub"></div>' +
-      '<div class="tt">TAMPIL</div><div class="tgrid">' + tile('blkOn', 'Blok', 1, 1) + tile('rowOn', 'Arah row', 1) + tile('lakesOn', 'Danau', 1, 1) + tile('shpOn', 'Gambar', 1, 1) + tile('batDesa', 'Desa', 1) + tile('batKec', 'Kecamatan', 1) + '</div>' +
+      '<div class="tt">TAMPIL</div><div class="tgrid">' + tile('blkOn', 'Blok', 1, 1) + tile('rowOn', 'Arah row', 1) + tile('lakesOn', 'Danau', 1, 1) + tile('linesOn', 'Jalan', 1) + tile('shpOn', 'Gambar', 1, 1) + tile('batDesa', 'Desa', 1) + tile('batKec', 'Kecamatan', 1) + '</div>' +
       '<div class="tseg" id="tRm"><button type="button" data-m="datar">Datar</button><button type="button" data-m="kontur">Kontur</button></div>' +
       '<div class="tt">LINTASAN</div><div class="tgrid">' + tile('play', 'Putar', 1) + '</div>' +
       '<div class="tt">ALAT</div><div class="tgrid">' + tile('draw', 'Gambar baru') + tile('detect', 'Impor blok') + tile('batCfg', 'Atur batas') + tile('dataGo', 'Data peta') + '</div>';
     function state(id) {
       return id === 'contour' ? !!S.settings.contour : id === 'slopeLayer' ? !!S.settings.slopeLayer : id === 'hach' ? !!S.settings.hach : id === 'slopeTap' ? !!m._slopeOn :
-        id === 'blkOn' ? S.settings.blkOn !== false : id === 'rowOn' ? !!S.settings.rowOn : id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'play' ? !!HA.PB.open : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'v3d' ? HA.V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : !!S.profOpen;
+        id === 'blkOn' ? S.settings.blkOn !== false : id === 'rowOn' ? !!S.settings.rowOn : id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'play' ? !!HA.PB.open : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'v3d' ? HA.V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : id === 'linesOn' ? S.settings.linesOn !== false : !!S.profOpen;
     }
     function sync() {
       var any = false;
@@ -193,6 +194,7 @@
       }
       else if (id === 'useNas') setSource('nas', S.settings.useNas === false);
       else if (id === 'useFree') setSource('free', S.settings.useFree === false);
+      else if (id === 'linesOn') { S.settings.linesOn = S.settings.linesOn === false; saveSettings(); if (HA.drawLines) HA.drawLines(); sync(); }
       else if (id === 'lakesOn') { S.settings.lakesOn = S.settings.lakesOn === false; saveSettings(); applyLakes(); demRedraw(); }
       else if (id === 'slopeTap') {
         m._slopeOn = !m._slopeOn; if (m._pinClear) m._pinClear();

@@ -29,6 +29,8 @@
   function areaHa(pts) { var P = proj(pts[0][0], pts[0][1]); return polyArea(pts.map(P.xy)) / 10000; }
 
   // arah saran: sisi panjang persegi pembatas terkecil (derajat dari utara, 0..179)
+  // Saran arah: row sejajar sisi TERPENDEK. Dua kandidat dari kotak pembungkus terkecil; dipilih yang potongan row-nya paling pendek di dalam blok
+  // (jadi blok bentuk C/U yang mengikuti danau juga benar). Tanpa jalan bantu/drainase.
   function suggestDir(pts) {
     var P = proj(pts[0][0], pts[0][1]), xy = pts.map(P.xy), best = null, i;
     for (i = 0; i < xy.length; i++) {
@@ -36,10 +38,12 @@
       var ux = Math.sin(th), uy = Math.cos(th), vx = Math.cos(th), vy = -Math.sin(th), u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
       xy.forEach(function (p) { var u = p[0] * ux + p[1] * uy, v = p[0] * vx + p[1] * vy; if (u < u0) u0 = u; if (u > u1) u1 = u; if (v < v0) v0 = v; if (v > v1) v1 = v; });
       var A = (u1 - u0) * (v1 - v0);
-      if (!best || A < best.A) best = { A: A, th: th, long: (u1 - u0) >= (v1 - v0) };
+      if (!best || A < best.A) best = { A: A, th: th };
     }
-    var d = best.th / R; if (!best.long) d += 90;
-    return Math.round(((d % 180) + 180) % 180);
+    var d1 = Math.round((((best.th / R) % 180) + 180) % 180), d2 = (d1 + 90) % 180, r1 = null, r2 = null;
+    try { r1 = rowsStraight(pts, d1, 1.5, 0); r2 = rowsStraight(pts, d2, 1.5, 0); } catch (e) { return d1; }
+    if (!r1 || !r2 || !r1.pieces || !r2.pieces) return d1;
+    return r1.avg <= r2.avg ? d1 : d2;
   }
   function bearing(a, b) { var P = proj(a[0], a[1]), q = P.xy(b); return ((Math.atan2(q[0], q[1]) / R) % 360 + 360) % 360; }
   // sudut antara arah row dan arah turun lereng (0 = searah lereng, 90 = memotong lereng)
@@ -48,12 +52,54 @@
   }
 
   // ---------- row lurus ----------
-  function rowsStraight(pts, dir, sp, margin) {
+  // ---------- garis pemotong (jalan bantu, drainase): kotak selebar w dengan ujung persegi, dalam meter lokal ----------
+  function cutQuads(cuts, P) {
+    var out = [];
+    (cuts || []).forEach(function (c) {
+      var q = (c.pts || []).map(P.xy), h = (+c.w || 0) / 2, i;
+      if (h <= 0 || q.length < 2) return;
+      for (i = 0; i + 1 < q.length; i++) {
+        var dx = q[i + 1][0] - q[i][0], dy = q[i + 1][1] - q[i][1], L = Math.hypot(dx, dy); if (L < 0.01) continue;
+        var ux = dx / L, uy = dy / L, nx = -uy, ny = ux, ax = q[i][0] - ux * h, ay = q[i][1] - uy * h, bx = q[i + 1][0] + ux * h, by = q[i + 1][1] + uy * h;
+        var p = [[ax + nx * h, ay + ny * h], [bx + nx * h, by + ny * h], [bx - nx * h, by - ny * h], [ax - nx * h, ay - ny * h]];
+        out.push({ p: p, x0: Math.min(p[0][0], p[1][0], p[2][0], p[3][0]), x1: Math.max(p[0][0], p[1][0], p[2][0], p[3][0]), y0: Math.min(p[0][1], p[1][1], p[2][1], p[3][1]), y1: Math.max(p[0][1], p[1][1], p[2][1], p[3][1]) });
+      }
+    });
+    return out;
+  }
+  function inQuads(qs, x, y) {
+    var k, i, j;
+    for (k = 0; k < qs.length; k++) {
+      var q = qs[k]; if (x < q.x0 || x > q.x1 || y < q.y0 || y > q.y1) continue;
+      var ins = false;
+      for (i = 0, j = 3; i < 4; j = i++) {
+        if ((q.p[i][1] > y) !== (q.p[j][1] > y) && x < (q.p[j][0] - q.p[i][0]) * (y - q.p[i][1]) / (q.p[j][1] - q.p[i][1]) + q.p[i][0]) ins = !ins;
+      }
+      if (ins) return true;
+    }
+    return false;
+  }
+  // selang t (sepanjang garis B + t*D) yang berada di dalam kotak q (cembung), atau null
+  function lineInQuad(bx, by, dx, dy, q) {
+    var lo = -Infinity, hi = Infinity, i, area = 0;
+    for (i = 0; i < 4; i++) { var a = q.p[i], b = q.p[(i + 1) % 4]; area += a[0] * b[1] - b[0] * a[1]; }
+    var sg = area >= 0 ? 1 : -1;
+    for (i = 0; i < 4; i++) {
+      var a2 = q.p[i], b2 = q.p[(i + 1) % 4], ex = b2[0] - a2[0], ey = b2[1] - a2[1], nx = ey * sg, ny = -ex * sg, nd = nx * dx + ny * dy, nb = nx * (bx - a2[0]) + ny * (by - a2[1]);
+      if (Math.abs(nd) < 1e-12) { if (nb > 0) return null; continue; }
+      var t = -nb / nd;
+      if (nd > 0) { if (t < hi) hi = t; } else { if (t > lo) lo = t; }
+    }
+    return lo < hi ? [lo, hi] : null;
+  }
+
+  function rowsStraight(pts, dir, sp, margin, cuts) {
     margin = margin || 0;
     var c = cen(pts), P = proj(c[0], c[1]), poly = pts.map(P.xy), th = dir * R, dx = Math.sin(th), dy = Math.cos(th), nx = Math.cos(th), ny = -Math.sin(th);
     var off = poly.map(function (p) { return p[0] * nx + p[1] * ny; }), mn = Math.min.apply(null, off), mx = Math.max.apply(null, off), N = poly.length;
-    var segs = [], total = 0, n = 0, o, i;
+    var segs = [], lk = [], total = 0, n = 0, o, i, oi = -1, lajurOf = -1, qs = cutQuads(cuts, P), qo = qs.map(function (q) { var m0 = Infinity, m1 = -Infinity; q.p.forEach(function (v) { var u = v[0] * nx + v[1] * ny; if (u < m0) m0 = u; if (u > m1) m1 = u; }); return [m0, m1]; });
     for (o = mn + Math.max(sp / 2, margin); o < mx - margin + 1e-9; o += sp) {
+      oi++;
       var ts = [];
       for (i = 0; i < N; i++) {
         var j = (i + 1) % N, oa = off[i], ob = off[j];
@@ -63,11 +109,27 @@
       for (i = 0; i + 1 < ts.length; i += 2) {
         var t0 = ts[i] + margin, t1 = ts[i + 1] - margin;
         if (t1 - t0 < 1) continue;
-        segs.push([P.ll(nx * o + dx * t0, ny * o + dy * t0), P.ll(nx * o + dx * t1, ny * o + dy * t1)]);
-        total += t1 - t0; n++;
+        // buang bagian yang tertutup jalan bantu / drainase
+        var parts = [[t0, t1]];
+        if (qs.length) {
+          var gaps = [], gi;
+          for (gi = 0; gi < qs.length; gi++) { if (o < qo[gi][0] || o > qo[gi][1]) continue; var iv = lineInQuad(nx * o, ny * o, dx, dy, qs[gi]); if (iv) gaps.push(iv); }
+          if (gaps.length) {
+            gaps.sort(function (p, q) { return p[0] - q[0]; });
+            parts = []; var cur0 = t0, gk;
+            for (gk = 0; gk < gaps.length; gk++) { if (gaps[gk][1] <= cur0) continue; if (gaps[gk][0] >= t1) break; if (gaps[gk][0] > cur0) parts.push([cur0, Math.min(gaps[gk][0], t1)]); cur0 = Math.max(cur0, gaps[gk][1]); }
+            if (cur0 < t1) parts.push([cur0, t1]);
+          }
+        }
+        parts.forEach(function (pp) {
+          if (pp[1] - pp[0] < 1) return;
+          segs.push([P.ll(nx * o + dx * pp[0], ny * o + dy * pp[0]), P.ll(nx * o + dx * pp[1], ny * o + dy * pp[1])]); lk.push(oi);
+          total += pp[1] - pp[0]; if (lajurOf !== oi) { lajurOf = oi; n++; }
+        });
       }
     }
-    return { lines: segs, n: n, total: total, avg: n ? total / n : 0, width: mx - mn };
+    // n = jumlah lajur (posisi lajur); satu lajur boleh terputus jadi beberapa potongan (danau, enklaf, jalan)
+    return { lines: segs, lk: lk, n: n, pieces: segs.length, total: total, avg: segs.length ? total / segs.length : 0, width: mx - mn };
   }
 
   // ---------- marching squares umum ----------
@@ -369,9 +431,20 @@
     return HZ.sampleGrid(b, 200).then(function (g) { return guideCalc(pts, g, b); });
   }
   var MAXCELL = 40000;
-  function rowsContour(pts, guide, sp, margin) {
+  // sisipkan titik tiap <= step meter supaya potongan di jalan sempit tidak terlewat
+  function densify(a, step) {
+    var out = [a[0]], i, j;
+    for (i = 1; i < a.length; i++) {
+      var dx = a[i][0] - a[i - 1][0], dy = a[i][1] - a[i - 1][1], m = Math.ceil(Math.hypot(dx, dy) / step);
+      for (j = 1; j < m; j++) out.push([a[i - 1][0] + dx * j / m, a[i - 1][1] + dy * j / m]);
+      out.push(a[i]);
+    }
+    return out;
+  }
+  function rowsContour(pts, guide, sp, margin, cuts) {
     margin = margin || 0;
-    var c = cen(pts), P = proj(c[0], c[1]), xy = pts.map(P.xy), gx = guide.map(P.xy), i, j, k;
+    var c = cen(pts), P = proj(c[0], c[1]), xy = pts.map(P.xy), gx = guide.map(P.xy), i, j, k, qs = cutQuads(cuts, P), cw = Infinity;
+    (cuts || []).forEach(function (cc) { if (+cc.w > 0) cw = Math.min(cw, +cc.w); });
     var bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
     xy.forEach(function (p) { bx0 = Math.min(bx0, p[0]); bx1 = Math.max(bx1, p[0]); by0 = Math.min(by0, p[1]); by1 = Math.max(by1, p[1]); });
     // ukuran sel: cukup halus untuk jarak row, tapi jumlah sel dibatasi supaya ringan
@@ -424,23 +497,26 @@
         });
       }
     }
-    var lines = [], total = 0, n = 0;
-    levels.forEach(function (lv) {
+    var lines = [], lk = [], total = 0, n = 0, pieces = 0;
+    levels.forEach(function (lv, lkey) {
+      var had = false;
       chain(lv.segs, lv.pos).forEach(function (ch) {
         // potong di dalam blok (dan di luar margin tepi)
         var cur = [], pts2 = ch.map(function (p) { return [x0 + p[0] * cellM, y0 + p[1] * cellM]; });
+        if (qs.length) pts2 = densify(pts2, Math.max(0.3, Math.min(1, cw * 0.4)));
         function flush() {
           if (cur.length > 1) {
             var len = 0, t; for (t = 1; t < cur.length; t++) len += Math.hypot(cur[t][0] - cur[t - 1][0], cur[t][1] - cur[t - 1][1]);
-            if (len >= 3) { lines.push(dp(cur, 0.25).map(function (p) { return P.ll(p[0], p[1]); })); total += len; n++; }
+            if (len >= 3) { lines.push(dp(cur, 0.25).map(function (p) { return P.ll(p[0], p[1]); })); lk.push(lkey); total += len; pieces++; had = true; }
           }
           cur = [];
         }
-        pts2.forEach(function (p) { if (pip(p[0], p[1], xy) && (margin <= 0 || distEdge(p[0], p[1], xy) >= margin)) cur.push(p); else flush(); });
+        pts2.forEach(function (p) { if (pip(p[0], p[1], xy) && (margin <= 0 || distEdge(p[0], p[1], xy) >= margin) && !(qs.length && inQuads(qs, p[0], p[1]))) cur.push(p); else flush(); });
         flush();
       });
+      if (had) n++;
     });
-    return { lines: lines, n: n, total: total, avg: n ? total / n : 0 };
+    return { lines: lines, lk: lk, n: n, pieces: pieces, total: total, avg: pieces ? total / pieces : 0 };
   }
 
   // ---------- pekerja latar (Web Worker), cadangan di utas utama ----------
@@ -448,7 +524,7 @@
   function konturCalc(a) {
     var guide = a.guide;
     if (!guide) guide = guideCalc(a.pts, a.gg, a.gb).guide;
-    var r = rowsContour(a.pts, guide, a.sp, a.margin); r.guide = guide; return r;
+    var r = rowsContour(a.pts, guide, a.sp, a.margin, a.cuts); r.guide = guide; return r;
   }
   function depJobCalc(a) { return depCalc(a.pts, a.g, a.b, a.thr, a.lake, a.thrH); }
   var KIND = { kontur: konturCalc, dep: depJobCalc };
@@ -501,12 +577,12 @@
     FL.set(key, p); return p;
   }
   // row kontur: guide = garis pedoman manual (atau null = otomatis dari data ketinggian)
-  function konturJob(pts, guide, sp, margin, key, front) {
+  function konturJob(pts, guide, sp, margin, key, front, cuts) {
     return once('k|' + key, function () {
-      if (guide) return job('kontur', { pts: pts, guide: guide, sp: sp, margin: margin }, front);
+      if (guide) return job('kontur', { pts: pts, guide: guide, sp: sp, margin: margin, cuts: cuts }, front);
       var HZ = root.HzDem; if (!HZ) return Promise.reject(new Error('Data ketinggian tidak tersedia'));
       var b = bboxOf(pts, 15);
-      return HZ.sampleGrid(b, 200).then(function (g) { return job('kontur', { pts: pts, guide: null, gg: g, gb: b, sp: sp, margin: margin }, front); });
+      return HZ.sampleGrid(b, 200).then(function (g) { return job('kontur', { pts: pts, guide: null, gg: g, gb: b, sp: sp, margin: margin, cuts: cuts }, front); });
     });
   }
   function depJob(pts, thr, key, front, thrH) {

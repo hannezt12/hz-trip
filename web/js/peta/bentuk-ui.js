@@ -88,6 +88,8 @@
       $('dpNewS').onclick = function () { HA.mapKeep = true; go('lintasan'); setTimeout(drawStart, 700); };
     } else if (tab === 'blok') {
       renderBlokTab(box);
+    } else if (tab === 'jalan') {
+      HA.renderLineTab(box);
     } else if (tab === 'batas') {
       var bs = batSet(), fi = window.HzBatas ? HzBatas.fileInfo() : [];
       box.innerHTML = '<div class="card"><div class="dprow" style="margin-top:0"><div class="nm"><b>Desa</b><small>' + (bs.desa ? 'tampil di peta' : 'mati') + '</small></div><button class="btn sm" data-bt="desa">' + (bs.desa ? 'Matikan' : 'Nyalakan') + '</button></div>' +
@@ -113,10 +115,11 @@
     if (S.settings.lakesOn === false || !lakesList().length) return;
     var g = L.layerGroup();
     lakesList().forEach(function (l) {
-      L.polygon(l.pts, { color: '#7FD8FF', weight: 1.2, dashArray: '5 4', fill: false, interactive: false }).bindTooltip(esc(l.name), { permanent: true, direction: 'center', className: 'lktip' }).addTo(g);
+      L.polygon(l.pts, S.settings.rowMode === 'kontur' ? { color: '#5EE0FF', weight: 1.6, fill: true, fillColor: '#5EE0FF', fillOpacity: .38, interactive: false } : { color: '#7FD8FF', weight: 1.2, dashArray: '5 4', fill: false, interactive: false }).bindTooltip(esc(l.name), { permanent: true, direction: 'center', className: 'lktip' }).addTo(g);
     });
     g.addTo(HA.map); HA.DM.lakeLayer = g;
   }
+  HA.drawLakes = drawLakes;
   function openLakes() {
     var ls = lakesList();
     openSheet('<div class="grab"></div><div class="st">DANAU</div>' +
