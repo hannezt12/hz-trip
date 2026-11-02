@@ -213,14 +213,14 @@
   }
   function openDrawer() { $('drawer').classList.add('on'); $('scrim').classList.add('on'); }
   function closeDrawer() { $('drawer').classList.remove('on'); if (!$('sheet').classList.contains('on')) $('scrim').classList.remove('on'); }
-  function openSheet(html) { $('sheet').innerHTML = html; $('sheet').classList.add('on'); $('scrim').classList.add('on'); }
+  function openSheet(html) { $('sheet').innerHTML = html; $('sheet').classList.remove('cmp'); $('sheet').classList.add('on'); $('scrim').classList.add('on'); }
   function askConfirm(title, msg, okLabel, onOk) {
     openSheet('<div class="grab"></div><div class="st">' + esc(title) + '</div><div class="muted" style="margin:6px 0 14px">' + esc(msg) + '</div>' +
       '<div class="row"><button class="btn" id="cfNo" style="flex:1;height:50px">Batal</button><button class="btn pri" id="cfYes" style="flex:1;height:50px;background:var(--r);border-color:var(--r);color:#fff">' + esc(okLabel) + '</button></div>');
     $('cfNo').onclick = closeSheet;
     $('cfYes').onclick = function () { closeSheet(); onOk(); };
   }
-  function closeSheet() { $('sheet').classList.remove('on'); $('scrim').classList.remove('on'); var h = HA.onSheetClose; HA.onSheetClose = null; if (h) h(); }
+  function closeSheet() { $('sheet').classList.remove('on'); $('sheet').classList.remove('cmp'); $('scrim').classList.remove('on'); var h = HA.onSheetClose; HA.onSheetClose = null; if (h) h(); }
 
   // Tombol back Android (dipanggil dari MainActivity): true = sudah ditangani di halaman.
   window.hzBack = function () {

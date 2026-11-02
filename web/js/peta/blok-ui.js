@@ -188,10 +188,10 @@
   function drawDepInto(g, dep) {
     if (!dep) return;
     dep.list.forEach(function (d) {
-      L.polygon(d.poly, { color: '#5EE0FF', weight: 1, fillColor: '#5EE0FF', fillOpacity: 0.38, interactive: false }).bindTooltip('cekung ' + nf(d.depth, 1) + ' m', { permanent: HA.map.getZoom() >= 17, direction: 'center', className: 'lktip' }).addTo(g);
+      L.polygon(d.poly, { color: '#5EE0FF', weight: 1, fillColor: '#5EE0FF', fillOpacity: 0.38, interactive: false }).bindTooltip(nf(d.depth, 1) + 'm', { permanent: HA.map.getZoom() >= 17, direction: 'center', className: 'lktip' }).addTo(g);
     });
     (dep.hump || []).forEach(function (d) {
-      L.polygon(d.poly, { color: '#FFB020', weight: 1, fillColor: '#FFB020', fillOpacity: 0.34, interactive: false }).bindTooltip('cembung +' + nf(d.depth, 1) + ' m', { permanent: HA.map.getZoom() >= 17, direction: 'center', className: 'lktip' }).addTo(g);
+      L.polygon(d.poly, { color: '#FFB020', weight: 1, fillColor: '#FFB020', fillOpacity: 0.34, interactive: false }).bindTooltip(nf(d.depth, 1) + 'm', { permanent: HA.map.getZoom() >= 17, direction: 'center', className: 'lktip' }).addTo(g);
     });
   }
   function drawRowsInto(g, b, mode, res, dep) {
@@ -384,20 +384,61 @@
     if (g0) { go2(g0); return; }
     computeRows(b, 'kontur').then(function (r) { if (r && r.guide) go2(r.guide); }).catch(function (e) { toast(String(e && e.message || e)); });
   }
+  // Ketuk 2 titik di satu lajur untuk menentukan arah row. Titik besar, bisa digeser; titik tampil di atas jari supaya tidak tertutup.
+  function tapDir(b) {
+    var P = [null, null], mk = [null, null], line = null, g = L.layerGroup().addTo(HA.map), bar = document.createElement('div'), ang = null;
+    HA.DM.pdir = true; closeBlockPop(true); HA.DM.popId = b.id;
+    bar.className = 'lkbar bot'; bar.innerHTML = '<span id="tdT">Ketuk titik pertama di satu lajur</span><button type="button" id="tdC">Batal</button><button type="button" class="pri" id="tdOk" disabled>Pakai</button>';
+    HA.map.getContainer().appendChild(bar); L.DomEvent.disableClickPropagation(bar);
+    function icon(n) { return L.divIcon({ className: '', html: '<div class="tpm"><b>' + n + '</b><div class="d"></div><div class="h"></div></div>', iconSize: [56, 80], iconAnchor: [28, 24] }); }
+    function upd() {
+      var t = $('tdT'); if (!t) return;
+      if (line) { g.removeLayer(line); line = null; }
+      if (P[0] && P[1]) {
+        line = L.polyline([P[0], P[1]], { color: '#00D4FF', weight: 2.5, dashArray: '6 5', interactive: false }).addTo(g);
+        var m = HzBlok.proj(P[0][0], P[0][1]).xy(P[1]), dist = Math.hypot(m[0], m[1]);
+        if (dist < 5) { ang = null; t.textContent = 'Titik terlalu dekat. Geser salah satu titik lebih jauh'; }
+        else { ang = Math.round((HzBlok.bearing(P[0], P[1]) % 180) * 10) / 10; t.textContent = 'Arah ' + ang + '° · jarak ' + Math.round(dist) + ' m · geser titik bila perlu'; }
+      } else t.textContent = P[0] ? 'Ketuk titik kedua di lajur yang sama (jauh dari titik pertama)' : 'Ketuk titik pertama di satu lajur';
+      $('tdOk').disabled = ang == null;
+    }
+    function put(k, ll) {
+      P[k] = [ll.lat, ll.lng];
+      mk[k] = L.marker(P[k], { draggable: true, icon: icon(k + 1), zIndexOffset: 900 }).addTo(g);
+      mk[k].on('drag', function (e) { var q = e.target.getLatLng(); P[k] = [q.lat, q.lng]; upd(); });
+      upd();
+    }
+    function end() { HA.map._lakeDraw = null; HA.DM.pdir = false; HA.map.removeLayer(g); bar.remove(); }
+    HA.map._lakeDraw = { tap: function (ll) { if (!P[0]) put(0, ll); else if (!P[1]) put(1, ll); } };
+    $('tdC').onclick = function () { end(); openBlockEdit(b); };
+    $('tdOk').onclick = function () { if (ang == null) return; end(); b.dir = ang; saveSettings(); drawBlocks(); openBlockPop(b); openBlockEdit(b); };
+    setTimeout(function () { fitBlockVisible(b, false); }, 60);
+  }
+  // posisikan peta supaya blok terlihat di bagian yang tidak tertutup panel
+  function fitBlockVisible(b, anim) {
+    if (S.view !== 'lintasan' || !HA.map || !b.pts || b.pts.length < 3) return;
+    var mr = HA.map.getContainer().getBoundingClientRect(), sh = $('sheet').getBoundingClientRect(), top = 24, bot = 24;
+    if ($('sheet').classList.contains('on')) bot = Math.max(24, mr.bottom - sh.top + 12);
+    else if (HA.map._lakeDraw) bot = 96;
+    if (HA.DM.pop) top = HA.DM.pop.offsetTop + HA.DM.pop.offsetHeight + 12;
+    if (mr.height - top - bot < 120) return;
+    HA.map.fitBounds(L.latLngBounds(b.pts), { paddingTopLeft: [24, top], paddingBottomRight: [24, bot], maxZoom: 19, animate: !!anim });
+  }
   function openBlockEdit(b) {
     HA.pbStopForEdit();
     HA.DM.bpFold = true;
-    var sg = HzBlok.suggestDir(b.pts);
-    openSheet('<div class="grab"></div><div class="st">EDIT BLOK</div>' +
-      '<input type="text" id="beN" maxlength="40" value="' + esc(b.name) + '" style="margin-top:6px">' +
+    var sg = HzBlok.suggestDir(b.pts), inMap = S.view === 'lintasan' && !!HA.map;
+    openSheet('<div class="grab"></div><div class="bth"><div class="st">EDIT BLOK</div><button class="btn pri" id="beX">Selesai</button></div>' +
+      '<div class="bnm"><input type="text" id="beN" maxlength="40" value="' + esc(b.name) + '"><label><input type="checkbox" id="beC"' + (b.conf ? ' checked' : '') + '> Terkonfirmasi</label></div>' +
       '<div class="muted" style="margin-top:8px">Arah row (° dari utara, 0–179)</div>' +
-      '<div class="row" style="gap:6px"><button class="btn" data-d="-5" style="width:48px">−5</button><button class="btn" data-d="-1" style="width:48px">−1</button><input type="number" id="beD" min="0" max="359" step="1" value="' + (b.dir == null ? '' : Math.round(b.dir * 10) / 10) + '" placeholder="belum" style="text-align:center"><button class="btn" data-d="1" style="width:48px">+1</button><button class="btn" data-d="5" style="width:48px">+5</button></div>' +
+      '<div class="row" style="gap:6px"><button class="btn" data-d="-5" style="width:48px">−5</button><button class="btn" data-d="-1" style="width:48px">−1</button><input type="number" id="beD" min="0" max="359" step="1" value="' + (b.dir == null ? '' : Math.round(b.dir * 10) / 10) + '" placeholder="arah" style="flex:1;min-width:0;text-align:center"><button class="btn" data-d="1" style="width:48px">+1</button><button class="btn" data-d="5" style="width:48px">+5</button></div>' +
       '<div class="row" style="margin-top:6px;gap:6px"><button class="btn" id="beS" style="flex:1">Pakai saran ' + sg + '°</button><button class="btn" id="beP" style="flex:1">Ketuk 2 titik</button></div>' +
-      '<div class="row" style="margin-top:10px;gap:8px"><div style="flex:1"><div class="muted">Jarak row (m)</div><input type="number" id="beJ" step="0.05" min="0.5" max="5" value="' + blkSp(b) + '"></div><div style="flex:1"><div class="muted">Kurangi tepi (m)</div><input type="number" id="beM" step="0.5" min="0" max="50" value="' + (b.margin || 0) + '"></div></div>' +
-      '<label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="beC"' + (b.conf ? ' checked' : '') + '> Arah sudah dicek (terkonfirmasi)</label>' +
+      '<button class="btn" id="beMo" style="width:100%;margin-top:8px">Lainnya ▾</button>' +
+      '<div class="bmore" id="beMore"><div class="row" style="margin-top:10px;gap:8px"><div style="flex:1"><div class="muted">Jarak row (m)</div><input type="number" id="beJ" step="0.05" min="0.5" max="5" value="' + blkSp(b) + '"></div><div style="flex:1"><div class="muted">Kurangi tepi (m)</div><input type="number" id="beM" step="1" min="0" max="50" value="' + (+b.margin || 0) + '"></div></div>' +
       '<textarea id="beT" rows="2" maxlength="200" placeholder="Catatan (varietas, R&D, dll.)" style="margin-top:8px;width:100%">' + esc(b.note || '') + '</textarea>' +
-      '<div class="row" style="margin-top:10px;gap:6px"><button class="btn" id="beB" style="flex:1">Edit batas</button><button class="btn" id="beD2" style="flex:1;color:var(--r)">Hapus</button></div>' +
-      '<button class="btn pri" id="beX" style="width:100%;margin-top:8px">Selesai</button>');
+      '<div class="row" style="margin-top:10px;gap:6px"><button class="btn" id="beB" style="flex:1">Edit batas</button><button class="btn" id="beD2" style="flex:1;color:var(--r)">Hapus</button></div></div>');
+    if (inMap) { $('scrim').classList.remove('on'); $('sheet').classList.add('cmp'); }
+    $('beMo').onclick = function () { var m = $('beMore'), on = !m.classList.contains('on'); m.classList.toggle('on', on); $('beMo').textContent = on ? 'Lainnya ▴' : 'Lainnya ▾'; if (on) $('sheet').scrollTop = $('sheet').scrollHeight; setTimeout(function () { fitBlockVisible(b, true); }, 60); };
     function live() { saveSettings(); drawBlocks(); if (HA.DM.pop && HA.DM.popId === b.id) openBlockPop(b); if (S.settings.rowOn) drawRows(); }
     function setDir(v) { b.dir = v == null ? null : ((v % 180) + 180) % 180; if (b.dir == null) b.conf = false; $('beD').value = b.dir == null ? '' : Math.round(b.dir * 10) / 10; if (b.dir == null) $('beC').checked = false; live(); }
     $('beN').onchange = function () { b.name = $('beN').value.trim() || b.name; live(); };
@@ -408,20 +449,12 @@
     $('beM').onchange = function () { b.margin = Math.max(0, +$('beM').value || 0); live(); };
     $('beC').onchange = function () { if ($('beC').checked && b.dir == null) { $('beC').checked = false; toast('Atur arah row dulu'); return; } b.conf = $('beC').checked; live(); };
     $('beT').onchange = function () { b.note = $('beT').value.trim(); live(); };
-    $('beP').onclick = function () {
-      HA.onSheetClose = null; closeSheet();
-      needMap(b.pts, function () {
-        var p1 = null, bar = document.createElement('div'); bar.className = 'lkbar'; bar.innerHTML = '<span id="lkT">Ketuk titik awal di satu lajur</span><button type="button" id="lkC">Batal</button>'; HA.map.getContainer().appendChild(bar); L.DomEvent.disableClickPropagation(bar);
-        function end() { HA.map._lakeDraw = null; bar.remove(); }
-        HA.map._lakeDraw = { tap: function (ll) { if (!p1) { p1 = [ll.lat, ll.lng]; $('lkT').textContent = 'Ketuk titik kedua di lajur yang sama (jauh dari titik pertama)'; return; } var d = HzBlok.bearing(p1, [ll.lat, ll.lng]); end(); b.dir = Math.round((d % 180) * 10) / 10; saveSettings(); drawBlocks(); openBlockPop(b); openBlockEdit(b); } };
-        $('lkC').onclick = function () { end(); openBlockEdit(b); };
-      });
-    };
+    $('beP').onclick = function () { HA.onSheetClose = null; closeSheet(); needMap(b.pts, function () { tapDir(b); }); };
     $('beB').onclick = function () { HA.onSheetClose = null; closeSheet(); needMap(b.pts, function () { closeBlockPop(); editPoly(b.pts, true, function (res) { if (res) { b.pts = res; delete b._bb; saveSettings(); } drawBlocks(); drawRows(); openBlockPop(b); openBlockEdit(b); }); }); };
     $('beD2').onclick = function () { askConfirm('Hapus "' + b.name + '"?', 'Blok dihapus dari peta. Peta PDF tidak terpengaruh.', 'Hapus', function () { var i = blocksList().indexOf(b); if (i >= 0) blocksList().splice(i, 1); HzBlok.cache.del(bid(b)); saveSettings(); closeBlockPop(); closeSheet(); drawBlocks(); drawRows(); if (S.view === 'data') renderData(); }); };
     $('beX').onclick = function () { closeSheet(); if (S.view === 'data') renderData(); };
     HA.onSheetClose = function () { HA.DM.bpFold = false; applyFold(); };
-    if (S.view === 'lintasan' && HA.map) { if (!HA.DM.pop) openBlockPop(b); else applyFold(); }
+    if (S.view === 'lintasan' && HA.map) { if (!HA.DM.pop) openBlockPop(b); else applyFold(); setTimeout(function () { fitBlockVisible(b, true); }, 80); }
   }
   // ---------- deteksi blok dari peta PDF ----------
   function detCfg() { return S.settings.dt || (S.settings.dt = { thr: 190, close: 1, minHa: 1 }); }
