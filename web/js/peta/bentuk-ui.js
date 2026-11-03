@@ -38,8 +38,6 @@
   HA.drawShapes = drawShapes;
   HA.applyShapes = applyShapes;
   HA.shapeItems = shapeItems;
-  HA.openShapes = openShapes;
-  HA.drawStart = drawStart;
   HA.tripPts = tripPts;
   HA.climbOfTrip = climbOfTrip;
   HA.climbSeq = climbSeq;
@@ -51,54 +49,43 @@
     HA.mapKeep = true; go('lintasan');
     setTimeout(function () { if (HA.map && pts && pts.length) HA.map.fitBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 19 }); }, 900);
   }
-  function afterShape() { if (S.view === 'data') { closeSheet(); renderData(); } else openShapes(); }
   function delLake(i) {
     var l = lakesList()[i]; if (!l) return;
     askConfirm('Hapus tanda "' + l.name + '"?', 'Kontur dan arah panah di sekitarnya kembali mengikuti data asli.', 'Hapus', function () { lakesList().splice(i, 1); saveSettings(); applyLakes(); demRedraw(); if (S.view === 'data') renderData(); else openLakes(); });
   }
+  function lpList() { return HA.lpList.apply(this, arguments); }
   function renderData() {
-    var tab = S.dpTab || 'danau';
+    var tab = S.dpTab || 'danau'; if (tab === 'gambar' || tab === 'jalan') tab = S.dpTab = 'danau';
     document.querySelectorAll('#dpTabs button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-tab') === tab); });
     document.querySelectorAll('.dpp').forEach(function (e) { e.classList.toggle('on', e.id === 'dp-' + tab); });
     var box = $('dp-' + tab);
     if (tab === 'danau') {
-      var ls = lakesList();
-      box.innerHTML = (ls.length ? ls.map(function (l, i) {
-        return '<div class="card"><div class="dprow" style="margin-top:0"><input type="text" data-lk="' + i + '" value="' + esc(l.name) + '" maxlength="30"><button class="btn sm" data-lv="' + i + '">Lihat</button><button class="btn sm danger" data-ld="' + i + '">Hapus</button></div><div class="muted" data-lm="' + i + '" style="margin-top:6px"></div></div>';
-      }).join('') : '<div class="card muted">Belum ada tanda danau.</div>') +
-        '<div class="muted" style="margin-top:10px">Di dalam tanda, permukaan dianggap datar di bawah tepinya, jadi panah di tepi menunjuk ke dalam. Dipakai oleh kontur, kemiringan, arsiran, Info lereng, dan profil. Matikan dengan ikon Danau di Alat peta.</div>' +
-        '<button class="btn pri" id="dpNewL" style="width:100%;margin-top:12px;height:50px">+ Tandai danau baru</button>';
-      ls.forEach(function (l, i) {
-        function show(m) { var e = box.querySelector('[data-lm="' + i + '"]'); if (e && m && m.area) e.textContent = 'Luas datar ' + fmtArea(m.area) + (m.areaSlope ? ' · permukaan lereng ' + fmtArea(m.areaSlope) : '') + ' · keliling ' + fmtLen(m.flat); }
-        if (l.m) show(l.m); else if (window.HzDem) HzDem.measure(l.pts, true).then(function (m) { l.m = m; saveSettings(); show(m); }).catch(function () {});
+      var ls = lakesList(); ls.forEach(function (l, i) { if (l.id == null) l.id = Date.now() + i; });
+      function lkById(id) { return ls.filter(function (l) { return String(l.id) === String(id); })[0]; }
+      lpList(box, 'danau', {
+        items: ls.map(function (l) { return { id: l.id, title: l.name, sub: l.m && l.m.area ? 'Luas datar ' + fmtArea(l.m.area) : 'menghitung luas…' }; }),
+        empty: 'Belum ada danau. Buat lewat Alat peta > Buat baru.',
+        onTap: function (id) { var l = lkById(id); if (l) viewOnMap(l.pts); },
+        onEdit: function (id) { var l = lkById(id); if (l) { HA.mapKeep = true; go('lintasan'); setTimeout(function () { HA.lakeName(l); }, 800); } },
+        delTitle: function (ids) { return ids.length === 1 ? 'Hapus danau ini?' : 'Hapus ' + ids.length + ' danau?'; },
+        delMsg: function () { return 'Kontur dan arah panah di sekitarnya kembali mengikuti data asli.'; },
+        onDelete: function (ids) { var set = {}; ids.forEach(function (i) { set[i] = 1; }); S.settings.lakes = ls.filter(function (l) { return !set[String(l.id)]; }); saveSettings(); applyLakes(); demRedraw(); renderData(); }
       });
-      box.querySelectorAll('input[data-lk]').forEach(function (inp) { inp.onchange = function () { var l = lakesList()[+inp.getAttribute('data-lk')]; if (l) { l.name = inp.value.trim() || l.name; saveSettings(); drawLakes(); } }; });
-      box.querySelectorAll('[data-lv]').forEach(function (b) { b.onclick = function () { var l = lakesList()[+b.getAttribute('data-lv')]; if (l) viewOnMap(l.pts); }; });
-      box.querySelectorAll('[data-ld]').forEach(function (b) { b.onclick = function () { delLake(+b.getAttribute('data-ld')); }; });
-      $('dpNewL').onclick = function () { HA.mapKeep = true; go('lintasan'); setTimeout(drawStart, 700); };
-    } else if (tab === 'gambar') {
-      var sh = shapesList();
-      box.innerHTML = (sh.length ? sh.map(function (s, i) {
-        return '<div class="card"><div class="dprow" style="margin-top:0"><div class="nm"><b>' + esc(s.name) + '</b><small>' + (s.type === 'line' ? 'Garis' : 'Area') + (s.m ? ' · ' + (s.type === 'line' ? fmtLen(s.m.flat) : (s.m.area ? fmtArea(s.m.area) + ' (datar)' + (s.m.areaSlope ? ' · ' + fmtArea(s.m.areaSlope) + ' (lereng)' : '') : '')) : '') + '</small></div><button class="btn sm" data-sv="' + i + '">Lihat</button><button class="btn sm" data-se="' + i + '">Buka</button></div></div>';
-      }).join('') : '<div class="card muted">Belum ada gambar.</div>') +
-        '<div class="muted" style="margin-top:10px">Garis mengukur panjang. Area menandai wilayah dan mengukur luas (datar dan mengikuti lereng). Tampil di peta dan 3D.</div>' +
-        '<button class="btn pri" id="dpNewS" style="width:100%;margin-top:12px;height:50px">+ Gambar baru</button>';
-      box.querySelectorAll('[data-sv]').forEach(function (b) { b.onclick = function () { var s = shapesList()[+b.getAttribute('data-sv')]; if (s) viewOnMap(s.pts); }; });
-      box.querySelectorAll('[data-se]').forEach(function (b) { b.onclick = function () { openShape(+b.getAttribute('data-se')); }; });
-      $('dpNewS').onclick = function () { HA.mapKeep = true; go('lintasan'); setTimeout(drawStart, 700); };
+      ls.forEach(function (l) { if (!l.m && window.HzDem) HzDem.measure(l.pts, true).then(function (m) { l.m = m; saveSettings(); if (S.view === 'data' && (S.dpTab || 'danau') === 'danau') renderData(); }).catch(function () {}); });
     } else if (tab === 'blok') {
       renderBlokTab(box);
-    } else if (tab === 'jalan') {
-      HA.renderLineTab(box);
     } else if (tab === 'batas') {
-      var bs = batSet(), fi = window.HzBatas ? HzBatas.fileInfo() : [];
-      box.innerHTML = '<div class="card"><div class="dprow" style="margin-top:0"><div class="nm"><b>Desa</b><small>' + (bs.desa ? 'tampil di peta' : 'mati') + '</small></div><button class="btn sm" data-bt="desa">' + (bs.desa ? 'Matikan' : 'Nyalakan') + '</button></div>' +
-        '<div class="dprow"><div class="nm"><b>Kecamatan</b><small>' + (bs.kec ? 'tampil di peta' : 'mati') + '</small></div><button class="btn sm" data-bt="kec">' + (bs.kec ? 'Matikan' : 'Nyalakan') + '</button></div></div>' +
-        '<div class="h">BERKAS IMPOR</div><div class="card">' + (fi.length ? fi.map(function (x, i) { return '<div class="dprow" style="margin-top:' + (i ? 8 : 0) + 'px"><div class="nm"><b>' + esc(x.name) + '</b><small>' + (x.kind === 'desa' ? 'Desa' : 'Kecamatan') + ' · ' + x.n + ' poligon</small></div><button class="btn sm danger" data-bd="' + i + '">Hapus</button></div>'; }).join('') : '<div class="muted">Belum ada berkas.</div>') + '</div>' +
-        '<div class="h">LAYANAN ONLINE</div><div class="card"><div class="muted" style="word-break:break-all">' + (bs.base ? esc(bs.base) : 'Belum diatur.') + '</div></div>' +
+      var fi = window.HzBatas ? HzBatas.fileInfo() : [];
+      box.innerHTML = '<div class="h">BERKAS IMPOR</div><div id="btList"></div>' +
+        '<div class="muted" style="margin-top:10px">Tombol Desa di Alat peta menampilkan batas: zoom 11–12 kecamatan, zoom 13 ke atas desa.' + (batSet().base ? '' : ' Layanan online belum diatur.') + '</div>' +
         '<button class="btn pri" id="dpBat" style="width:100%;margin-top:12px;height:50px">Pengaturan batas wilayah</button>';
-      box.querySelectorAll('[data-bt]').forEach(function (b) { b.onclick = function () { var k = b.getAttribute('data-bt'); bs[k] = !bs[k]; saveSettings(); batRedraw(); renderData(); }; });
-      box.querySelectorAll('[data-bd]').forEach(function (b) { b.onclick = function () { var x = HzBatas.fileInfo()[+b.getAttribute('data-bd')]; if (x) HzBatas.removeFile(x.kind, x.name).then(function () { batRedraw(); renderData(); }); }; });
+      lpList($('btList'), 'batas', {
+        items: fi.map(function (x, i) { return { id: i, title: x.name, sub: (x.kind === 'desa' ? 'Desa' : 'Kecamatan') + ' · ' + x.n + ' poligon' }; }),
+        empty: 'Belum ada berkas batas yang diimpor.',
+        delTitle: function (ids) { return ids.length === 1 ? 'Hapus berkas ini?' : 'Hapus ' + ids.length + ' berkas?'; },
+        delMsg: function () { return 'Berkas batas dihapus dari ponsel. Berkas asli Anda tidak terpengaruh.'; },
+        onDelete: function (ids) { var all = HzBatas.fileInfo(), xs = ids.map(function (i) { return all[+i]; }).filter(Boolean); Promise.all(xs.map(function (x) { return HzBatas.removeFile(x.kind, x.name); })).then(function () { batRedraw(); renderData(); }); }
+      });
       $('dpBat').onclick = openBat;
     } else if (tab === 'pdf') {
       renderOv();
@@ -131,7 +118,7 @@
       if (l.m) show(l.m); else if (window.HzDem) HzDem.measure(l.pts, true).then(function (m) { l.m = m; saveSettings(); show(m); }).catch(function () {});
     });
     $('lkX').onclick = closeSheet;
-    $('lkNew').onclick = function () { closeSheet(); lakeStart(); };
+    $('lkNew').onclick = function () { closeSheet(); HA.drawStart(); };
     $('sheet').querySelectorAll('input[data-lk]').forEach(function (inp) {
       inp.onchange = function () { var l = lakesList()[+inp.getAttribute('data-lk')]; if (l) { l.name = inp.value.trim() || l.name; saveSettings(); drawLakes(); } };
     });
@@ -144,7 +131,7 @@
   }
   // ---------- gambar dan ukur (garis, area, danau) ----------
   var SHP_COL = ['#00D4FF', '#FF7AD9', '#B79CFF', '#FFFFFF', '#00E5C0'];
-  function shapesList() { return S.settings.shapes || (S.settings.shapes = []); }
+  function shapesList() { return []; } // v0.11.1: tab Gambar dihapus
   function nf(v, d) { return v.toFixed(d).replace('.', ','); }
   function fmtLen(m) { return m < 1000 ? Math.round(m) + ' m' : nf(m / 1000, 2) + ' km'; }
   function fmtArea(m) { return m < 10000 ? Math.round(m) + ' m²' : nf(m / 10000, 2) + ' ha'; }
@@ -195,85 +182,6 @@
     if (S.settings.lakesOn !== false) lakesList().forEach(function (l) { out.push({ name: l.name, pts: l.pts, closed: true, color: '#7FD8FF', label: l.name + (l.m && l.m.area ? ' · ' + fmtArea(l.m.area) : '') }); });
     return out;
   }
-  function openShapes() {
-    var ls = shapesList();
-    openSheet('<div class="grab"></div><div class="st">GAMBAR & UKUR</div>' +
-      (ls.length ? ls.map(function (s, i) { return '<button class="btn" data-sh="' + i + '" style="width:100%;margin-top:8px;text-align:left;height:auto;padding:8px 12px"><b>' + esc(s.name) + '</b><br><small class="muted">' + (s.type === 'line' ? 'Garis' : 'Area') + (s.m ? ' · ' + (s.type === 'line' ? fmtLen(s.m.flat) : (s.m.area ? fmtArea(s.m.area) : '')) : '') + '</small></button>'; }).join('') : '<div class="muted" style="margin:8px 0">Belum ada gambar.</div>') +
-      '<div class="muted" style="margin-top:10px">Ketuk titik di peta. Pilih Garis untuk mengukur panjang, atau Area untuk menandai wilayah dan mengukur luasnya. Danau memakai alat yang sama dan juga mengoreksi ketinggian. Semua tampil di peta dan tampilan 3D.</div>' +
-      '<button class="btn pri" id="shNew" style="width:100%;margin-top:12px;height:50px">+ Gambar baru</button><button class="btn" id="shX" style="width:100%;margin-top:8px">Tutup</button>');
-    $('shX').onclick = closeSheet;
-    $('shNew').onclick = function () { closeSheet(); drawStart(); };
-    $('sheet').querySelectorAll('button[data-sh]').forEach(function (b) { b.onclick = function () { openShape(+b.getAttribute('data-sh')); }; });
-  }
-  function openShape(i) {
-    var s = shapesList()[i]; if (!s) return;
-    openSheet('<div class="grab"></div><div class="st">' + (s.type === 'line' ? 'GARIS' : 'AREA') + '</div>' +
-      '<input type="text" id="shN" maxlength="40" value="' + esc(s.name) + '" style="margin-top:6px">' +
-      '<div class="row" id="shC" style="margin-top:8px;gap:8px">' + SHP_COL.map(function (c) { return '<button class="btn" data-c="' + c + '" style="width:44px;height:44px;flex:none;background:' + c + ';border:3px solid ' + (c === s.color ? 'var(--tx)' : 'transparent') + '"></button>'; }).join('') + '</div>' +
-      '<div id="shM" style="margin-top:10px"></div>' +
-      '<textarea id="shT" rows="2" maxlength="200" placeholder="Catatan (opsional)" style="margin-top:10px;width:100%">' + esc(s.note || '') + '</textarea>' +
-      '<div class="row" style="margin-top:10px"><button class="btn" id="shV" style="flex:1">Lihat di peta</button><button class="btn" id="shD" style="flex:1;color:var(--r)">Hapus</button></div>' +
-      '<button class="btn" id="shX" style="width:100%;margin-top:8px">Selesai</button>');
-    $('shM').innerHTML = measureHtml(s.m, s.type);
-    if (!s.m && window.HzDem) HzDem.measure(s.pts, s.type !== 'line').then(function (m) { s.m = m; saveSettings(); if ($('shM')) $('shM').innerHTML = measureHtml(m, s.type); drawShapes(); }).catch(function () {});
-    $('shN').onchange = function () { s.name = $('shN').value.trim() || s.name; saveSettings(); applyShapes(); };
-    $('shT').onchange = function () { s.note = $('shT').value.trim(); saveSettings(); };
-    $('shC').onclick = function (e) { var c = e.target.getAttribute && e.target.getAttribute('data-c'); if (!c) return; s.color = c; saveSettings(); applyShapes(); openShape(i); };
-    $('shV').onclick = function () { closeSheet(); if (HA.map) HA.map.fitBounds(L.latLngBounds(s.pts), { padding: [50, 50], maxZoom: 19 }); };
-    $('shD').onclick = function () { askConfirm('Hapus "' + s.name + '"?', 'Gambar ini dihapus dari peta dan tampilan 3D.', 'Hapus', function () { shapesList().splice(i, 1); saveSettings(); applyShapes(); afterShape(); }); };
-    $('shX').onclick = function () { if (S.view === 'data') afterShape(); else { closeSheet(); openShapes(); } };
-  }
-  function drawStart() {
-    if (!HA.map || !window.HzDem) return;
-    HA.pbStopForEdit();
-    if (HA.DM.closePanel) HA.DM.closePanel();
-    HA.map._slopeOn = false; if (HA.DM.sync) HA.DM.sync();
-    var pts = [], pl = L.polyline([], { color: HA.NEON, weight: 3 }).addTo(HA.map), pl0 = L.polyline([], { color: '#06202B', weight: 6, opacity: 0.55, interactive: false }).addTo(HA.map), mk = L.layerGroup().addTo(HA.map), bar = document.createElement('div');
-    bar.className = 'lkbar';
-    bar.innerHTML = '<span id="lkT"></span><button type="button" id="lkU">Urung</button><button type="button" id="lkL" class="pri">Garis</button><button type="button" id="lkA" class="pri">Area</button><button type="button" id="lkD" class="pri">Danau</button><button type="button" id="lkB" class="pri">Blok</button><button type="button" id="lkC">Batal</button>';
-    HA.map.getContainer().appendChild(bar);
-    L.DomEvent.disableClickPropagation(bar);
-    function upd() {
-      pl.setLatLngs(pts.length > 2 ? pts.concat([pts[0]]) : pts); pl0.setLatLngs(pts.length > 2 ? pts.concat([pts[0]]) : pts); pl.bringToFront();
-      var t = 'Ketuk titik di peta (' + pts.length + ')';
-      if (pts.length > 1) { var q = flatQ(pts, false); t += ' · garis ' + fmtLen(q.len); if (pts.length > 2) t += ' · area ' + fmtArea(flatQ(pts, true).area); }
-      $('lkT').textContent = t;
-    }
-    function dot(q) { L.circleMarker(q, { radius: 5, color: '#06202B', weight: 2, fillColor: HA.NEON, fillOpacity: 1 }).addTo(mk); }
-    function end() { HA.map._lakeDraw = null; HA.map.removeLayer(pl); HA.map.removeLayer(pl0); HA.map.removeLayer(mk); bar.remove(); }
-    HA.map._lakeDraw = { tap: function (ll) { var q = [+ll.lat.toFixed(6), +ll.lng.toFixed(6)]; pts.push(q); dot(q); upd(); } };
-    $('lkU').onclick = function () { pts.pop(); mk.clearLayers(); pts.forEach(dot); upd(); };
-    $('lkC').onclick = end;
-    function saveShape(type) {
-      var n = shapesList().filter(function (x) { return x.type === type; }).length + 1, p = pts.slice();
-      toast('Menghitung…');
-      HzDem.measure(p, type === 'area').catch(function () { return null; }).then(function (m) {
-        var s = { id: Date.now(), type: type, name: (type === 'line' ? 'Garis ' : 'Area ') + n, pts: p, color: type === 'line' ? '#00D4FF' : '#FF7AD9', note: '', m: m };
-        shapesList().push(s); S.settings.shapesOn = true; saveSettings(); end(); applyShapes(); openShape(shapesList().length - 1);
-      });
-    }
-    $('lkB').onclick = function () {
-      if (pts.length < 3) { toast('Minimal 3 titik'); return; }
-      var b = { id: Date.now(), src: 'manual', name: 'Blok ' + nextBlockNo(), pts: pts.slice(), ovId: null, dir: null, sp: null, margin: 0, conf: false, note: '' };
-      blocksList().push(b); S.settings.blkOn = true; saveSettings(); end(); drawBlocks(); openBlockPop(b); openBlockEdit(b);
-    };
-    $('lkL').onclick = function () { if (pts.length < 2) { toast('Minimal 2 titik'); return; } saveShape('line'); };
-    $('lkA').onclick = function () { if (pts.length < 3) { toast('Minimal 3 titik'); return; } saveShape('area'); };
-    $('lkD').onclick = function () {
-      if (pts.length < 3) { toast('Minimal 3 titik'); return; }
-      toast('Menghitung…');
-      HzDem.lakeLevel(pts).then(function (lv) {
-        if (lv === null) { toast('Data ketinggian belum tersedia di area ini'); return; }
-        var n = lakesList().length + 1, lk = { id: Date.now(), name: 'Danau ' + n, pts: pts.slice(), level: lv };
-        lakesList().push(lk);
-        S.settings.lakesOn = true; saveSettings(); end(); applyLakes(); demRedraw(); openLakes();
-        HzDem.measure(lk.pts, true).then(function (m) { lk.m = m; saveSettings(); }).catch(function () {});
-      });
-    };
-    upd();
-    toast('Ketuk titik di peta');
-  }
-  function lakeStart() { drawStart(); }
   function tripPts(pts, t) {
     var out = [];
     E.trackOf(pts, t).runs.forEach(function (r) { r.pts.forEach(function (p) { out.push([p.lat, p.lng]); }); });

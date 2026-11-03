@@ -313,8 +313,8 @@
       if (!(cfg.desa || cfg.kec) || !root.L) return;
       var minDesa = cfg.minDesa || 13, minKec = cfg.minKec || 10, osm = !!cfg.osm, bounds = map.getBounds().pad(0.1), o = map.getPixelBounds().min;
       var kinds = [];
-      if (cfg.kec && z >= 8) kinds.push('kec');
-      if (cfg.desa && z >= minDesa - 1) kinds.push('desa');
+      if (cfg.gab) { if (cfg.desa && z >= 11 && z <= 12) kinds.push('kec'); if (cfg.desa && z >= 13) kinds.push('desa'); }
+      else { if (cfg.kec && z >= 8) kinds.push('kec'); if (cfg.desa && z >= minDesa - 1) kinds.push('desa'); }
       var cand = [];
       kinds.forEach(function (kind) {
         var feats = gather(kind, cfg, z, bounds), lineCol = kind === 'kec' ? (osm ? '#B0237E' : '#FF7AD9') : (osm ? '#6A2FB5' : '#D6A8FF');
@@ -341,8 +341,9 @@
     function labels(cand, cfg, z, s, osm) {
       var minDesa = cfg.minDesa || 13, minKec = cfg.minKec || 10, M = 5, list = [];
       cand.forEach(function (c) {
-        if (c.kind === 'desa' && z < minDesa) return;
-        if (c.kind === 'kec' && (z < minKec || (cfg.desa && z > minDesa + 1))) return;
+        if (cfg.gab) { if (c.kind === 'desa' && z < 13) return; if (c.kind === 'kec' && (z < 11 || z > 12)) return; }
+        else if (c.kind === 'desa' && z < minDesa) return;
+        if (!cfg.gab && c.kind === 'kec' && (z < minKec || (cfg.desa && z > minDesa + 1))) return;
         var cl = clip(c.pts, M, M, s.x - M, s.y - M);
         if (!cl.length || area(cl) < 900) return;
         var sm = samples(cl); if (!sm.length) return;

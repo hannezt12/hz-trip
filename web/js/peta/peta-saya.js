@@ -71,11 +71,28 @@
   function renderOv() {
     var box = $('ovList'); if (!box) return;
     var l = ovList();
-    box.innerHTML = l.length ? l.map(function (o, i) {
-      var af0 = o.cal ? HzOverlay.affOf(o) : null, inf = af0 ? HzOverlay.infoAff(af0, o.cal[0].lat) : null;
-      return '<div class="ovrow"><div class="nm">' + esc(o.name) + '<small>' + o.W + '×' + o.H + ' px · ' + mb(o.bytes || 0) + ' · ' + (inf ? 'terpasang, ± ' + inf.mpp.toFixed(2).replace('.', ',') + ' m/piksel' : 'belum dikalibrasi') + '</small></div>' +
-        '<div style="display:flex;gap:6px;width:100%;margin-bottom:4px"><button class="btn sm" data-cal="' + i + '">' + (o.cal ? 'Kalibrasi ulang' : 'Kalibrasi') + '</button>' + (o.cal ? '<button class="btn sm" data-tune="' + i + '">Setel</button>' : '') + '<button class="btn sm" data-clean="' + i + '">Bersihkan</button>' + (o.cal ? '<button class="btn sm" data-exp="' + i + '">Ekspor</button>' : '') + '<button class="btn sm danger" data-del="' + i + '">Hapus</button></div></div>';
-    }).join('') : 'Belum ada.';
+    HA.lpList(box, 'pdf', {
+      items: l.map(function (o, i) {
+        var af0 = o.cal ? HzOverlay.affOf(o) : null, inf = af0 ? HzOverlay.infoAff(af0, o.cal[0].lat) : null;
+        return { id: i, title: o.name, sub: o.W + '×' + o.H + ' px · ' + mb(o.bytes || 0) + ' · ' + (inf ? 'terpasang, ± ' + inf.mpp.toFixed(2).replace('.', ',') + ' m/piksel' : 'belum dikalibrasi') };
+      }),
+      empty: 'Belum ada peta PDF.',
+      actions: function (id) {
+        var o = ovList()[+id], a = [{ label: o && o.cal ? 'Kalibrasi ulang' : 'Kalibrasi', fn: function (i) { calibrateOv(+i); } }];
+        if (o && o.cal) a.push({ label: 'Setel posisi', fn: function (i) { tuneOv(+i); } });
+        a.push({ label: 'Bersihkan', fn: function (i) { cleanOv(+i); } });
+        if (o && o.cal) a.push({ label: 'Ekspor', fn: function (i) { exportOv(+i); } });
+        return a;
+      },
+      delTitle: function (ids) { return ids.length === 1 ? 'Hapus peta "' + (ovList()[+ids[0]] || {}).name + '"?' : 'Hapus ' + ids.length + ' peta?'; },
+      delMsg: function () { return 'Gambar peta dihapus dari ponsel. File PDF asli Anda tidak terpengaruh.'; },
+      onDelete: function (ids) {
+        var os = ids.map(function (i) { return ovList()[+i]; }).filter(Boolean);
+        Promise.all(os.map(function (o) { return HzOverlay.delOverlay(o.id); })).then(function () {
+          S.settings.ovl = ovList().filter(function (o) { return os.indexOf(o) < 0; }); saveSettings(); renderOv(); syncAllOverlays();
+        });
+      }
+    });
   }
   function calibrateOv(i) {
     var o = ovList()[i]; if (!o) return;

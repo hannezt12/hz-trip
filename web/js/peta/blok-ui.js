@@ -262,6 +262,55 @@
       computeDep(b, true).then(function (r) { if (r) ok++; }).catch(function () { HA.RC.depFail[key] = 1; }).then(function () { setTimeout(nx, 60); });
     })();
   }
+
+  // ---------- kontur seluruh area: cekungan dan cembung per petak z16, hasil disimpan (IDB) ----------
+  function tileXY(lat, lng, z) { var n = Math.pow(2, z), r = lat * Math.PI / 180; return [Math.floor((lng + 180) / 360 * n), Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n)]; }
+  function tileBB(x, y, z) { var n = Math.pow(2, z); function la(yy) { return Math.atan(Math.sinh(Math.PI * (1 - 2 * yy / n))) * 180 / Math.PI; } return [la(y + 1), x / n * 360 - 180, la(y), (x + 1) / n * 360 - 180]; }
+  function hashStr(t) { var h = 5381, i; for (i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
+  function lakeSig() { return hashStr((S.settings.lakesOn === false ? '0' : '1') + (S.settings.lakes || []).map(function (l) { return l.pts.length + ':' + (l.level == null ? '' : l.level) + ':' + (l.pts[0] ? l.pts[0][0] : 0); }).join(',')); }
+  function areaDep(x, y) {
+    var bb = tileBB(x, y, 16), bd = L.latLngBounds([[bb[0], bb[1]], [bb[2], bb[3]]]), bl = blocksList().filter(function (b) { return bbHit(b, bd); });
+    if (!bl.length) return Promise.resolve(null);
+    var thr = +S.settings.depThr || 0.3, key = ['a', x, y, hashStr(bl.map(bSig).join(',')), lakeSig(), thr, humpThr(), 'v1'].join('|');
+    function keep(r) {
+      var out = { list: [], hump: [] };
+      function inside(d) {
+        var cy = 0, cx = 0; d.poly.forEach(function (p) { cy += p[0]; cx += p[1]; }); cy /= d.poly.length; cx /= d.poly.length;
+        if (cy < bb[0] || cy >= bb[2] || cx < bb[1] || cx >= bb[3]) return false;
+        return bl.some(function (b) { return llPip({ lat: cy, lng: cx }, b.pts); });
+      }
+      (r.list || []).forEach(function (d) { if (inside(d)) out.list.push(d); });
+      (r.hump || []).forEach(function (d) { if (inside(d)) out.hump.push(d); });
+      return out;
+    }
+    if (HA.RC.dep[key]) return Promise.resolve(HA.RC.dep[key]);
+    var ck = 'area\u0001' + key;
+    return HzBlok.cache.get(ck).then(function (hit) {
+      if (hit) { rcPut(HA.RC.dep, key, hit); return hit; }
+      var dLat = 50 / 111320, dLng = 50 / (111320 * Math.cos(bb[0] * Math.PI / 180)), rect = [[bb[0] - dLat, bb[1] - dLng], [bb[2] + dLat, bb[1] - dLng], [bb[2] + dLat, bb[3] + dLng], [bb[0] - dLat, bb[3] + dLng]];
+      return HzBlok.depJob(rect, thr, 'area|' + key, false, humpThr()).then(function (r) {
+        var out = keep(r); rcPut(HA.RC.dep, key, out); HzBlok.cache.put('area:' + x + ':' + y, 'd', ck, out); return out;
+      });
+    });
+  }
+  function drawArea(g, id) {
+    var bd = HA.map.getBounds(), a = tileXY(bd.getNorth(), bd.getWest(), 16), c = tileXY(bd.getSouth(), bd.getEast(), 16), list = [], x, y;
+    for (x = a[0]; x <= c[0]; x++) for (y = a[1]; y <= c[1]; y++) list.push([x, y]);
+    if (list.length > 12) { if (!HA.DM.areaTip) { HA.DM.areaTip = 1; toast('Dekatkan peta sedikit untuk kontur area'); } return; }
+    var i = 0, told = false, popB = HA.DM.popId != null ? blocksList().filter(function (b) { return b.id === HA.DM.popId; })[0] : null;
+    (function nx() {
+      if (id !== HA.DM.rowSeq || i >= list.length) return;
+      var t = list[i++];
+      var tm = setTimeout(function () { if (!told && id === HA.DM.rowSeq) { told = true; toast('Menghitung kontur area… hanya sekali, lalu tersimpan'); } }, 700);
+      areaDep(t[0], t[1]).then(function (r) {
+        clearTimeout(tm);
+        if (id !== HA.DM.rowSeq || !r) return;
+        var d2 = { list: r.list, hump: r.hump };
+        if (popB) { d2 = { list: r.list.filter(function (d) { return !llPip({ lat: d.poly[0][0], lng: d.poly[0][1] }, popB.pts); }), hump: r.hump.filter(function (d) { return !llPip({ lat: d.poly[0][0], lng: d.poly[0][1] }, popB.pts); }) }; }
+        drawDepInto(g, d2);
+      }).catch(function () { clearTimeout(tm); }).then(function () { setTimeout(nx, 40); });
+    })();
+  }
   // lapisan Arah row. Datar: semua blok yang tampak. Kontur: hanya blok yang hasilnya sudah tersimpan
   // (blok lain dihitung saat diketuk atau lewat "Siapkan kontur"), digambar satu per satu supaya tidak macet.
   function drawRows(hint) {
@@ -271,16 +320,16 @@
     if (HA.DM.rowLayer) { HA.map.removeLayer(HA.DM.rowLayer); HA.DM.rowLayer = null; }
     HA.DM.rowSeq = (HA.DM.rowSeq || 0) + 1;
     if (!S.settings.rowOn || S.settings.blkOn === false || !blocksList().length) return;
-    if (HA.map.getZoom() < 16) { if (hint) toast('Dekatkan peta (zoom 16 ke atas) untuk melihat row'); return; }
+    if (HA.map.getZoom() < 16) { if (hint) toast('Perbesar peta ke zoom 16 untuk melihat ' + ((S.settings.rowMode || 'datar') === 'kontur' ? 'kontur' : 'row')); return; }
     var mode = S.settings.rowMode || 'datar', id = HA.DM.rowSeq, bd = HA.map.getBounds(), cc = HA.map.getCenter(), g = L.layerGroup().addTo(HA.map), vis, i = 0, miss = 0, need = [];
     HA.DM.rowLayer = g;
+    if (mode === 'kontur') drawArea(g, id);
     vis = blocksList().filter(function (b) { return bbHit(b, bd) && (mode === 'kontur' || b.dir != null); });
     vis.sort(function (p, q) { var a1 = bbOf(p), b1 = bbOf(q); return Math.hypot((a1[0] + a1[2]) / 2 - cc.lat, (a1[1] + a1[3]) / 2 - cc.lng) - Math.hypot((b1[0] + b1[2]) / 2 - cc.lat, (b1[1] + b1[3]) / 2 - cc.lng); });
     vis = vis.slice(0, mode === 'kontur' ? 40 : 30);
     function fin() {
       if (id !== HA.DM.rowSeq) return;
       if (need.length && !HA.DM.depBg) fillDepBg(need.slice(0, 6), id);
-      if (mode === 'kontur' && miss && HA.DM.rowTipMode !== 'kontur') toast('Kontur belum dihitung untuk ' + miss + ' blok. Ketuk blok untuk menghitung, atau siapkan semua di Data peta > Blok.');
       HA.DM.rowTipMode = mode;
     }
     (function nx() {
@@ -294,7 +343,7 @@
       }
       Promise.all([peekRows(b), peekDep(b)]).then(function (r) {
         if (id !== HA.DM.rowSeq) return;
-        if (!r[0]) miss++; else { if (!r[1] || !r[1].hump) need.push(b); if (b.id !== HA.DM.popId) drawRowsInto(g, b, 'kontur', r[0], r[1] && r[1].hump ? r[1] : null); }
+        if (!r[0]) miss++; else { if (!r[1] || !r[1].hump) need.push(b); if (b.id !== HA.DM.popId) drawRowsInto(g, b, 'kontur', r[0], r[1] && r[1].hump ? { list: [], hump: [], flow: r[1].flow } : null); }
       }).catch(function () {}).then(function () { setTimeout(nx, 0); });
     })();
   }
@@ -314,6 +363,7 @@
   }
   function openBlockPop(b) {
     if (!HA.map) return;
+    if (HA.DM.closePanel) HA.DM.closePanel(); if (HA.closeLinePop) HA.closeLinePop();
     if (HA.DM.popId != null && HA.DM.popId !== b.id && !$('sheet').classList.contains('on')) HA.DM.bpFold = false;
     closeBlockPop(true); HA.DM.popId = b.id;
     var sumR = '', sumD = '';
@@ -377,8 +427,9 @@
   HA.NEON = '#00D4FF';
   function editPoly(pts, closed, done) {
     var work = pts.map(function (p) { return p.slice(); }), mode = 'geser', g = L.layerGroup().addTo(HA.map), bar = document.createElement('div'), under = null, shape = null, min = closed ? 3 : 2;
+    if (HA.DM.closePanel) HA.DM.closePanel(); if (HA.closeLinePop) HA.closeLinePop(); if ($('sheet').classList.contains('on')) { HA.onSheetClose = null; closeSheet(); }
     HA.DM.edit = true; bar.className = 'lkbar bot';
-    bar.innerHTML = '<span id="epT"></span><div class="tseg" style="flex:1 1 100%;margin:0"><button type="button" data-m="geser">Geser</button><button type="button" data-m="tambah">+ Titik</button><button type="button" data-m="hapus">− Titik</button></div><button type="button" id="epOk" class="pri">Simpan</button><button type="button" id="epNo">Batal</button>';
+    bar.innerHTML = '<span id="epT"></span><div class="tseg" style="flex:1 1 100%;margin:0"><button type="button" data-m="geser">Geser</button><button type="button" data-m="tambah">+ Titik</button><button type="button" data-m="hapus">− Titik</button></div><button type="button" id="epNo">Batal</button><button type="button" id="epOk" class="pri">Simpan</button>';
     HA.map.getContainer().appendChild(bar); L.DomEvent.disableClickPropagation(bar);
     var hint = { geser: 'Seret titik untuk menggeser posisinya', tambah: 'Ketuk dekat sisi untuk menambah titik', hapus: 'Ketuk sebuah titik untuk menghapusnya' };
     function info() { $('epT').textContent = work.length + ' titik · ' + hint[mode]; bar.querySelectorAll('.tseg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-m') === mode); }); }
@@ -440,6 +491,7 @@
   // Ketuk 2 titik di satu lajur untuk menentukan arah row. Titik besar, bisa digeser; titik tampil di atas jari supaya tidak tertutup.
   function tapDir(b) {
     var P = [null, null], mk = [null, null], line = null, g = L.layerGroup().addTo(HA.map), bar = document.createElement('div'), ang = null;
+    if (HA.DM.closePanel) HA.DM.closePanel(); if (HA.closeLinePop) HA.closeLinePop();
     HA.DM.pdir = true; closeBlockPop(true); HA.DM.popId = b.id;
     bar.className = 'lkbar bot'; bar.innerHTML = '<span id="tdT">Ketuk titik pertama di satu lajur</span><button type="button" id="tdC">Batal</button><button type="button" class="pri" id="tdOk" disabled>Pakai</button>';
     HA.map.getContainer().appendChild(bar); L.DomEvent.disableClickPropagation(bar);
@@ -469,6 +521,7 @@
   }
   // posisikan peta supaya blok terlihat di bagian yang tidak tertutup panel
   function fitBlockVisible(b, anim) {
+    return; // v0.11.1: peta tidak berpindah atau zoom sendiri saat edit
     if (S.view !== 'lintasan' || !HA.map || !b.pts || b.pts.length < 3) return;
     var mr = HA.map.getContainer().getBoundingClientRect(), sh = $('sheet').getBoundingClientRect(), top = 24, bot = 24;
     if ($('sheet').classList.contains('on')) bot = Math.max(24, mr.bottom - sh.top + 12);
@@ -478,7 +531,7 @@
     HA.map.fitBounds(L.latLngBounds(b.pts), { paddingTopLeft: [24, top], paddingBottomRight: [24, bot], maxZoom: 19, animate: !!anim });
   }
   function openBlockEdit(b) {
-    HA.pbStopForEdit();
+    HA.pbStopForEdit(); if (HA.DM.closePanel) HA.DM.closePanel(); if (HA.closeLinePop) HA.closeLinePop();
     HA.DM.bpFold = true;
     var sg = HzBlok.suggestDir(b.pts), inMap = S.view === 'lintasan' && !!HA.map;
     function dirStat(d) { try { var r = HzBlok.rowsStraight(b.pts, d, blkSp(b), +b.margin || 0, cutsFor(b)); return r.n.toLocaleString('id-ID') + ' lajur · ' + Math.round(r.avg) + ' m'; } catch (e) { return ''; } }
@@ -515,15 +568,16 @@
   }
   // ---------- deteksi blok dari peta PDF ----------
   function detCfg() { return S.settings.dt || (S.settings.dt = { thr: 190, close: 1, minHa: 1 }); }
+  function blockById(id) { var l = blocksList(), i; for (i = 0; i < l.length; i++) if (String(l[i].id) === String(id)) return l[i]; return null; }
   function renderBlokTab(box) {
     var bl = blocksList(), cfg = detCfg(), ovs = ovList().map(function (o, i) { return { o: o, i: i }; }).filter(function (x) { return x.o.cal; });
     var conf = bl.filter(function (b) { return b.conf; }).length, set = bl.filter(function (b) { return b.dir != null; }).length;
     var PG = 30, q = (S.blkQ || '').toLowerCase(), fl = q ? bl.filter(function (b) { return (b.name || '').toLowerCase().indexOf(q) >= 0; }) : bl, pages = Math.max(1, Math.ceil(fl.length / PG)), pg = Math.min(Math.max(0, S.blkPg || 0), pages - 1);
     S.blkPg = pg;
     var listHtml = '<div class="row" style="gap:6px"><input type="text" id="bkQ" placeholder="Cari no blok (mis. 12 BS)" value="' + esc(S.blkQ || '') + '"><button class="btn sm" id="bkQb">Cari</button></div>' +
-      (fl.length ? fl.slice(pg * PG, pg * PG + PG).map(function (b) { var i = bl.indexOf(b); return '<div class="card"><div class="dprow" style="margin-top:0"><div class="nm"><b>' + esc(b.name) + '</b><small>' + nf(blkHa(b), 1) + ' ha · ' + (b.dir == null ? 'arah belum diatur' : 'arah ' + Math.round(b.dir) + '° · ' + nf(blkSp(b), 2) + ' m') + ' · ' + blkStatusText(b) + '</small></div><button class="btn sm" data-bv="' + i + '">Lihat</button><button class="btn sm" data-be="' + i + '">Edit</button></div></div>'; }).join('') +
+      (fl.length ? '<div id="bkList" style="margin-top:8px"></div>' +
         '<div class="row" style="margin-top:10px;gap:6px;align-items:center"><button class="btn sm" id="bkPv"' + (pg ? '' : ' disabled') + '>‹</button><div class="muted" style="flex:1;text-align:center">Hal ' + (pg + 1) + ' / ' + pages + ' · ' + fl.length + ' blok</div><button class="btn sm" id="bkNx"' + (pg < pages - 1 ? '' : ' disabled') + '>›</button></div>' +
-        (bl.filter(isScanBlk).length ? '<button class="btn" id="bkScan" style="width:100%;margin-top:12px;color:var(--r)">Hapus blok hasil deteksi (' + bl.filter(isScanBlk).length + ')</button>' : '') + '<button class="btn" id="bkAll" style="width:100%;margin-top:12px;color:var(--r)">Hapus semua blok</button>'
+        (bl.filter(isScanBlk).length ? '<button class="btn" id="bkScan" style="width:100%;margin-top:12px;color:var(--r)">Hapus blok hasil deteksi (' + bl.filter(isScanBlk).length + ')</button>' : '')
         : '<div class="card muted">' + (bl.length ? 'Tidak ada yang cocok.' : 'Belum ada.') + '</div>');
     box.innerHTML = '<div class="card"><div class="muted">' + (bl.length ? bl.length + ' blok · ' + set + ' sudah diatur arahnya · ' + conf + ' terkonfirmasi' : 'Belum ada blok.') + '</div></div>' +
       '<div class="h">IMPOR DARI LOGBOOK.HZ</div><div class="card">' +
@@ -551,10 +605,20 @@
     $('rwSp').onchange = function () { var v = +this.value; if (v >= 0.5 && v <= 5) { S.settings.rowSp = v; saveSettings(); HA.RC.rows = {}; } };
     if ($('humpT')) $('humpT').onchange = function () { var v = +this.value; if (v >= 0.3 && v <= 5) { S.settings.humpThr = v; saveSettings(); HA.RC.dep = {}; } };
     $('depT').onchange = function () { var v = +this.value; if (v >= 0.1 && v <= 3) { S.settings.depThr = v; saveSettings(); HA.RC.dep = {}; } };
-    box.querySelectorAll('[data-bv]').forEach(function (x) { x.onclick = function () { var b = blocksList()[+x.getAttribute('data-bv')]; if (b) needMap(b.pts, function () { HA.map.fitBounds(L.latLngBounds(b.pts), { padding: [50, 50], maxZoom: 19 }); openBlockPop(b); }); }; });
-    box.querySelectorAll('[data-be]').forEach(function (x) { x.onclick = function () { var b = blocksList()[+x.getAttribute('data-be')]; if (b) openBlockEdit(b); }; });
+    if ($('bkList')) HA.lpList($('bkList'), 'blok', {
+      items: fl.slice(pg * PG, pg * PG + PG).map(function (b) { return { id: b.id, title: b.name, sub: nf(blkHa(b), 1) + ' ha · ' + (b.dir == null ? 'arah belum diatur' : 'arah ' + Math.round(b.dir) + '° · ' + nf(blkSp(b), 2) + ' m') + ' · ' + blkStatusText(b) }; }),
+      onTap: function (id) { var b = blockById(id); if (b) needMap(b.pts, function () { HA.map.fitBounds(L.latLngBounds(b.pts), { padding: [50, 50], maxZoom: 19 }); openBlockPop(b); }); },
+      onEdit: function (id) { var b = blockById(id); if (b) needMap(b.pts, function () { openBlockEdit(b); }); },
+      delTitle: function (ids) { return ids.length === 1 ? 'Hapus blok ini?' : 'Hapus ' + ids.length + ' blok?'; },
+      delMsg: function () { return 'Blok dihapus dari peta. Peta PDF tidak terpengaruh.'; },
+      onDelete: function (ids) {
+        var set = {}; ids.forEach(function (i) { set[i] = 1; });
+        S.settings.blocks = blocksList().filter(function (b) { if (set[String(b.id)]) { HzBlok.cache.del(bid(b)); return false; } return true; });
+        saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); toast(ids.length + ' blok dihapus'); renderData();
+      }
+    });
     if ($('bkScan')) $('bkScan').onclick = function () { askConfirm('Hapus blok hasil deteksi?', bl.filter(isScanBlk).length + ' blok hasil deteksi otomatis dihapus. Blok dari Logbook.HZ dan blok gambar sendiri tidak terhapus.', 'Hapus', function () { toast(delScanBlocks() + ' blok dihapus'); renderData(); }); };
-    if ($('bkAll')) $('bkAll').onclick = function () { askConfirm('Hapus semua blok?', bl.length + ' blok dihapus dari aplikasi. Peta PDF tidak terpengaruh.', 'Hapus', function () { S.settings.blocks = []; HA.RC.rows = {}; HA.RC.dep = {}; HzBlok.cache.clear(); saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); renderData(); }); };
+    if (false) $('bkAll').onclick = function () { askConfirm('Hapus semua blok?', bl.length + ' blok dihapus dari aplikasi. Peta PDF tidak terpengaruh.', 'Hapus', function () { S.settings.blocks = []; HA.RC.rows = {}; HA.RC.dep = {}; HzBlok.cache.clear(); saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); renderData(); }); };
   }
   // siapkan kontur semua blok, satu per satu (latar), bisa dihentikan
   function kcInfo(n) { var e = $('kcInfo'); if (e) e.textContent = n + ' dari ' + blocksList().length + ' blok sudah dihitung kontur-nya.'; }

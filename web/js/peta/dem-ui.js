@@ -123,6 +123,7 @@
       linesOn: ic('<path d="M4 20 L10 4 M14 4 L20 20"/>'),
       lakesOn: ic('<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>'),
       shpOn: ic('<path d="M5 17l3-10 9 3 2 8z"/><circle cx="5" cy="17" r="1.5"/><circle cx="8" cy="7" r="1.5"/><circle cx="17" cy="10" r="1.5"/>'),
+      measure: ic('<path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/>'),
       batDesa: ic('<path d="M4 7l5-3 6 3 5-2v12l-5 2-6-3-5 3z"/><path d="M9 4v13M15 7v13"/>'),
       batKec: ic('<path d="M3 5h18v14H3z"/><path d="M3 12h18M12 5v14"/>'),
       draw: ic('<path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/>'),
@@ -138,10 +139,10 @@
       '<div class="tseg" id="tHk"><button type="button" data-k="down">Arah turun</button><button type="button" data-k="row">Searah kontur</button></div>' +
       '<div class="tseg" id="tHs"><button type="button" data-s="detail">Detail</button><button type="button" data-s="umum">Umum</button></div>' +
       '<div class="tt" style="margin-top:6px">SUMBER DATA</div><div class="tgrid">' + tile('useNas', 'DEMNAS', 1) + tile('useFree', 'DEM gratis', 1) + '</div><div class="tnote" id="tNasSub"></div>' +
-      '<div class="tt">TAMPIL</div><div class="tgrid">' + tile('blkOn', 'Blok', 1, 1) + tile('rowOn', 'Arah row', 1) + tile('lakesOn', 'Danau', 1, 1) + tile('linesOn', 'Jalan', 1) + tile('shpOn', 'Gambar', 1, 1) + tile('batDesa', 'Desa', 1) + tile('batKec', 'Kecamatan', 1) + '</div>' +
+      '<div class="tt">TAMPIL</div><div class="tgrid">' + tile('blkOn', 'Blok', 1, 1) + tile('rowOn', 'Arah row', 1) + tile('lakesOn', 'Danau', 1, 1) + tile('linesOn', 'Jalan', 1) + tile('batDesa', 'Desa', 1) + '</div>' +
       '<div class="tseg" id="tRm"><button type="button" data-m="datar">Datar</button><button type="button" data-m="kontur">Kontur</button></div>' +
       '<div class="tt">LINTASAN</div><div class="tgrid">' + tile('play', 'Putar', 1) + '</div>' +
-      '<div class="tt">ALAT</div><div class="tgrid">' + tile('draw', 'Gambar baru') + tile('detect', 'Impor blok') + tile('batCfg', 'Atur batas') + tile('dataGo', 'Data peta') + '</div>';
+      '<div class="tt">ALAT</div><div class="tgrid">' + tile('draw', 'Buat baru') + tile('measure', 'Ukur') + tile('batCfg', 'Atur batas') + tile('dataGo', 'Data peta') + '</div>';
     function state(id) {
       return id === 'contour' ? !!S.settings.contour : id === 'slopeLayer' ? !!S.settings.slopeLayer : id === 'hach' ? !!S.settings.hach : id === 'slopeTap' ? !!m._slopeOn :
         id === 'blkOn' ? S.settings.blkOn !== false : id === 'rowOn' ? !!S.settings.rowOn : id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'play' ? !!HA.PB.open : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'v3d' ? HA.V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : id === 'linesOn' ? S.settings.linesOn !== false : !!S.profOpen;
@@ -175,6 +176,7 @@
       var b = e.target.closest && e.target.closest('.tsw, .tbtn, .tile'); if (!b) return;
       var id = b.getAttribute('data-t');
       if (id === 'play') { if (HA.PB.open) HA.pbClose(); else { closeP(); HA.pbOpen(); } sync(); return; }
+      if (id === 'measure') { closeP(); HA.measureStart(); return; }
       if (id === 'draw') { if (HA.pbLocked('Tutup Putar dulu untuk menggambar')) return; closeP(); drawStart(); return; }
       if (id === 'detect') { closeP(); S.dpTab = 'blok'; go('data'); return; }
       if (id === 'blkOn') { S.settings.blkOn = S.settings.blkOn === false; saveSettings(); if (S.settings.blkOn === false) closeBlockPop(); drawBlocks(); sync(); return; }
@@ -184,7 +186,7 @@
       if (id === 'shapes') { closeP(); openShapes(); return; }
       if (id === 'shpOn') { S.settings.shapesOn = S.settings.shapesOn === false; saveSettings(); applyShapes(); sync(); return; }
       if (id === 'batCfg') { closeP(); openBat(); return; }
-      if (id === 'batDesa' || id === 'batKec') { var bb = batSet(); bb[id === 'batDesa' ? 'desa' : 'kec'] = !bb[id === 'batDesa' ? 'desa' : 'kec']; saveSettings(); batRedraw(); sync(); return; }
+      if (id === 'batDesa') { var bb = batSet(); bb.desa = !bb.desa; bb.kec = false; saveSettings(); batRedraw(); sync(); if (bb.desa && m.getZoom() < 11) toast('Batas tampil mulai zoom 11 (kecamatan) dan zoom 13 (desa)'); return; }
       if (id === 'contour') setContour(!S.settings.contour);
       else if (id === 'slopeLayer') setSlopeLayer(!S.settings.slopeLayer);
       else if (id === 'hach') setHach(!S.settings.hach);
@@ -209,17 +211,19 @@
         b.type = 'button'; b.setAttribute('aria-label', 'Alat peta'); b.innerHTML = ICO_T;
         L.DomEvent.disableClickPropagation(b);
         b.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-        b.onclick = function () { var open = panel.style.display === 'none'; panel.style.display = open ? 'block' : 'none'; b.classList.toggle('open', open); sync(); };
+        b.onclick = function () { var open = panel.style.display === 'none'; if (open) HA.closeAll({ panel: true }); panel.style.display = open ? 'block' : 'none'; b.classList.toggle('open', open); sync(); };
         HA.DM.main = b; closeP = function () { panel.style.display = 'none'; b.classList.remove('open'); }; HA.DM.closePanel = closeP; return b;
       }
     });
     new Ctl().addTo(m);
     // tombol lama dipertahankan sebagai penampung status (tidak tampil)
+    if (HA.btnInit) HA.btnInit(m);
     HA.DM.btnL = document.createElement('button'); HA.DM.btnS = document.createElement('button'); HA.DM.btnK = document.createElement('button'); HA.DM.btnP = document.createElement('button');
     if (window.HzBatas && !HA.DM.bat) HA.DM.bat = HzBatas.attach(m, batCfg, toast);
     zoomInd(m);
     if (window.HzDem) HzDem.setSources(S.settings.useNas !== false, S.settings.useFree !== false);
-    applyLakes(); drawShapes(); drawBlocks(); drawRows();
+    if (S.settings.shapes) { delete S.settings.shapes; saveSettings(); }
+    applyLakes(); drawBlocks(); drawRows();
     var rwT = null; m.on('moveend', function () { clearTimeout(rwT); rwT = setTimeout(drawRows, 250); }); var bkT = null; m.on('moveend', function () { clearTimeout(bkT); bkT = setTimeout(drawBlocks, 300); });
     if (S.settings.contour) setContour(true);
     if (S.settings.slopeLayer) setSlopeLayer(true);

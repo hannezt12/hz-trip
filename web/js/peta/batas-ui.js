@@ -43,7 +43,7 @@
   function batSet() { return S.settings.bat || (S.settings.bat = {}); }
   function batCfg() {
     var b = S.settings.bat || {};
-    return { desa: !!b.desa, kec: !!b.kec, online: b.online !== false, file: b.file !== false, base: b.base || '', desaId: b.desaId == null ? null : b.desaId, kecId: b.kecId == null ? null : b.kecId,
+    return { gab: true, desa: !!b.desa, kec: !!b.kec, online: b.online !== false, file: b.file !== false, base: b.base || '', desaId: b.desaId == null ? null : b.desaId, kecId: b.kecId == null ? null : b.kecId,
       fDesa: b.fDesa || '', fKec: b.fKec || '', minDesa: b.minDesa || 13, minKec: b.minKec || 10, osm: S.settings.mapMode === 'osm' };
   }
   function batRedraw() {
