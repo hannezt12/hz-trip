@@ -130,6 +130,7 @@
   function nameFor(poly) {
     var found = [];
     (HA.ovList() || []).forEach(function (o) { if (!o.cal) return; labelsLL(o).forEach(function (l) { if (pip([l.lat, l.lng], poly)) found.push(l); }); });
+    found = found.filter(function (l) { return !/\bha\b/i.test(l.t); });
     if (!found.length) return null;
     found.sort(function (a, b) { return Math.abs(a.v - b.v) > 6 ? a.v - b.v : a.u - b.u; });
     var nm = found.map(function (l) { return l.t; }).join(' ').replace(/\s+/g, ' ').trim();

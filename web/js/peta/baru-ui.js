@@ -17,8 +17,9 @@
   HA.lpList = lpList;
   HA.closeAll = closeAll;
   HA.lakeName = lakeName;
+  HA.drawFlow = drawFlow;
   var DEF = { road: 3, drain: 1.5 };
-  var NAMES = { blok: 'Blok', danau: 'Danau', drain: 'Drainase', road: 'Jalan bantu' };
+  var NAMES = { master: 'Master', blok: 'Blok', danau: 'Danau', drain: 'Drainase', road: 'Jalan bantu' };
 
   // ---------- hanya satu panel terbuka ----------
   function closeAll(keep) {
@@ -57,7 +58,7 @@
     bar.querySelectorAll('[data-t]').forEach(function (b) { b.onclick = function () { bar.remove(); drawFlow(b.getAttribute('data-t')); }; });
   }
   function drawFlow(type) {
-    var poly = type === 'blok' || type === 'danau', pts = [], redo = [], g = L.layerGroup().addTo(HA.map), pl = null, pl0 = null, mk = [], busy = false;
+    var poly = type === 'blok' || type === 'danau' || type === 'master', pts = [], redo = [], g = L.layerGroup().addTo(HA.map), pl = null, pl0 = null, mk = [], busy = false;
     var bar = mkBar('<button type="button" id="nbU">Urungkan</button><button type="button" id="nbR">Ulangi</button><button type="button" id="nbC">Batal</button><button type="button" class="pri" id="nbOk">Simpan</button>');
     var pa = null, pb = null;
     function pathOf() { return poly && pts.length > 2 ? pts.concat([pts[0]]) : pts; }
@@ -102,6 +103,8 @@
       if (type === 'blok') {
         var b = { id: Date.now(), src: 'manual', name: 'Blok ' + HA.nextBlockNo(), pts: P, ovId: null, dir: null, sp: null, margin: 0, conf: false, note: '' };
         HA.blocksList().push(b); S.settings.blkOn = true; saveSettings(); end(); HA.drawBlocks(); HA.openBlockPop(b); HA.openBlockEdit(b);
+      } else if (type === 'master') {
+        end(); HA.masterCreated(P);
       } else if (type === 'danau') {
         busy = true; toast('Menghitung…');
         HzDem.lakeLevel(P).then(function (lv) {

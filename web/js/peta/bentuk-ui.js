@@ -72,6 +72,8 @@
         onDelete: function (ids) { var set = {}; ids.forEach(function (i) { set[i] = 1; }); S.settings.lakes = ls.filter(function (l) { return !set[String(l.id)]; }); saveSettings(); applyLakes(); demRedraw(); renderData(); }
       });
       ls.forEach(function (l) { if (!l.m && window.HzDem) HzDem.measure(l.pts, true).then(function (m) { l.m = m; saveSettings(); if (S.view === 'data' && (S.dpTab || 'danau') === 'danau') renderData(); }).catch(function () {}); });
+    } else if (tab === 'master') {
+      HA.renderMaster(box);
     } else if (tab === 'blok') {
       renderBlokTab(box);
     } else if (tab === 'batas') {

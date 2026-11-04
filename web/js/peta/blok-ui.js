@@ -29,6 +29,7 @@
   HA.closeBlockPop = closeBlockPop;
   HA.openBlockPop = openBlockPop;
   HA.openBlockEdit = openBlockEdit;
+  HA.editPoly = editPoly;
   HA.renderBlokTab = renderBlokTab;
 
   // ---------- blok kebun ----------
