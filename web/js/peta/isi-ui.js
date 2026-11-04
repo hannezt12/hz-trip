@@ -184,34 +184,56 @@
   }
 
   // ---------- Geser blok ----------
-  function shiftStart() {
+  function shiftStart(pre) {
     if (!HA.map) return;
-    if (S.view !== 'lintasan') { HA.mapKeep = true; go('lintasan'); setTimeout(shiftStart, 800); return; }
+    if (S.view !== 'lintasan') { HA.mapKeep = true; go('lintasan'); setTimeout(function () { shiftStart(pre); }, 800); return; }
     HA.pbStopForEdit(); HA.closeAll();
     if (HA.map._lakeDraw) { toast('Selesaikan dulu yang sedang digambar'); return; }
-    var n = HA.blocksList().length; if (!n) { toast('Belum ada blok'); return; }
-    var P = [], g = L.layerGroup().addTo(HA.map), bar = mkBar('<button type="button" id="gU">Urungkan</button><button type="button" id="gC">Batal</button><button type="button" class="pri" id="gOk" disabled>Terapkan</button>');
-    function icon(k) { var t = k % 2 ? '→' : '●'; return L.divIcon({ className: '', html: '<div class="tpm"><b>' + (Math.floor(k / 2) + 1) + (k % 2 ? '′' : '') + '</b><div class="d"></div><div class="h"></div></div>', iconSize: [56, 80], iconAnchor: [28, 24] }); }
+    var all = HA.blocksList(); if (!all.length) { toast('Belum ada blok'); return; }
+    var marks = [], phase = 'mark', P = [], g = L.layerGroup().addTo(HA.map), gm = L.layerGroup().addTo(HA.map);
+    var nConf = all.filter(function (b) { return b.conf; }).length;
+    (pre || []).forEach(function (id) { var b = all.filter(function (x) { return String(x.id) === String(id); })[0]; if (b && !b.conf) marks.push(String(b.id)); });
+    var bar = mkBar('<button type="button" id="gU">Urungkan</button><button type="button" id="gC">Batal</button><button type="button" class="pri" id="gN" disabled>Lanjut</button><button type="button" class="pri" id="gOk" disabled style="display:none">Terapkan</button>');
+    function icon(k) { return L.divIcon({ className: '', html: '<div class="tpm"><b>' + (Math.floor(k / 2) + 1) + (k % 2 ? '′' : '') + '</b><div class="d"></div><div class="h"></div></div>', iconSize: [56, 80], iconAnchor: [28, 24] }); }
     function hint() {
+      if (phase === 'mark') return marks.length + ' blok ditandai · ketuk blok untuk tandai atau batal' + (nConf ? ' · ' + nConf + ' terkonfirmasi tidak bisa ditandai' : '');
       var k = P.length;
       return k === 0 ? 'Ketuk titik acuan 1 di blok (posisi sekarang, mis. sudut blok)' : k === 1 ? 'Ketuk tempat yang benar untuk titik 1 (di satelit)' : k === 2 ? 'Selesai bila cukup (geser). Atau ketuk acuan 2 untuk memutar dan menskala' : k === 3 ? 'Ketuk tempat yang benar untuk titik 2' : 'Siap diterapkan';
     }
+    function drawMarks() {
+      gm.clearLayers();
+      marks.forEach(function (id) { var b = all.filter(function (x) { return String(x.id) === id; })[0]; if (b && b.pts) L.polygon(b.pts, { color: '#FF9F1C', weight: 3, fillColor: '#FF9F1C', fillOpacity: 0.28, interactive: false }).addTo(gm); });
+    }
     function draw() {
-      g.clearLayers();
-      P.forEach(function (p, k) {
+      g.clearLayers(); drawMarks();
+      if (phase === 'ref') P.forEach(function (p, k) {
         var m = L.marker(p, { draggable: true, icon: icon(k), zIndexOffset: 900 }).addTo(g);
         m.on('drag', function (e) { var q = e.target.getLatLng(); P[k] = [q.lat, q.lng]; lines(); });
         m.on('dragend', function () { draw(); });
       });
-      lines(); $('isT').textContent = hint(); $('gOk').disabled = P.length < 2 || P.length === 3;
+      lines(); $('isT').textContent = hint();
+      $('gN').style.display = phase === 'mark' ? '' : 'none'; $('gOk').style.display = phase === 'ref' ? '' : 'none';
+      $('gN').disabled = !marks.length; $('gOk').disabled = P.length < 2 || P.length === 3;
     }
     var ln = [];
-    function lines() { ln.forEach(function (l) { g.removeLayer(l); }); ln = []; for (var k = 0; k + 1 < P.length; k += 2) ln.push(L.polyline([P[k], P[k + 1]], { color: '#FFD84D', weight: 2.5, dashArray: '5 5', interactive: false }).addTo(g)); }
-    function end() { HA.map._lakeDraw = null; HA.map.removeLayer(g); bar.remove(); }
-    HA.map._lakeDraw = { tap: function (ll) { if (P.length >= 4) return; P.push([ll.lat, ll.lng]); draw(); } };
-    $('gU').onclick = function () { P.pop(); draw(); };
+    function lines() { ln.forEach(function (l) { g.removeLayer(l); }); ln = []; if (phase !== 'ref') return; for (var k = 0; k + 1 < P.length; k += 2) ln.push(L.polyline([P[k], P[k + 1]], { color: '#FFD84D', weight: 2.5, dashArray: '5 5' }).addTo(g)); }
+    function end() { HA.map._lakeDraw = null; HA.map.removeLayer(g); HA.map.removeLayer(gm); bar.remove(); }
+    HA.map._lakeDraw = { tap: function (ll) {
+      if (phase === 'mark') {
+        var hit = null; all.forEach(function (b) { if (!hit && b.pts && pip([ll.lat, ll.lng], b.pts)) hit = b; });
+        if (!hit) { toast('Ketuk di dalam blok'); return; }
+        if (hit.conf) { toast('Blok ' + hit.name + ' sudah terkonfirmasi, tidak bisa ditandai'); return; }
+        var i = marks.indexOf(String(hit.id)); if (i >= 0) marks.splice(i, 1); else marks.push(String(hit.id));
+        draw(); return;
+      }
+      if (P.length >= 4) return; P.push([ll.lat, ll.lng]); draw();
+    } };
+    $('gU').onclick = function () { if (phase === 'ref') { if (P.length) P.pop(); else phase = 'mark'; } else marks.pop(); draw(); };
     $('gC').onclick = end;
+    $('gN').onclick = function () { if (!marks.length) return; phase = 'ref'; P = []; draw(); };
     $('gOk').onclick = function () {
+      var tgt = all.filter(function (b) { return marks.indexOf(String(b.id)) >= 0 && !b.conf; }), n = tgt.length;
+      if (!n) { toast('Belum ada blok yang ditandai'); return; }
       var lat0 = P[0][0], k = Math.cos(lat0 * Math.PI / 180), ky = 111320, kx = 111320 * k;
       function xy(p) { return [(p[1] - P[0][1]) * kx, (p[0] - lat0) * ky]; }
       var a1 = [0, 0], b1 = xy(P[1]), c = [1, 0], rot = 0;
@@ -223,10 +245,10 @@
         if (sc < 0.9 || sc > 1.1) { toast('Skala ' + sc.toFixed(2) + ' tidak wajar. Periksa titik acuan'); return; }
       }
       var shift = Math.hypot(b1[0], b1[1]);
-      askConfirm('Geser ' + n + ' blok?', 'Semua blok digeser ' + Math.round(shift) + ' m' + (P.length === 4 ? ' dan diputar ' + rot.toFixed(2).replace('.', ',') + '°' : '') + '. Posisi lama disimpan, bisa diurungkan dari Data peta > Blok.', 'Terapkan', function () {
+      askConfirm('Geser ' + n + ' blok?', n + ' blok yang ditandai digeser ' + Math.round(shift) + ' m' + (P.length === 4 ? ' dan diputar ' + rot.toFixed(2).replace('.', ',') + '°' : '') + '. Blok lain tidak berubah. Posisi lama disimpan, bisa diurungkan dari Data peta > Blok.', 'Terapkan', function () {
         var bk = { t: Date.now(), blocks: {} };
         function tr(pt) { var x = (pt[1] - P[0][1]) * kx, y = (pt[0] - lat0) * ky, nx = b1[0] + c[0] * x - c[1] * y, ny = b1[1] + c[1] * x + c[0] * y; return [+(lat0 + ny / ky).toFixed(6), +(P[0][1] + nx / kx).toFixed(6)]; }
-        HA.blocksList().forEach(function (b) {
+        tgt.forEach(function (b) {
           bk.blocks[b.id] = { pts: b.pts, guide: b.guide || null, dir: b.dir == null ? null : b.dir };
           b.pts = b.pts.map(tr); if (b.guide) b.guide = b.guide.map(tr);
           if (rot && b.dir != null) b.dir = (((b.dir - rot) % 180) + 180) % 180;

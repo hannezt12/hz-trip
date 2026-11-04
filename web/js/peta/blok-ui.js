@@ -610,6 +610,7 @@
       items: fl.slice(pg * PG, pg * PG + PG).map(function (b) { return { id: b.id, title: b.name, sub: nf(blkHa(b), 1) + ' ha · ' + (b.dir == null ? 'arah belum diatur' : 'arah ' + Math.round(b.dir) + '° · ' + nf(blkSp(b), 2) + ' m') + ' · ' + blkStatusText(b) }; }),
       onTap: function (id) { var b = blockById(id); if (b) needMap(b.pts, function () { HA.map.fitBounds(L.latLngBounds(b.pts), { padding: [50, 50], maxZoom: 19 }); openBlockPop(b); }); },
       onEdit: function (id) { var b = blockById(id); if (b) needMap(b.pts, function () { openBlockEdit(b); }); },
+      multi: [{ label: 'Geser', fn: function (ids) { var ok = ids.filter(function (i) { var b = blockById(i); return b && !b.conf; }); if (!ok.length) { toast('Blok terkonfirmasi tidak bisa digeser'); return; } if (ok.length < ids.length) toast((ids.length - ok.length) + ' blok terkonfirmasi dilewati'); HA.closeAll(); HA.shiftStart(ok); } }],
       delTitle: function (ids) { return ids.length === 1 ? 'Hapus blok ini?' : 'Hapus ' + ids.length + ' blok?'; },
       delMsg: function () { return 'Blok dihapus dari peta. Peta PDF tidak terpengaruh.'; },
       onDelete: function (ids) {
@@ -618,7 +619,7 @@
         saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); toast(ids.length + ' blok dihapus'); renderData();
       }
     });
-    if ($('shUn')) $('shUn').onclick = function () { askConfirm('Urungkan geser?', 'Posisi semua blok dikembalikan seperti sebelum digeser. Perubahan bentuk setelahnya pada blok yang sama ikut hilang.', 'Urungkan', function () { HA.shiftUndo(); renderData(); }); };
+    if ($('shUn')) $('shUn').onclick = function () { askConfirm('Urungkan geser?', 'Posisi blok yang tadi digeser dikembalikan seperti sebelum digeser. Perubahan bentuk setelahnya pada blok yang sama ikut hilang.', 'Urungkan', function () { HA.shiftUndo(); renderData(); }); };
     if ($('bkScan')) $('bkScan').onclick = function () { askConfirm('Hapus blok hasil deteksi?', bl.filter(isScanBlk).length + ' blok hasil deteksi otomatis dihapus. Blok dari Logbook.HZ dan blok gambar sendiri tidak terhapus.', 'Hapus', function () { toast(delScanBlocks() + ' blok dihapus'); renderData(); }); };
     if (false) $('bkAll').onclick = function () { askConfirm('Hapus semua blok?', bl.length + ' blok dihapus dari aplikasi. Peta PDF tidak terpengaruh.', 'Hapus', function () { S.settings.blocks = []; HA.RC.rows = {}; HA.RC.dep = {}; HzBlok.cache.clear(); saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); renderData(); }); };
   }

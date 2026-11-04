@@ -165,7 +165,7 @@
     var sel = SEL[key] || null;
     function draw() {
       sel = SEL[key] || null;
-      box.innerHTML = (sel ? '<div class="lpbar"><b>' + sel.length + ' dipilih</b><span style="flex:1"></span><button class="btn sm" id="lpAll">Semua</button><button class="btn sm danger" id="lpDel"' + (sel.length ? '' : ' disabled') + '>Hapus</button><button class="btn sm" id="lpDone">Selesai</button></div>' : '') +
+      box.innerHTML = (sel ? '<div class="lpbar"><b>' + sel.length + ' dipilih</b><span style="flex:1"></span><button class="btn sm" id="lpAll">Semua</button>' + (o.multi || []).map(function (m, i) { return '<button class="btn sm" id="lpM' + i + '"' + (sel.length ? '' : ' disabled') + '>' + esc(m.label) + '</button>'; }).join('') + '<button class="btn sm danger" id="lpDel"' + (sel.length ? '' : ' disabled') + '>Hapus</button><button class="btn sm" id="lpDone">Selesai</button></div>' : '') +
         (o.items.length ? o.items.map(function (it) {
           var on = sel && sel.indexOf(String(it.id)) >= 0;
           return '<div class="lpi' + (on ? ' on' : '') + '" data-id="' + esc(String(it.id)) + '">' + (sel ? '<i class="lpc">' + (on ? '✓' : '') + '</i>' : '') + '<div class="nm"><b>' + esc(it.title) + '</b>' + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</div></div>';
@@ -175,6 +175,7 @@
         $('lpDone').onclick = function () { SEL[key] = null; draw(); };
         $('lpAll').onclick = function () { SEL[key] = sel.length === o.items.length ? [] : o.items.map(function (x) { return String(x.id); }); draw(); };
         $('lpDel').onclick = function () { var ids = sel.slice(); delIds(ids); };
+        (o.multi || []).forEach(function (m, i) { var e = $('lpM' + i); if (e) e.onclick = function () { var ids = sel.slice(); SEL[key] = null; draw(); m.fn(ids); }; });
       }
     }
     function delIds(ids) {
