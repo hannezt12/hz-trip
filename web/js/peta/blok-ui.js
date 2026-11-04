@@ -538,13 +538,12 @@
     openSheet('<div class="grab"></div><div class="bth"><div class="st">EDIT BLOK</div><button class="btn pri" id="beX">Selesai</button></div>' +
       '<div class="bnm"><input type="text" id="beN" maxlength="40" value="' + esc(b.name) + '"><label><input type="checkbox" id="beC"' + (b.conf ? ' checked' : '') + '> Terkonfirmasi</label></div>' +
       '<div class="muted" style="margin-top:8px">Arah row (° dari utara, 0–179)</div>' +
-      '<div class="row" style="gap:6px"><button class="btn" data-d="-5" style="width:48px">−5</button><button class="btn" data-d="-1" style="width:48px">−1</button><input type="number" id="beD" min="0" max="359" step="1" value="' + (b.dir == null ? '' : Math.round(b.dir * 10) / 10) + '" placeholder="arah" style="flex:1;min-width:0;text-align:center"><button class="btn" data-d="1" style="width:48px">+1</button><button class="btn" data-d="5" style="width:48px">+5</button></div>' +
-      '<div class="row" style="margin-top:6px;gap:6px"><button class="btn sgb" id="beS" style="flex:1.2">Terpendek ' + sg + '°<small>' + dirStat(sg) + '</small></button><button class="btn sgb" id="beNS" style="flex:1">U–S 0°<small>' + dirStat(0) + '</small></button><button class="btn sgb" id="beEW" style="flex:1">T–B 90°<small>' + dirStat(90) + '</small></button></div>' +
-      '<button class="btn" id="beP" style="width:100%;margin-top:6px">Ketuk 2 titik</button>' +
+      '<div class="row bedir"><button class="btn" data-d="-5">−5</button><button class="btn" data-d="-1">−1</button><input type="number" id="beD" min="0" max="359" step="1" value="' + (b.dir == null ? '' : Math.round(b.dir * 10) / 10) + '" placeholder="arah"><button class="btn" data-d="1">+1</button><button class="btn" data-d="5">+5</button><button class="btn sgb" id="beS"></button></div>' +
+      '<div class="row" style="margin-top:6px;gap:6px"><button class="btn" id="beP" style="flex:1">Ketuk 2 titik</button><button class="btn" id="beB" style="flex:1">Edit batas</button></div>' +
       '<button class="btn" id="beMo" style="width:100%;margin-top:8px">Lainnya ▾</button>' +
       '<div class="bmore" id="beMore"><div class="row" style="margin-top:10px;gap:8px"><div style="flex:1"><div class="muted">Jarak row (m)</div><input type="number" id="beJ" step="0.05" min="0.5" max="5" value="' + blkSp(b) + '"></div><div style="flex:1"><div class="muted">Kurangi tepi (m)</div><input type="number" id="beM" step="1" min="0" max="50" value="' + (+b.margin || 0) + '"></div></div>' +
       '<textarea id="beT" rows="2" maxlength="200" placeholder="Catatan (varietas, R&D, dll.)" style="margin-top:8px;width:100%">' + esc(b.note || '') + '</textarea>' +
-      '<div class="row" style="margin-top:10px;gap:6px"><button class="btn" id="beB" style="flex:1">Edit batas</button><button class="btn" id="beD2" style="flex:1;color:var(--r)">Hapus</button></div></div>');
+      '<div class="row" style="margin-top:10px;gap:6px"><button class="btn" id="beD2" style="flex:1;color:var(--r)">Hapus</button></div></div>');
     if (inMap) { $('scrim').classList.remove('on'); $('sheet').classList.add('cmp'); }
     $('beMo').onclick = function () { var m = $('beMore'), on = !m.classList.contains('on'); m.classList.toggle('on', on); $('beMo').textContent = on ? 'Lainnya ▴' : 'Lainnya ▾'; if (on) $('sheet').scrollTop = $('sheet').scrollHeight; setTimeout(function () { fitBlockVisible(b, true); }, 60); };
     function live() { saveSettings(); drawBlocks(); if (HA.DM.pop && HA.DM.popId === b.id) openBlockPop(b); if (S.settings.rowOn) drawRows(); }
@@ -552,9 +551,10 @@
     $('beN').onchange = function () { b.name = $('beN').value.trim() || b.name; live(); };
     $('beD').onchange = function () { var v = $('beD').value; setDir(v === '' ? null : +v); };
     $('sheet').querySelectorAll('button[data-d]').forEach(function (x) { x.onclick = function () { setDir((b.dir == null ? sg : b.dir) + (+x.getAttribute('data-d'))); }; });
-    $('beS').onclick = function () { setDir(sg); };
-    $('beNS').onclick = function () { setDir(0); };
-    $('beEW').onclick = function () { setDir(90); };
+    var lg = (sg + 90) % 180, nextSg = 0; // 0 = berikutnya terpendek, 1 = terjauh
+    function sgLabel() { var d = nextSg ? lg : sg; $('beS').innerHTML = (nextSg ? 'Terjauh ' : 'Terpendek ') + d + '°<small>' + dirStat(d) + '</small>'; }
+    $('beS').onclick = function () { setDir(nextSg ? lg : sg); nextSg = nextSg ? 0 : 1; sgLabel(); };
+    sgLabel();
     $('beJ').onchange = function () { var v = +$('beJ').value; b.sp = v >= 0.5 && v <= 5 ? Math.round(v * 100) / 100 : null; live(); };
     $('beM').onchange = function () { b.margin = Math.max(0, +$('beM').value || 0); live(); };
     $('beC').onchange = function () { if ($('beC').checked && b.dir == null) { $('beC').checked = false; toast('Atur arah row dulu'); return; } b.conf = $('beC').checked; live(); };
@@ -580,6 +580,7 @@
         (bl.filter(isScanBlk).length ? '<button class="btn" id="bkScan" style="width:100%;margin-top:12px;color:var(--r)">Hapus blok hasil deteksi (' + bl.filter(isScanBlk).length + ')</button>' : '')
         : '<div class="card muted">' + (bl.length ? 'Tidak ada yang cocok.' : 'Belum ada.') + '</div>');
     box.innerHTML = '<div class="card"><div class="muted">' + (bl.length ? bl.length + ' blok · ' + set + ' sudah diatur arahnya · ' + conf + ' terkonfirmasi' : 'Belum ada blok.') + '</div></div>' +
+      (S.settings.shiftBackup ? '<div class="card"><div class="muted">Blok terakhir digeser. Posisi lama masih tersimpan.</div><button class="btn" id="shUn" style="width:100%;margin-top:8px">Urungkan geser terakhir</button></div>' : '') +
       '<div class="h">IMPOR DARI LOGBOOK.HZ</div><div class="card">' +
       (ovs.length ? '<select id="lgOv">' + ovs.map(function (x) { return '<option value="' + x.i + '">' + esc(x.o.name) + '</option>'; }).join('') + '</select>' +
         '<button class="btn pri" id="lgGo" style="width:100%;margin-top:10px;height:48px">Pilih berkas blok (.json)</button><input type="file" id="lgFile" accept=".json,application/json" style="display:none">' +
@@ -617,6 +618,7 @@
         saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); toast(ids.length + ' blok dihapus'); renderData();
       }
     });
+    if ($('shUn')) $('shUn').onclick = function () { askConfirm('Urungkan geser?', 'Posisi semua blok dikembalikan seperti sebelum digeser. Perubahan bentuk setelahnya pada blok yang sama ikut hilang.', 'Urungkan', function () { HA.shiftUndo(); renderData(); }); };
     if ($('bkScan')) $('bkScan').onclick = function () { askConfirm('Hapus blok hasil deteksi?', bl.filter(isScanBlk).length + ' blok hasil deteksi otomatis dihapus. Blok dari Logbook.HZ dan blok gambar sendiri tidak terhapus.', 'Hapus', function () { toast(delScanBlocks() + ' blok dihapus'); renderData(); }); };
     if (false) $('bkAll').onclick = function () { askConfirm('Hapus semua blok?', bl.length + ' blok dihapus dari aplikasi. Peta PDF tidak terpengaruh.', 'Hapus', function () { S.settings.blocks = []; HA.RC.rows = {}; HA.RC.dep = {}; HzBlok.cache.clear(); saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); renderData(); }); };
   }

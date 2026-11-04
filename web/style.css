@@ -482,3 +482,13 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .lkbar .pri{flex:1.4}
 .lkbar button:disabled{opacity:.4}
 .locbtn.arr{outline:2px dashed #4DA3FF;outline-offset:2px;touch-action:none}
+
+.toolpanel .tarr{display:flex;align-items:center;gap:0.375rem;flex-wrap:wrap;margin-top:0.25rem;padding-top:0.375rem;border-top:1px solid var(--line);font-size:calc(0.75rem*var(--fs,1))}
+.toolpanel .tarr span{flex:1 1 100%}.toolpanel .tarr div{display:flex;gap:0.375rem;flex:1 1 100%}
+.toolpanel .tarr button{flex:1;min-height:2.25rem;border-radius:0.5625rem;border:1px solid var(--line);background:none;color:inherit;font:inherit;cursor:pointer}
+.toolpanel .tarr button.pri{background:#4DA3FF;border-color:#4DA3FF;color:#06121c;font-weight:600}
+.toolpanel.arr .tile{border-style:dashed;touch-action:none}.toolpanel.arr .tile.drg{opacity:.5;border-color:#4DA3FF}
+
+.bedir{gap:0.25rem;flex-wrap:nowrap;align-items:stretch}.bedir .btn{min-width:0;flex:none;width:2.375rem;padding:0}
+.bedir input{flex:1;min-width:2.5rem;width:0;text-align:center}
+.bedir .sgb{flex:1.5;width:auto;min-width:5.5rem;padding:0 0.375rem;line-height:1.15}

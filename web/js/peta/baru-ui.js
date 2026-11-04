@@ -59,18 +59,19 @@
   function drawFlow(type) {
     var poly = type === 'blok' || type === 'danau', pts = [], redo = [], g = L.layerGroup().addTo(HA.map), pl = null, pl0 = null, mk = [], busy = false;
     var bar = mkBar('<button type="button" id="nbU">Urungkan</button><button type="button" id="nbR">Ulangi</button><button type="button" id="nbC">Batal</button><button type="button" class="pri" id="nbOk">Simpan</button>');
+    var pa = null, pb = null;
+    function pathOf() { return poly && pts.length > 2 ? pts.concat([pts[0]]) : pts; }
     function upd() {
-      g.clearLayers(); mk = [];
+      g.clearLayers(); mk = []; pa = pb = null;
       if (pts.length > 1) {
-        var path = poly && pts.length > 2 ? pts.concat([pts[0]]) : pts;
-        L.polyline(path, { color: '#06202B', weight: 6, opacity: .55, interactive: false }).addTo(g);
-        L.polyline(path, { color: HA.NEON, weight: 3, interactive: false }).addTo(g);
+        pa = L.polyline(pathOf(), { color: '#06202B', weight: 6, opacity: .55, interactive: false }).addTo(g);
+        pb = L.polyline(pathOf(), { color: HA.NEON, weight: 3, interactive: false }).addTo(g);
       }
       pts.forEach(function (p, k) {
-        if (poly) { L.circleMarker(p, { radius: 5, color: '#06202B', weight: 2, fillColor: HA.NEON, fillOpacity: 1, interactive: false }).addTo(g); return; }
-        var m = L.marker(p, { draggable: true, icon: bigIcon(k + 1), zIndexOffset: 900 }).addTo(g);
-        m.on('drag', function (e) { var q = e.target.getLatLng(); pts[k] = [q.lat, q.lng]; text(); });
+        var m = L.marker(p, { draggable: true, icon: poly ? L.divIcon({ className: '', html: '<div class="vx"></div>', iconSize: [26, 26] }) : bigIcon(k + 1), zIndexOffset: poly ? 500 : 900 }).addTo(g);
+        m.on('drag', function (e) { var q = e.target.getLatLng(); pts[k] = [q.lat, q.lng]; if (pa) { pa.setLatLngs(pathOf()); pb.setLatLngs(pathOf()); } text(); });
         m.on('dragend', function () { upd(); });
+        mk.push(m);
       });
       text();
       $('nbU').disabled = !pts.length; $('nbR').disabled = !redo.length;
@@ -80,7 +81,7 @@
       if (poly) {
         var s = NAMES[type] + ' · ' + pts.length + ' titik';
         if (pts.length > 2) s += ' · ' + fmtArea(flat(pts, true).area);
-        t.textContent = pts.length < 3 ? s + ' · ketuk minimal 3 titik' : s;
+        t.textContent = pts.length < 3 ? s + ' · ketuk minimal 3 titik' : s + ' · geser titik bila perlu';
       } else {
         t.textContent = pts.length < 2 ? NAMES[type] + ' · ketuk ' + (pts.length ? 'titik kedua' : 'titik pertama') : NAMES[type] + ' · ' + fmtLen(flat(pts, false).len) + ' · geser titik bila perlu';
       }
@@ -212,68 +213,5 @@
       if (SEL[key]) { var i = SEL[key].indexOf(id); if (i >= 0) SEL[key].splice(i, 1); else SEL[key].push(id); draw(); return; }
       if (o.onTap) o.onTap(id);
     };
-  }
-
-  // ---------- tombol di peta bisa dipindah (tahan lama) ----------
-  HA.btnInit = btnInit;
-  function bpos() { return S.settings.btnPos || (S.settings.btnPos = {}); }
-  function targets(m) { return Array.prototype.slice.call(m.getContainer().querySelectorAll('.locbtn')); }
-  function keyOf(b) { return b.getAttribute('aria-label') || 'btn'; }
-  function cornerRect(m) { return m.getContainer().getBoundingClientRect(); }
-  function place(b, r, bt, m) {
-    var c = cornerRect(m), w = b.offsetWidth || 44, h = b.offsetHeight || 44;
-    r = Math.max(4, Math.min(c.width - w - 4, r)); bt = Math.max(4, Math.min(c.height - h - 4, bt));
-    b.style.position = 'absolute'; b.style.right = r + 'px'; b.style.bottom = bt + 'px'; b.style.margin = '0'; b.style.float = 'none'; b.style.pointerEvents = 'auto';
-    return [r, bt];
-  }
-  function applyPos(m) {
-    var P = bpos(); targets(m).forEach(function (b) { var q = P[keyOf(b)]; if (q) place(b, q[0], q[1], m); });
-  }
-  function btnInit(m) {
-    if (m._btnInit) return; m._btnInit = true;
-    var cont = m.getContainer(), timer = null, arr = null, swallow = 0, sx = 0, sy = 0, drag = null, press = null;
-    applyPos(m); setTimeout(function () { applyPos(m); }, 700); m.on('resize', function () { applyPos(m); });
-    function endArr(save) {
-      if (!arr) return;
-      var P = bpos();
-      targets(m).forEach(function (b) { b.classList.remove('arr'); });
-      if (save) { targets(m).forEach(function (b) { var c = cornerRect(m), r = b.getBoundingClientRect(); P[keyOf(b)] = [Math.round(c.right - r.right), Math.round(c.bottom - r.bottom)]; }); saveSettings(); toast('Posisi tombol disimpan'); }
-      else { S.settings.btnPos = arr.before; targets(m).forEach(function (b) { if (!S.settings.btnPos[keyOf(b)]) { b.style.position = ''; b.style.right = ''; b.style.bottom = ''; b.style.margin = ''; b.style.float = ''; } }); applyPos(m); }
-      arr.bar.remove(); arr = null; drag = null;
-    }
-    function startArr() {
-      closeAll(); swallow = Date.now() + 60000;
-      var before = JSON.parse(JSON.stringify(bpos())), c = cornerRect(m);
-      targets(m).forEach(function (b) { var r = b.getBoundingClientRect(); place(b, c.right - r.right, c.bottom - r.bottom, m); b.classList.add('arr'); });
-      var bar = document.createElement('div'); bar.className = 'lkbar';
-      bar.innerHTML = '<span>Seret tombol ke posisi yang diinginkan</span><button type="button" id="abR">Awal</button><button type="button" id="abC">Batal</button><button type="button" class="pri" id="abOk">Simpan</button>';
-      cont.appendChild(bar); L.DomEvent.disableClickPropagation(bar);
-      arr = { bar: bar, before: before };
-      if (press) { var r0 = press.b.getBoundingClientRect(); drag = { b: press.b, dx: press.x - r0.left, dy: press.y - r0.top, w: r0.width, h: r0.height }; try { press.b.setPointerCapture(press.id); } catch (x) {} }
-      $('abOk').onclick = function () { endArr(true); };
-      $('abC').onclick = function () { endArr(false); };
-      $('abR').onclick = function () { S.settings.btnPos = {}; targets(m).forEach(function (b) { b.style.position = ''; b.style.right = ''; b.style.bottom = ''; b.style.margin = ''; b.style.float = ''; b.classList.remove('arr'); }); endArr(true); };
-      try { if (navigator.vibrate) navigator.vibrate(25); } catch (e) {}
-    }
-    cont.addEventListener('pointerdown', function (e) {
-      var b = e.target.closest && e.target.closest('.locbtn'); if (!b) return;
-      sx = e.clientX; sy = e.clientY; if (!arr) swallow = 0; press = { b: b, x: e.clientX, y: e.clientY, id: e.pointerId };
-      if (arr) { e.preventDefault(); e.stopPropagation(); var r = b.getBoundingClientRect(); drag = { b: b, dx: e.clientX - r.left, dy: e.clientY - r.top, w: r.width, h: r.height }; try { b.setPointerCapture(e.pointerId); } catch (x) {} return; }
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(function () { timer = null; startArr(); }, 600);
-    }, true);
-    cont.addEventListener('pointermove', function (e) {
-      if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 12) { clearTimeout(timer); timer = null; }
-      if (!drag) return;
-      e.preventDefault(); e.stopPropagation();
-      var c = cornerRect(m), left = e.clientX - drag.dx, top = e.clientY - drag.dy;
-      place(drag.b, c.right - (left + drag.w), c.bottom - (top + drag.h), m);
-    }, true);
-    function up() { if (timer) { clearTimeout(timer); timer = null; } if (drag) swallow = Date.now() + 700; drag = null; press = null; }
-    cont.addEventListener('pointerup', up, true); cont.addEventListener('pointercancel', up, true);
-    cont.addEventListener('click', function (e) {
-      if (e.target.closest && e.target.closest('.lkbar')) return;
-      if (Date.now() < swallow || arr) { swallow = 0; e.preventDefault(); e.stopPropagation(); }
-    }, true);
   }
 })();

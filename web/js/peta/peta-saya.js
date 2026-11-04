@@ -142,7 +142,8 @@
     var nm = file.name.replace(/\.pdf$/i, '');
     var inp = 'width:100%;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--tx);padding:0 12px;font-size:max(11px,calc(16px * var(--fs,1)))';
     openSheet('<div class="grab"></div><div class="st">MEMBACA PDF…</div><div class="muted">' + esc(file.name) + ' (' + mb(file.size) + ')</div>');
-    HzOverlay.openPdf(file).then(function (h) {
+    Promise.all([HzOverlay.openPdf(file), HzOverlay.readGeo(file)]).then(function (rs) {
+      var h = rs[0], geo = rs[1];
       var hidden = {};
       h.layers.forEach(function (l) { if (!l.on) hidden[l.id] = true; });
       var lay = h.layers.length ? '<label class="lbl" style="margin-top:10px">Layer PDF (hilangkan centang untuk menyembunyikan)</label><div class="lylist" id="ovLy">' +
@@ -154,6 +155,7 @@
         '<div class="pgrid" style="margin-top:10px"><div><label class="lbl">Halaman (1–' + h.numPages + ')</label><input id="ovPage" type="number" min="1" max="' + h.numPages + '" value="1" style="' + inp + '"></div>' +
         '<div><label class="lbl">Ketajaman</label><select id="ovRes" style="' + inp + ';padding:0 8px"><option value="5000">Ringan (5000 px)</option><option value="7000">Sedang (7000 px)</option><option value="9000" selected>Tajam (9000 px)</option></select></div></div>' +
         (ovList().length ? '<label class="lbl" style="margin-top:10px">Gantikan peta lama (kalibrasi dan editan dipindahkan)</label><select id="ovRep" style="' + inp + ';padding:0 8px"><option value="-1">Tidak, tambah sebagai peta baru</option>' + ovList().map(function (o, k) { return '<option value="' + k + '">' + esc(o.name) + '</option>'; }).join('') + '</select>' : '') +
+        (geo ? '<label class="geol" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="ovGeo" checked> Pasang otomatis dari koordinat PDF (UTM zona ' + geo.zone + (geo.south ? ' S' : ' U') + ')</label>' : '') +
         lay +
         '<div class="muted" style="margin-top:8px">Makin tajam, makin lama diproses dan makin besar di ponsel. 9000 px sudah cukup tajam untuk zoom dekat; di atas itu tidak banyak berpengaruh. Setelah dikalibrasi, ukuran m/piksel tampil di daftar peta.</div>' +
         '<div class="row" style="margin-top:14px;gap:8px"><button class="btn" id="ovNo" style="flex:1">Batal</button><button class="btn pri" id="ovGo" style="flex:1">Proses</button></div>');
@@ -168,22 +170,28 @@
       $('ovNo').onclick = function () { h.close(); closeSheet(); };
       $('ovGo').onclick = function () {
         if (zv) { zv.close(); zv = null; }
+        var useGeo = !!(geo && $('ovGeo') && $('ovGeo').checked);
         var name = $('ovName').value.trim() || nm, page = +$('ovPage').value || 1, ls = +$('ovRes').value, repIdx = $('ovRep') ? +$('ovRep').value : -1, repO = repIdx >= 0 ? ovList()[repIdx] : null;
         openSheet('<div class="grab"></div><div class="st">MEMPROSES PDF…</div><div class="muted" id="ovMsg">Jangan tutup aplikasi sampai selesai.</div><div class="ovbar"><div id="ovBar"></div></div>');
         h.run({ name: name, page: page, longSide: ls, hidden: hidden }, function (f) { var b = $('ovBar'); if (b) b.style.width = Math.round(f * 100) + '%'; }).then(function (meta) {
           h.close();
-          if (repO && carryOver(repO, meta)) {
+          var carried = !!(repO && carryOver(repO, meta)), gi = null, diff = null;
+          if (useGeo) {
+            var pa0 = carried ? Object.assign({}, meta.aff || HzOverlay.affOf(meta)) : null;
+            gi = HzOverlay.applyGeo(meta, geo);
+            if (gi && pa0) { var cu = meta.W / 2, cv = meta.H / 2, o1 = [pa0.A * cu + pa0.B * cv + pa0.C, pa0.D * cu + pa0.E * cv + pa0.F], o2 = [gi.aff.A * cu + gi.aff.B * cv + gi.aff.C, gi.aff.D * cu + gi.aff.E * cv + gi.aff.F]; diff = Math.hypot(o2[0] - o1[0], o2[1] - o1[1]) * Math.cos(gi.lat * Math.PI / 180); }
+            if (!gi) toast('Koordinat PDF tidak bisa dipakai, pakai kalibrasi manual');
+          }
+          if (repO && carried) {
             var ix = ovList().indexOf(repO);
             if (ix >= 0) ovList()[ix] = meta; else ovList().push(meta);
             HzOverlay.delOverlay(repO.id);
-            saveSettings(); renderOv(); syncAllOverlays(); closeSheet();
-            toast('Peta diganti. Kalibrasi dan editan dipindahkan, mohon periksa hasilnya');
-            return;
-          }
-          if (repO) toast('Ukuran halaman berbeda: kalibrasi tidak bisa dipindahkan');
-          ovList().push(meta); saveSettings(); renderOv();
-          var i = ovList().length - 1;
+          } else { if (repO) toast('Ukuran halaman berbeda: kalibrasi tidak bisa dipindahkan'); ovList().push(meta); }
+          saveSettings(); renderOv(); syncAllOverlays();
+          var i = ovList().indexOf(meta);
+          if (gi) { geoDone(meta, geo, gi, diff, i); return; }
           closeSheet();
+          if (repO && carried) { toast('Peta diganti. Kalibrasi dan editan dipindahkan, mohon periksa hasilnya'); return; }
           toast('Langkah 1: bersihkan gambar (boleh langsung Selesai)');
           cleanOv(i, function () { calibrateOv(i); });
         }).catch(function (e) {
@@ -196,6 +204,27 @@
       openSheet('<div class="grab"></div><div class="st">GAGAL</div><div class="muted">' + esc(e && e.message || e) + '</div><button class="btn" id="ovNo2" style="margin-top:12px;width:100%">Tutup</button>');
       $('ovNo2').onclick = closeSheet;
     });
+  }
+  function ovCorners(o) {
+    var af = HzOverlay.affOf(o); if (!af) return [];
+    return [[0, 0], [o.W, 0], [o.W, o.H], [0, o.H]].map(function (c) { var q = L.CRS.EPSG3857.unproject(L.point(af.A * c[0] + af.B * c[1] + af.C, af.D * c[0] + af.E * c[1] + af.F)); return [q.lat, q.lng]; });
+  }
+  function geoDone(meta, geo, gi, diff, i) {
+    var zs = ''; for (var z = 46; z <= 54; z++) zs += '<option value="' + z + '"' + (z === gi.zone ? ' selected' : '') + '>Zona ' + z + '</option>';
+    openSheet('<div class="grab"></div><div class="st">PETA TERPASANG</div>' +
+      '<div class="muted" style="margin:6px 0">Dipasang dari koordinat PDF (UTM zona ' + gi.zone + (gi.south ? ' Selatan' : ' Utara') + '). Ukuran ± ' + gi.mpp.toFixed(2).replace('.', ',') + ' m/piksel. Titik tengah peta: ' + gi.lat.toFixed(5) + ', ' + gi.lng.toFixed(5) + '.' + (diff != null ? ' Selisih dengan kalibrasi lama: ± ' + (diff < 10 ? diff.toFixed(1) : Math.round(diff)).toString().replace('.', ',') + ' m.' : '') + '</div>' +
+      '<div class="muted">Kalau titik tengah bukan di kebun, ganti zona lalu pasang ulang.</div>' +
+      '<div class="row" style="margin-top:8px;gap:6px"><select id="gzZ" style="flex:1">' + zs + '</select><select id="gzH" style="flex:1"><option value="S"' + (gi.south ? ' selected' : '') + '>Selatan</option><option value="U"' + (gi.south ? '' : ' selected') + '>Utara</option></select><button class="btn" id="gzGo" style="flex:1">Pasang ulang</button></div>' +
+      '<div class="row" style="margin-top:10px;gap:6px"><button class="btn" id="gzV" style="flex:1;height:48px">Lihat di peta</button><button class="btn" id="gzM" style="flex:1;height:48px">Kalibrasi manual</button></div>' +
+      '<button class="btn pri" id="gzX" style="width:100%;margin-top:8px;height:48px">Selesai</button>');
+    $('gzGo').onclick = function () {
+      var g2 = HzOverlay.applyGeo(meta, geo, +$('gzZ').value, $('gzH').value === 'S');
+      if (!g2) { toast('Zona ini tidak cocok dengan koordinat PDF'); return; }
+      saveSettings(); renderOv(); syncAllOverlays(); geoDone(meta, geo, g2, null, i);
+    };
+    $('gzV').onclick = function () { closeSheet(); meta.on = true; saveSettings(); syncAllOverlays(); HA.mapKeep = true; go('lintasan'); setTimeout(function () { if (HA.map) HA.map.fitBounds(L.latLngBounds(ovCorners(meta)), { padding: [20, 20] }); }, 900); if (S.settings.mapMode !== 'osm') toast('Peta PDF tampil di mode Peta (bukan Satelit)'); };
+    $('gzM').onclick = function () { closeSheet(); calibrateOv(i); };
+    $('gzX').onclick = closeSheet;
   }
   function exportOv(i) {
     var o = ovList()[i]; if (!o) return;

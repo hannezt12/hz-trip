@@ -123,6 +123,8 @@
       linesOn: ic('<path d="M4 20 L10 4 M14 4 L20 20"/>'),
       lakesOn: ic('<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>'),
       shpOn: ic('<path d="M5 17l3-10 9 3 2 8z"/><circle cx="5" cy="17" r="1.5"/><circle cx="8" cy="7" r="1.5"/><circle cx="17" cy="10" r="1.5"/>'),
+      fill: ic('<path d="M7 4l9 9-5 5-6-6z"/><path d="M17 15c1.5 2 2 3 0 4s-2-2 0-4z"/>'),
+      shift: ic('<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>'),
       measure: ic('<path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/>'),
       batDesa: ic('<path d="M4 7l5-3 6 3 5-2v12l-5 2-6-3-5 3z"/><path d="M9 4v13M15 7v13"/>'),
       batKec: ic('<path d="M3 5h18v14H3z"/><path d="M3 12h18M12 5v14"/>'),
@@ -135,14 +137,60 @@
       dataGo: ic('<path d="M5 5h14M5 12h14M5 19h14"/>')
     };
     function tile(id, label, st, badge) { return '<button type="button" class="tile' + (st ? ' st' : '') + '" data-t="' + id + '">' + IC[id] + '<span>' + label + '</span>' + (badge ? '<i class="tbd" id="bd_' + id + '"></i>' : '') + '</button>'; }
-    panel.innerHTML = '<div class="tt">LAPISAN</div><div class="tgrid">' + tile('contour', 'Kontur', 1) + tile('slopeLayer', 'Lereng', 1) + tile('hach', 'Arsiran', 1) + tile('v3d', '3D', 1) + tile('slopeTap', 'Info lereng', 1) + tile('prof', 'Profil', 1) + '</div>' +
+    var TILES = [['contour', 'Kontur', 1], ['slopeLayer', 'Lereng', 1], ['hach', 'Arsiran', 1], ['v3d', '3D', 1], ['slopeTap', 'Info lereng', 1], ['prof', 'Profil', 1],
+      ['useNas', 'DEMNAS', 1], ['useFree', 'DEM gratis', 1], ['blkOn', 'Blok', 1, 1], ['rowOn', 'Arah row', 1], ['lakesOn', 'Danau', 1, 1], ['linesOn', 'Jalan', 1], ['batDesa', 'Desa', 1], ['play', 'Putar', 1],
+      ['draw', 'Buat baru'], ['fill', 'Isi blok'], ['measure', 'Ukur'], ['shift', 'Geser blok'], ['batCfg', 'Atur batas'], ['dataGo', 'Data peta']];
+    function orderedTiles() {
+      var saved = S.settings.tileOrder || [], byId = {}, out = [];
+      TILES.forEach(function (t) { byId[t[0]] = t; });
+      saved.forEach(function (id) { if (byId[id]) { out.push(byId[id]); delete byId[id]; } });
+      TILES.forEach(function (t) { if (byId[t[0]]) out.push(t); });
+      return out;
+    }
+    function gridHtml() { return orderedTiles().map(function (t) { return tile(t[0], t[1], t[2], t[3]); }).join(''); }
+    panel.innerHTML = '<div class="tseg" id="tRm"><button type="button" data-m="datar">Datar</button><button type="button" data-m="kontur">Kontur</button></div>' +
+      '<div class="tgrid" id="tGrid">' + gridHtml() + '</div>' +
       '<div class="tseg" id="tHk"><button type="button" data-k="down">Arah turun</button><button type="button" data-k="row">Searah kontur</button></div>' +
       '<div class="tseg" id="tHs"><button type="button" data-s="detail">Detail</button><button type="button" data-s="umum">Umum</button></div>' +
-      '<div class="tt" style="margin-top:6px">SUMBER DATA</div><div class="tgrid">' + tile('useNas', 'DEMNAS', 1) + tile('useFree', 'DEM gratis', 1) + '</div><div class="tnote" id="tNasSub"></div>' +
-      '<div class="tt">TAMPIL</div><div class="tgrid">' + tile('blkOn', 'Blok', 1, 1) + tile('rowOn', 'Arah row', 1) + tile('lakesOn', 'Danau', 1, 1) + tile('linesOn', 'Jalan', 1) + tile('batDesa', 'Desa', 1) + '</div>' +
-      '<div class="tseg" id="tRm"><button type="button" data-m="datar">Datar</button><button type="button" data-m="kontur">Kontur</button></div>' +
-      '<div class="tt">LINTASAN</div><div class="tgrid">' + tile('play', 'Putar', 1) + '</div>' +
-      '<div class="tt">ALAT</div><div class="tgrid">' + tile('draw', 'Buat baru') + tile('measure', 'Ukur') + tile('batCfg', 'Atur batas') + tile('dataGo', 'Data peta') + '</div>';
+      '<div class="tnote" id="tNasSub"></div>' +
+      '<div class="tarr" id="tArr" style="display:none"><span>Seret ikon untuk menukar posisi</span><div><button type="button" id="taR">Awal</button><button type="button" id="taC">Batal</button><button type="button" class="pri" id="taOk">Simpan</button></div></div>';
+    // atur urutan ikon: tahan lama, seret untuk menukar
+    var arr = null;
+    (function () {
+      var grid = panel.querySelector('#tGrid'), timer = null, sx = 0, sy = 0, dragEl = null, pend = null;
+      function endArr(save) {
+        if (!arr) return;
+        if (save) { S.settings.tileOrder = [].map.call(grid.children, function (e) { return e.getAttribute('data-t'); }); saveSettings(); toast('Urutan ikon disimpan'); }
+        else { grid.innerHTML = gridHtml(); }
+        panel.classList.remove('arr'); $('tArr').style.display = 'none'; arr = null; dragEl = null; sync();
+      }
+      function startArr() {
+        arr = { }; panel.classList.add('arr'); $('tArr').style.display = ''; try { if (navigator.vibrate) navigator.vibrate(25); } catch (e) {}
+        $('taOk').onclick = function () { endArr(true); };
+        $('taC').onclick = function () { endArr(false); };
+        $('taR').onclick = function () { S.settings.tileOrder = []; saveSettings(); grid.innerHTML = gridHtml(); endArr(false); toast('Urutan dikembalikan'); };
+        if (pend) { dragEl = pend; dragEl.classList.add('drg'); }
+      }
+      grid.addEventListener('pointerdown', function (e) {
+        var t = e.target.closest && e.target.closest('.tile'); if (!t) return;
+        sx = e.clientX; sy = e.clientY; pend = t;
+        if (arr) { dragEl = t; t.classList.add('drg'); try { grid.setPointerCapture(e.pointerId); } catch (x) {} e.preventDefault(); return; }
+        clearTimeout(timer); timer = setTimeout(function () { timer = null; startArr(); }, 600);
+      });
+      grid.addEventListener('pointermove', function (e) {
+        if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 12) { clearTimeout(timer); timer = null; }
+        if (!arr || !dragEl) return;
+        e.preventDefault();
+        var el = document.elementFromPoint(e.clientX, e.clientY), t = el && el.closest && el.closest('.tile');
+        if (!t || t === dragEl || t.parentNode !== grid) return;
+        var kids = [].slice.call(grid.children), i = kids.indexOf(dragEl), j = kids.indexOf(t);
+        if (i < j) grid.insertBefore(dragEl, t.nextSibling); else grid.insertBefore(dragEl, t);
+      });
+      function up() { clearTimeout(timer); timer = null; if (dragEl) { dragEl.classList.remove('drg'); } dragEl = null; if (arr) HA.DM.tileSwallow = Date.now() + 500; }
+      grid.addEventListener('pointerup', up); grid.addEventListener('pointercancel', up);
+      grid.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+      HA.DM.arranging = function () { return !!arr || Date.now() < (HA.DM.tileSwallow || 0); };
+    })();
     function state(id) {
       return id === 'contour' ? !!S.settings.contour : id === 'slopeLayer' ? !!S.settings.slopeLayer : id === 'hach' ? !!S.settings.hach : id === 'slopeTap' ? !!m._slopeOn :
         id === 'blkOn' ? S.settings.blkOn !== false : id === 'rowOn' ? !!S.settings.rowOn : id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'play' ? !!HA.PB.open : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'v3d' ? HA.V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : id === 'linesOn' ? S.settings.linesOn !== false : !!S.profOpen;
@@ -167,6 +215,8 @@
     }
     HA.DM.sync = sync; HA.DM.syncMode = syncMode;
     panel.onclick = function (e) {
+      if (e.target.closest && e.target.closest('#tArr')) return;
+      if (HA.DM.arranging && HA.DM.arranging()) return;
       var k = e.target.closest && e.target.closest('#tHk button');
       if (k) { S.settings.hachKind = k.getAttribute('data-k'); saveSettings(); if (!S.settings.hach) setHach(true); else if (HA.DM.hach) HA.DM.hach.redraw(); sync(); return; }
       var rm = e.target.closest && e.target.closest('#tRm button');
@@ -177,6 +227,8 @@
       var id = b.getAttribute('data-t');
       if (id === 'play') { if (HA.PB.open) HA.pbClose(); else { closeP(); HA.pbOpen(); } sync(); return; }
       if (id === 'measure') { closeP(); HA.measureStart(); return; }
+      if (id === 'fill') { closeP(); HA.fillStart(); return; }
+      if (id === 'shift') { closeP(); HA.shiftStart(); return; }
       if (id === 'draw') { if (HA.pbLocked('Tutup Putar dulu untuk menggambar')) return; closeP(); drawStart(); return; }
       if (id === 'detect') { closeP(); S.dpTab = 'blok'; go('data'); return; }
       if (id === 'blkOn') { S.settings.blkOn = S.settings.blkOn === false; saveSettings(); if (S.settings.blkOn === false) closeBlockPop(); drawBlocks(); sync(); return; }
@@ -217,7 +269,7 @@
     });
     new Ctl().addTo(m);
     // tombol lama dipertahankan sebagai penampung status (tidak tampil)
-    if (HA.btnInit) HA.btnInit(m);
+    if (S.settings.btnPos) { delete S.settings.btnPos; saveSettings(); }
     HA.DM.btnL = document.createElement('button'); HA.DM.btnS = document.createElement('button'); HA.DM.btnK = document.createElement('button'); HA.DM.btnP = document.createElement('button');
     if (window.HzBatas && !HA.DM.bat) HA.DM.bat = HzBatas.attach(m, batCfg, toast);
     zoomInd(m);

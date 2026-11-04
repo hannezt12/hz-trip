@@ -212,7 +212,17 @@
                 });
               }
               return next(0).then(function () {
-                return { id: id, name: opt.name || 'Peta', W: W, H: H, levels: levels, cal: null, on: true, bytes: bytes, edit: { keyBg: false, tol: 6, boost: 100, crop: null, erase: [] } };
+                var meta = { id: id, name: opt.name || 'Peta', W: W, H: H, levels: levels, cal: null, on: true, bytes: bytes, edit: { keyBg: false, tol: 6, boost: 100, crop: null, erase: [] }, pv: { x0: page.view[0], y0: page.view[1], x1: page.view[2], y1: page.view[3], rot: page.rotate || 0, s: full } };
+                // teks nomor blok (bila PDF menyimpannya sebagai teks): dipakai untuk menamai blok otomatis
+                return page.getTextContent().then(function (tc) {
+                  var labs = [];
+                  (tc.items || []).forEach(function (it) {
+                    var t = String(it.str || '').trim(); if (!t || t.length > 14 || !/\d/.test(t) || labs.length >= 6000 || !it.transform) return;
+                    labs.push({ t: t, u: Math.round((it.transform[4] - page.view[0] + (it.width || 0) / 2) * full), v: Math.round((page.view[3] - it.transform[5] - Math.abs(it.height || it.transform[3] || 0) / 2) * full) });
+                  });
+                  if (labs.length) meta.labels = labs;
+                  return meta;
+                }).catch(function () { return meta; });
               });
             }).catch(function (e) { delOverlay(id); throw e; });
           }
@@ -933,6 +943,92 @@
     }
     return next().then(function () { return { lv: lv, w: L.w, h: L.h, scale: Math.pow(2, lv), data: ctx.getImageData(0, 0, L.w, L.h).data }; });
   }
+
+  // ---------- GeoPDF: pasang otomatis dari koordinat yang tertanam di PDF ----------
+  function utmToLL(E, N, zone, south) {
+    var a = 6378137, f = 1 / 298.257223563, k0 = 0.9996, e2 = f * (2 - f), ep2 = e2 / (1 - e2), R = Math.PI / 180;
+    var x = E - 500000, y = south ? N - 10000000 : N, M = y / k0;
+    var mu = M / (a * (1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256)), e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+    var p1 = mu + (3 * e1 / 2 - 27 * Math.pow(e1, 3) / 32) * Math.sin(2 * mu) + (21 * e1 * e1 / 16 - 55 * Math.pow(e1, 4) / 32) * Math.sin(4 * mu) + (151 * Math.pow(e1, 3) / 96) * Math.sin(6 * mu) + (1097 * Math.pow(e1, 4) / 512) * Math.sin(8 * mu);
+    var s = Math.sin(p1), c = Math.cos(p1), t = Math.tan(p1), N1 = a / Math.sqrt(1 - e2 * s * s), T1 = t * t, C1 = ep2 * c * c, R1 = a * (1 - e2) / Math.pow(1 - e2 * s * s, 1.5), D = x / (N1 * k0);
+    var lat = p1 - (N1 * t / R1) * (D * D / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * ep2) * Math.pow(D, 4) / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * ep2 - 3 * C1 * C1) * Math.pow(D, 6) / 720);
+    var lon = ((zone - 1) * 6 - 180 + 3) * R + (D - (1 + 2 * T1 + C1) * Math.pow(D, 3) / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * ep2 + 24 * T1 * T1) * Math.pow(D, 5) / 120) / c;
+    return [lat / R, lon / R];
+  }
+  function nums(str) { return (str.match(/-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?/g) || []).map(Number); }
+  // baca /GPTS, /LPTS, /BBox dari berkas PDF. Hasil null bila tidak ada.
+  function readGeo(file) {
+    return file.arrayBuffer().then(function (buf) {
+      var txt = new TextDecoder('latin1').decode(buf), m = /\/GPTS\s*\[([^\]]*)\]/.exec(txt); if (!m) return null;
+      var gp = nums(m[1]), lm = /\/LPTS\s*\[([^\]]*)\]/.exec(txt), lp = lm ? nums(lm[1]) : [0, 1, 0, 0, 1, 0, 1, 1];
+      if (gp.length < 6 || gp.length % 2 || lp.length !== gp.length) return null;
+      var bi = [], re = /\/BBox\s*\[([^\]]*)\]/g, q, best = null;
+      while ((q = re.exec(txt))) { var bn = nums(q[1]); if (bn.length === 4) bi.push({ at: q.index, b: bn }); }
+      bi.forEach(function (x) { if (!best || Math.abs(x.at - m.index) < Math.abs(best.at - m.index)) best = x; });
+      if (!best) return null;
+      var zone = 48, south = true, w = /UTM[_ ]*Zone[_ ]*(\d{1,2})\s*([NS])?/i.exec(txt) || /EPSG[:\/ ]*32([67])(\d\d)/.exec(txt);
+      if (w && w.length === 3 && /^[67]$/.test(w[1])) { south = w[1] === '7'; zone = +w[2]; }
+      else if (w) { zone = +w[1]; if (w[2]) south = /S/i.test(w[2]); }
+      var geographic = gp.every(function (v, i) { return i % 2 ? Math.abs(v) <= 180 : Math.abs(v) <= 90; });
+      return { gp: gp, lp: lp, bbox: best.b, zone: zone, south: south, geographic: geographic };
+    }).catch(function () { return null; });
+  }
+  function fitAff(P) {
+    // kuadrat terkecil: X = A u + B v + C ; Y = D u + E v + F
+    var n = P.length, su = 0, sv = 0, suu = 0, suv = 0, svv = 0, sX = 0, sY = 0, suX = 0, svX = 0, suY = 0, svY = 0;
+    P.forEach(function (p) { su += p.u; sv += p.v; suu += p.u * p.u; suv += p.u * p.v; svv += p.v * p.v; sX += p.X; sY += p.Y; suX += p.u * p.X; svX += p.v * p.X; suY += p.u * p.Y; svY += p.v * p.Y; });
+    var Mx = [[suu, suv, su], [suv, svv, sv], [su, sv, n]];
+    function solve(r) {
+      var d = det3(Mx); if (Math.abs(d) < 1e-9) return null;
+      function rp(k) { var m = Mx.map(function (row) { return row.slice(); }); for (var i = 0; i < 3; i++) m[i][k] = r[i]; return det3(m) / d; }
+      return [rp(0), rp(1), rp(2)];
+    }
+    var a = solve([suX, svX, sX]), b = solve([suY, svY, sY]); if (!a || !b) return null;
+    return { A: a[0], B: a[1], C: a[2], D: b[0], E: b[1], F: b[2] };
+  }
+  // pasang meta (hasil impor) memakai koordinat PDF; zone/south boleh diganti. Mengembalikan info, atau null bila gagal.
+  function applyGeo(meta, geo, zone, south) {
+    if (!geo || !meta.pv || meta.pv.rot) return null;
+    zone = zone || geo.zone; south = south == null ? geo.south : south;
+    var pv = meta.pv, bx0 = Math.min(geo.bbox[0], geo.bbox[2]), bx1 = Math.max(geo.bbox[0], geo.bbox[2]), by0 = Math.min(geo.bbox[1], geo.bbox[3]), by1 = Math.max(geo.bbox[1], geo.bbox[3]);
+    var n = geo.gp.length / 2, res = null;
+    [false, true].forEach(function (down) {
+      if (res) return;
+      var P = [], i;
+      for (i = 0; i < n; i++) {
+        var lx = geo.lp[2 * i], ly = geo.lp[2 * i + 1], x = bx0 + lx * (bx1 - bx0), y = down ? by1 - ly * (by1 - by0) : by0 + ly * (by1 - by0);
+        var a = geo.gp[2 * i], b = geo.gp[2 * i + 1], ll;
+        if (geo.geographic) ll = [a, b];
+        else if (a > 1e6 && b < 1e6) ll = utmToLL(b, a, zone, south); else ll = utmToLL(a, b, zone, south);
+        var q = L.CRS.EPSG3857.project(L.latLng(ll[0], ll[1]));
+        P.push({ u: (x - pv.x0) * pv.s, v: (pv.y1 - y) * pv.s, X: q.x, Y: q.y, lat: ll[0], lng: ll[1] });
+      }
+      // peta menghadap utara: ke kanan = timur (A>0), ke bawah = selatan (E<0)
+      var af = fitAff(P); if (af && af.A > 0 && af.E < 0) res = { af: af, P: P };
+    });
+    if (!res) return null;
+    // titik acuan: kumpulkan sampel merata untuk kuadrat terkecil sudah dalam P (sudut). Pakai 3 sudut sebagai cal, aff dari kuadrat terkecil semua sudut.
+    meta.cal = res.P.slice(0, 3).map(function (p) { return { u: p.u, v: p.v, lat: p.lat, lng: p.lng }; });
+    meta.aff = res.af; meta.geoInfo = { zone: zone, south: south };
+    var k = Math.cos(res.P[0].lat * Math.PI / 180), mpp = Math.hypot(res.af.A, res.af.D) * k;
+    var cu = meta.W / 2, cv = meta.H / 2, c = L.CRS.EPSG3857.unproject(L.point(res.af.A * cu + res.af.B * cv + res.af.C, res.af.D * cu + res.af.E * cv + res.af.F));
+    return { mpp: mpp, lat: c.lat, lng: c.lng, zone: zone, south: south, aff: res.af };
+  }
+  // jendela piksel (resolusi penuh) di sekitar (u0,v0), untuk ketuk-isi blok
+  function regionAt(o, u0, v0, R) {
+    var L0 = o.levels[0], x0 = Math.max(0, Math.floor(u0 - R)), y0 = Math.max(0, Math.floor(v0 - R)), x1 = Math.min(L0.w, Math.ceil(u0 + R)), y1 = Math.min(L0.h, Math.ceil(v0 + R));
+    var w = x1 - x0, h = y1 - y0; if (w < 8 || h < 8) return Promise.resolve(null);
+    var cv = document.createElement('canvas'); cv.width = w; cv.height = h; var ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    var jobs = [], tx, ty;
+    for (ty = Math.floor(y0 / TS); ty <= Math.floor((y1 - 1) / TS); ty++) for (tx = Math.floor(x0 / TS); tx <= Math.floor((x1 - 1) / TS); tx++) jobs.push([tx, ty]);
+    var i = 0;
+    function next() {
+      if (i >= jobs.length) return Promise.resolve();
+      var j = jobs[i++];
+      return getTile(o.id + '|0|' + j[0] + '|' + j[1]).then(function (b) { return b ? createImageBitmap(b) : null; }).then(function (bm) { if (bm) { ctx.drawImage(bm, j[0] * TS - x0, j[1] * TS - y0); if (bm.close) bm.close(); } return next(); });
+    }
+    return next().then(function () { return { x0: x0, y0: y0, w: w, h: h, data: ctx.getImageData(0, 0, w, h).data }; });
+  }
   function exportOverlay(o, extra) {
     var tiles = [];
     (o.levels || []).forEach(function (l, lv) { for (var ty = 0; ty < l.rows; ty++) for (var tx = 0; tx < l.cols; tx++) tiles.push([lv, tx, ty]); });
@@ -973,5 +1069,5 @@
     });
   }
 
-  root.HzOverlay = { rasterAt: rasterAt, exportOverlay: exportOverlay, importOverlayFile: importOverlayFile, openPdf: openPdf, clean: clean, affOf: affOf, infoAff: infoAff, tune: tune, importPdf: importPdf, delOverlay: delOverlay, makeLayer: makeLayer, affineOf: affineOf, toLLFn: toLLFn, info: info, residual: residual, calibrate: calibrate, TS: TS };
+  root.HzOverlay = { readGeo: readGeo, applyGeo: applyGeo, regionAt: regionAt, utmToLL: utmToLL, rasterAt: rasterAt, exportOverlay: exportOverlay, importOverlayFile: importOverlayFile, openPdf: openPdf, clean: clean, affOf: affOf, infoAff: infoAff, tune: tune, importPdf: importPdf, delOverlay: delOverlay, makeLayer: makeLayer, affineOf: affineOf, toLLFn: toLLFn, info: info, residual: residual, calibrate: calibrate, TS: TS };
 })(window);
