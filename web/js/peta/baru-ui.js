@@ -114,7 +114,7 @@
         }).catch(function () { busy = false; toast('Gagal menghitung danau'); });
       } else {
         HA.linesList().push({ id: 'l' + Date.now().toString(36), type: type, w: DEF[type], pts: P });
-        end(); S.settings.linesOn = true; HA.lineChanged(); toast(NAMES[type] + ' tersimpan. Ketuk garis untuk ubah lebar atau hapus');
+        end(); if (type === 'drain') S.settings.lakesOn = true; else S.settings.linesOn = true; HA.lineChanged(); toast(NAMES[type] + ' tersimpan. Ketuk garis untuk ubah lebar atau hapus');
       }
     };
     upd();

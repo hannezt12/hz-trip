@@ -117,16 +117,24 @@
     var all = blocksList();
     if (S.settings.blkOn === false || !all.length) return;
     var z = HA.map.getZoom(); if (z < 15) return;
-    // pengaman: kalau penggambaran sebelumnya tidak selesai (macet lalu aplikasi ditutup paksa), blok dimatikan
+    // pengaman: kalau penggambaran sebelumnya tidak selesai (macet lalu aplikasi ditutup paksa) gambar diringankan dulu;
+    // Blok baru dimatikan bila tidak selesai dua kali berturut-turut. Tanda dihapus juga saat aplikasi masuk latar belakang.
+    var light = false;
     if (all.length > 150) {
-      var bad = null; try { bad = localStorage.getItem('hz_bd'); } catch (e) {}
-      if (bad === '1') { try { localStorage.removeItem('hz_bd'); } catch (e) {} S.settings.blkOn = false; saveSettings(); toast('Blok dimatikan karena aplikasi sempat macet. Nyalakan lagi lewat Alat peta > Blok.'); return; }
+      var bad = null, cnt = 0; try { bad = localStorage.getItem('hz_bd'); cnt = +localStorage.getItem('hz_bdc') || 0; } catch (e) {}
+      if (bad === '1') {
+        cnt++; try { localStorage.removeItem('hz_bd'); localStorage.setItem('hz_bdc', String(cnt)); } catch (e) {}
+        if (cnt >= 2) { try { localStorage.setItem('hz_bdc', '0'); } catch (e) {} S.settings.blkOn = false; saveSettings(); toast('Blok dimatikan karena aplikasi macet dua kali berturut-turut. Nyalakan lagi lewat Alat peta > Blok.'); return; }
+      }
+      light = cnt >= 1;
+      if (!HA.DM.bdHide) { HA.DM.bdHide = true; document.addEventListener('visibilitychange', function () { if (document.hidden) { try { localStorage.removeItem('hz_bd'); } catch (e) {} } }); window.addEventListener('pagehide', function () { try { localStorage.removeItem('hz_bd'); } catch (e) {} }); }
       try { localStorage.setItem('hz_bd', '1'); } catch (e) {}
-      setTimeout(function () { try { localStorage.removeItem('hz_bd'); } catch (e) {} }, 60);
+      setTimeout(function () { try { localStorage.removeItem('hz_bd'); localStorage.setItem('hz_bdc', '0'); } catch (e) {} }, 40);
     }
     var bd = HA.map.getBounds(), vis = all.filter(function (b) { return bbHit(b, bd); }), g = L.layerGroup(), cc = HA.map.getCenter();
     if (vis.length > 120) { vis.sort(function (p, q) { var a1 = bbOf(p), b1 = bbOf(q); return Math.hypot((a1[0] + a1[2]) / 2 - cc.lat, (a1[1] + a1[3]) / 2 - cc.lng) - Math.hypot((b1[0] + b1[2]) / 2 - cc.lat, (b1[1] + b1[3]) / 2 - cc.lng); }); vis = vis.slice(0, 120); }
-    var lab = z >= 16 ? vis.slice(0, 40) : [];
+    if (light && vis.length > 60) vis = vis.slice(0, 60);
+    var lab = z >= 16 ? vis.slice(0, light ? 12 : 40) : [];
     vis.forEach(function (b) {
       var st = blkStatus(b), l = L.polygon(b.pts, { color: HA.BLK_COL[st], weight: 1.3, dashArray: st === 'none' ? '4 4' : null, fillOpacity: 0.05, interactive: false });
       if (lab.indexOf(b) >= 0) l.bindTooltip(esc(blkLabel(b)), { permanent: true, direction: 'center', className: 'lktip' });
@@ -247,7 +255,6 @@
       L.polyline(ls, { color: '#FFFFFF', weight: 0.8, opacity: 0.9, interactive: false, smoothFactor: 0.5 }).addTo(g);
     }
     if (dep && mode === 'kontur') {
-      drawDepInto(g, dep);
       if (ls && dep.flow) drawArrows(g, ls, dep.flow);
     }
   }
@@ -294,36 +301,50 @@
     });
   }
   function drawArea(g, id) {
+    var sk = 'wlSeq';
     var bd = HA.map.getBounds(), a = tileXY(bd.getNorth(), bd.getWest(), 16), c = tileXY(bd.getSouth(), bd.getEast(), 16), list = [], x, y;
     for (x = a[0]; x <= c[0]; x++) for (y = a[1]; y <= c[1]; y++) list.push([x, y]);
-    if (list.length > 12) { if (!HA.DM.areaTip) { HA.DM.areaTip = 1; toast('Dekatkan peta sedikit untuk kontur area'); } return; }
+    if (list.length > 12) { if (!HA.DM.areaTip) { HA.DM.areaTip = 1; toast('Dekatkan peta sedikit untuk melihat water lock'); } return; }
     var i = 0, told = false, popB = HA.DM.popId != null ? blocksList().filter(function (b) { return b.id === HA.DM.popId; })[0] : null;
     (function nx() {
-      if (id !== HA.DM.rowSeq || i >= list.length) return;
+      if (id !== HA.DM[sk] || i >= list.length) return;
       var t = list[i++];
-      var tm = setTimeout(function () { if (!told && id === HA.DM.rowSeq) { told = true; toast('Menghitung kontur area… hanya sekali, lalu tersimpan'); } }, 700);
+      var tm = setTimeout(function () { if (!told && id === HA.DM[sk]) { told = true; toast('Menghitung water lock… hanya sekali, lalu tersimpan'); } }, 700);
       areaDep(t[0], t[1]).then(function (r) {
         clearTimeout(tm);
-        if (id !== HA.DM.rowSeq || !r) return;
+        if (id !== HA.DM[sk] || !r) return;
         var d2 = { list: r.list, hump: r.hump };
         if (popB) { d2 = { list: r.list.filter(function (d) { return !llPip({ lat: d.poly[0][0], lng: d.poly[0][1] }, popB.pts); }), hump: r.hump.filter(function (d) { return !llPip({ lat: d.poly[0][0], lng: d.poly[0][1] }, popB.pts); }) }; }
         drawDepInto(g, d2);
       }).catch(function () { clearTimeout(tm); }).then(function () { setTimeout(nx, 40); });
     })();
   }
+  // lapisan Water lock: cekungan dan cembung seluruh area, terpisah dari Arah row/Kontur, tampil di mode Datar maupun Kontur
+  function wlOn() { return S.settings.wlOn != null ? !!S.settings.wlOn : (!!S.settings.rowOn && (S.settings.rowMode || 'datar') === 'kontur'); }
+  function drawWL(hint) {
+    if (!HA.map) return;
+    if (HA.DM.wlLayer) { HA.map.removeLayer(HA.DM.wlLayer); HA.DM.wlLayer = null; }
+    HA.DM.wlSeq = (HA.DM.wlSeq || 0) + 1;
+    if (!wlOn() || S.settings.blkOn === false || !blocksList().length || HA.DM.edit) return;
+    if (HA.map.getZoom() < 16) { if (hint) toast('Perbesar peta ke zoom 16 untuk melihat water lock'); return; }
+    var g = L.layerGroup().addTo(HA.map); HA.DM.wlLayer = g;
+    drawArea(g, HA.DM.wlSeq);
+  }
+  HA.drawWL = drawWL; HA.wlOn = wlOn;
   // lapisan Arah row. Datar: semua blok yang tampak. Kontur: hanya blok yang hasilnya sudah tersimpan
   // (blok lain dihitung saat diketuk atau lewat "Siapkan kontur"), digambar satu per satu supaya tidak macet.
   function drawRows(hint) {
     if (!HA.map) return;
     if (HA.drawLines) HA.drawLines();
     if (HA.drawLakes) HA.drawLakes();
+    drawWL();
     if (HA.DM.rowLayer) { HA.map.removeLayer(HA.DM.rowLayer); HA.DM.rowLayer = null; }
     HA.DM.rowSeq = (HA.DM.rowSeq || 0) + 1;
-    if (!S.settings.rowOn || S.settings.blkOn === false || !blocksList().length) return;
-    if (HA.map.getZoom() < 16) { if (hint) toast('Perbesar peta ke zoom 16 untuk melihat ' + ((S.settings.rowMode || 'datar') === 'kontur' ? 'kontur' : 'row')); return; }
+    if (!S.settings.rowOn || S.settings.blkOn === false || !blocksList().length || HA.DM.edit) return;
+    var zmin = (S.settings.rowMode || 'datar') === 'kontur' ? 17 : 16;
+    if (HA.map.getZoom() < zmin) { if (hint) toast('Perbesar peta ke zoom ' + zmin + ' untuk melihat ' + (zmin === 17 ? 'kontur' : 'row')); return; }
     var mode = S.settings.rowMode || 'datar', id = HA.DM.rowSeq, bd = HA.map.getBounds(), cc = HA.map.getCenter(), g = L.layerGroup().addTo(HA.map), vis, i = 0, miss = 0, need = [];
     HA.DM.rowLayer = g;
-    if (mode === 'kontur') drawArea(g, id);
     vis = blocksList().filter(function (b) { return bbHit(b, bd) && (mode === 'kontur' || b.dir != null); });
     vis.sort(function (p, q) { var a1 = bbOf(p), b1 = bbOf(q); return Math.hypot((a1[0] + a1[2]) / 2 - cc.lat, (a1[1] + a1[3]) / 2 - cc.lng) - Math.hypot((b1[0] + b1[2]) / 2 - cc.lat, (b1[1] + b1[3]) / 2 - cc.lng); });
     vis = vis.slice(0, mode === 'kontur' ? 40 : 30);
@@ -428,7 +449,7 @@
   function editPoly(pts, closed, done) {
     var work = pts.map(function (p) { return p.slice(); }), mode = 'geser', g = L.layerGroup().addTo(HA.map), bar = document.createElement('div'), under = null, shape = null, min = closed ? 3 : 2;
     if (HA.DM.closePanel) HA.DM.closePanel(); if (HA.closeLinePop) HA.closeLinePop(); if ($('sheet').classList.contains('on')) { HA.onSheetClose = null; closeSheet(); }
-    HA.DM.edit = true; bar.className = 'lkbar bot';
+    HA.DM.edit = true; HA.drawRows(); bar.className = 'lkbar bot';
     bar.innerHTML = '<span id="epT"></span><div class="tseg" style="flex:1 1 100%;margin:0"><button type="button" data-m="geser">Geser</button><button type="button" data-m="tambah">+ Titik</button><button type="button" data-m="hapus">− Titik</button></div><button type="button" id="epNo">Batal</button><button type="button" id="epOk" class="pri">Simpan</button>';
     HA.map.getContainer().appendChild(bar); L.DomEvent.disableClickPropagation(bar);
     var hint = { geser: 'Seret titik untuk menggeser posisinya', tambah: 'Ketuk dekat sisi untuk menambah titik', hapus: 'Ketuk sebuah titik untuk menghapusnya' };
@@ -464,7 +485,7 @@
     }
     HA.map.on('click', onClick);
     bar.querySelector('.tseg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-m'); if (m) { mode = m; rebuild(); } };
-    function end(res) { HA.map.off('click', onClick); g.remove(); bar.remove(); HA.DM.edit = false; done(res); }
+    function end(res) { HA.map.off('click', onClick); g.remove(); bar.remove(); HA.DM.edit = false; done(res); HA.drawRows(); }
     $('epOk').onclick = function () { end(work.map(function (p) { return [+p[0].toFixed(6), +p[1].toFixed(6)]; })); };
     $('epNo').onclick = function () { end(null); };
     rebuild();

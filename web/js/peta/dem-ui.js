@@ -121,6 +121,7 @@
       useNas: ic('<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>'),
       useFree: ic('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>'),
       linesOn: ic('<path d="M4 20 L10 4 M14 4 L20 20"/>'),
+      wlOn: ic('<path d="M3 8c3-3 6 2 9-1s6 2 9-1"/><ellipse cx="8" cy="15.5" rx="4" ry="2.6"/><circle cx="17" cy="15" r="2.4"/>'),
       lakesOn: ic('<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>'),
       shpOn: ic('<path d="M5 17l3-10 9 3 2 8z"/><circle cx="5" cy="17" r="1.5"/><circle cx="8" cy="7" r="1.5"/><circle cx="17" cy="10" r="1.5"/>'),
       fill: ic('<path d="M7 4l9 9-5 5-6-6z"/><path d="M17 15c1.5 2 2 3 0 4s-2-2 0-4z"/>'),
@@ -138,7 +139,7 @@
     };
     function tile(id, label, st, badge) { return '<button type="button" class="tile' + (st ? ' st' : '') + '" data-t="' + id + '">' + IC[id] + '<span>' + label + '</span>' + (badge ? '<i class="tbd" id="bd_' + id + '"></i>' : '') + '</button>'; }
     var TILES = [['contour', 'Kontur', 1], ['slopeLayer', 'Lereng', 1], ['hach', 'Arsiran', 1], ['v3d', '3D', 1], ['slopeTap', 'Info lereng', 1], ['prof', 'Profil', 1],
-      ['useNas', 'DEMNAS', 1], ['useFree', 'DEM gratis', 1], ['blkOn', 'Blok', 1, 1], ['rowOn', 'Arah row', 1], ['lakesOn', 'Danau', 1, 1], ['linesOn', 'Jalan', 1], ['batDesa', 'Desa', 1], ['play', 'Putar', 1],
+      ['useNas', 'DEMNAS', 1], ['useFree', 'DEM gratis', 1], ['blkOn', 'Blok', 1, 1], ['rowOn', 'Arah row', 1], ['wlOn', 'Water lock', 1], ['lakesOn', 'Danau & drainase', 1, 1], ['linesOn', 'Jalan bantu', 1], ['batDesa', 'Desa', 1], ['play', 'Putar', 1],
       ['draw', 'Buat baru'], ['fill', 'Isi blok'], ['measure', 'Ukur'], ['shift', 'Geser blok'], ['batCfg', 'Atur batas'], ['dataGo', 'Data peta']];
     function orderedTiles() {
       var saved = S.settings.tileOrder || [], byId = {}, out = [];
@@ -193,7 +194,7 @@
     })();
     function state(id) {
       return id === 'contour' ? !!S.settings.contour : id === 'slopeLayer' ? !!S.settings.slopeLayer : id === 'hach' ? !!S.settings.hach : id === 'slopeTap' ? !!m._slopeOn :
-        id === 'blkOn' ? S.settings.blkOn !== false : id === 'rowOn' ? !!S.settings.rowOn : id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'play' ? !!HA.PB.open : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'v3d' ? HA.V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : id === 'linesOn' ? S.settings.linesOn !== false : !!S.profOpen;
+        id === 'blkOn' ? S.settings.blkOn !== false : id === 'wlOn' ? !!(HA.wlOn && HA.wlOn()) : id === 'rowOn' ? !!S.settings.rowOn : id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'play' ? !!HA.PB.open : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'v3d' ? HA.V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : id === 'linesOn' ? S.settings.linesOn !== false : !!S.profOpen;
     }
     function sync() {
       var any = false;
@@ -249,7 +250,8 @@
       else if (id === 'useNas') setSource('nas', S.settings.useNas === false);
       else if (id === 'useFree') setSource('free', S.settings.useFree === false);
       else if (id === 'linesOn') { S.settings.linesOn = S.settings.linesOn === false; saveSettings(); if (HA.drawLines) HA.drawLines(); sync(); }
-      else if (id === 'lakesOn') { S.settings.lakesOn = S.settings.lakesOn === false; saveSettings(); applyLakes(); demRedraw(); }
+      else if (id === 'lakesOn') { S.settings.lakesOn = S.settings.lakesOn === false; saveSettings(); applyLakes(); demRedraw(); if (HA.drawLines) HA.drawLines(); if (HA.RC) HA.RC.dep = {}; if (HA.drawWL) HA.drawWL(); sync(); }
+      else if (id === 'wlOn') { S.settings.wlOn = !(HA.wlOn && HA.wlOn()); saveSettings(); if (HA.drawWL) HA.drawWL(true); sync(); }
       else if (id === 'slopeTap') {
         m._slopeOn = !m._slopeOn; if (m._pinClear) m._pinClear();
         toast(m._slopeOn ? 'Ketuk peta untuk info lereng' : 'Mode lereng mati');

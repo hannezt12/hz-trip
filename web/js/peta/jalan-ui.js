@@ -32,10 +32,13 @@
     if (!HA.map) return;
     if (layer) { HA.map.removeLayer(layer); layer = null; }
     if (!zbound) { zbound = true; HA.map.on('zoomend', function () { if (!HA.map._lineEd) drawLines(); }); }
-    if (S.settings.linesOn === false || !lines().length || HA.map._lineEd) return;
+    if (!lines().length || HA.map._lineEd || HA.map.getZoom() < 15) return;
+    var showRoad = S.settings.linesOn !== false, showDrain = S.settings.lakesOn !== false;
+    if (!showRoad && !showDrain) return;
     var g = L.layerGroup();
     lines().forEach(function (ln) {
       if (!ln.pts || ln.pts.length < 2) return;
+      if (ln.type === 'drain' ? !showDrain : !showRoad) return;
       L.polyline(ln.pts, { color: colorOf(ln), weight: wpx(+ln.w || 2), opacity: kontur() && ln.type === 'drain' ? .8 : .7, lineCap: 'butt', lineJoin: 'round', interactive: false }).addTo(g);
       // area ketuk lebar (sekitar satu jari), garis dipilih lebih dulu daripada blok di bawahnya
       var hit = L.polyline(ln.pts, { color: '#000', weight: Math.max(wpx(+ln.w || 2), 30), opacity: 0, lineCap: 'round', bubblingMouseEvents: false, interactive: true }).addTo(g);
