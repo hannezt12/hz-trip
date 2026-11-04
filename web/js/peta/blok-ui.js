@@ -35,7 +35,7 @@
   HA.BLK_COL = { none: '#9AA5AD', set: '#7FD8FF', conf: '#B79CFF' };
   HA.RC = { guide: {}, rows: {}, dep: {} };
   function blocksList() { return S.settings.blocks || (S.settings.blocks = []); }
-  function isScanBlk(b) { return b.src === 'scan' || (!b.src && /^Blok \d+$/.test(b.name || '') && !b.luasCat); }
+  function isScanBlk(b) { return !b.conf && (b.src === 'scan' || (!b.src && /^Blok \d+$/.test(b.name || '') && !b.luasCat)); }
   function delScanBlocks() {
     var n = blocksList().filter(isScanBlk).length;
     S.settings.blocks = blocksList().filter(function (b) { return !isScanBlk(b); });
@@ -558,6 +558,7 @@
     function dirStat(d) { try { var r = HzBlok.rowsStraight(b.pts, d, blkSp(b), +b.margin || 0, cutsFor(b)); return r.n.toLocaleString('id-ID') + ' lajur · ' + Math.round(r.avg) + ' m'; } catch (e) { return ''; } }
     openSheet('<div class="grab"></div><div class="bth"><div class="st">EDIT BLOK</div><button class="btn pri" id="beX">Selesai</button></div>' +
       '<div class="bnm"><input type="text" id="beN" maxlength="40" value="' + esc(b.name) + '"><label><input type="checkbox" id="beC"' + (b.conf ? ' checked' : '') + '> Terkonfirmasi</label></div>' +
+      '<div class="muted" id="beLk" style="display:none;margin-top:8px;color:#FFB020">Blok terkunci. Hilangkan centang Terkonfirmasi untuk mengedit.</div>' +
       '<div class="muted" style="margin-top:8px">Arah row (° dari utara, 0–179)</div>' +
       '<div class="row bedir"><button class="btn" data-d="-5">−5</button><button class="btn" data-d="-1">−1</button><input type="number" id="beD" min="0" max="359" step="1" value="' + (b.dir == null ? '' : Math.round(b.dir * 10) / 10) + '" placeholder="arah"><button class="btn" data-d="1">+1</button><button class="btn" data-d="5">+5</button><button class="btn sgb" id="beS"></button></div>' +
       '<div class="row" style="margin-top:6px;gap:6px"><button class="btn" id="beP" style="flex:1">Ketuk 2 titik</button><button class="btn" id="beB" style="flex:1">Edit batas</button></div>' +
@@ -578,13 +579,20 @@
     sgLabel();
     $('beJ').onchange = function () { var v = +$('beJ').value; b.sp = v >= 0.5 && v <= 5 ? Math.round(v * 100) / 100 : null; live(); };
     $('beM').onchange = function () { b.margin = Math.max(0, +$('beM').value || 0); live(); };
-    $('beC').onchange = function () { if ($('beC').checked && b.dir == null) { $('beC').checked = false; toast('Atur arah row dulu'); return; } b.conf = $('beC').checked; live(); };
+    function applyLock() {
+      var lk = !!b.conf;
+      ['beN', 'beD', 'beS', 'beP', 'beB', 'beJ', 'beM', 'beT', 'beD2'].forEach(function (id) { var e = $(id); if (e) e.disabled = lk; });
+      $('sheet').querySelectorAll('button[data-d]').forEach(function (x) { x.disabled = lk; });
+      $('beLk').style.display = lk ? '' : 'none';
+    }
+    $('beC').onchange = function () { if ($('beC').checked && b.dir == null) { $('beC').checked = false; toast('Atur arah row dulu'); return; } b.conf = $('beC').checked; live(); applyLock(); };
     $('beT').onchange = function () { b.note = $('beT').value.trim(); live(); };
     $('beP').onclick = function () { HA.onSheetClose = null; closeSheet(); needMap(b.pts, function () { tapDir(b); }); };
     $('beB').onclick = function () { HA.onSheetClose = null; closeSheet(); needMap(b.pts, function () { closeBlockPop(); editPoly(b.pts, true, function (res) { if (res) { b.pts = res; delete b._bb; saveSettings(); } drawBlocks(); drawRows(); openBlockPop(b); openBlockEdit(b); }); }); };
     $('beD2').onclick = function () { askConfirm('Hapus "' + b.name + '"?', 'Blok dihapus dari peta. Peta PDF tidak terpengaruh.', 'Hapus', function () { var i = blocksList().indexOf(b); if (i >= 0) blocksList().splice(i, 1); HzBlok.cache.del(bid(b)); saveSettings(); closeBlockPop(); closeSheet(); drawBlocks(); drawRows(); if (S.view === 'data') renderData(); }); };
     $('beX').onclick = function () { closeSheet(); if (S.view === 'data') renderData(); };
     HA.onSheetClose = function () { HA.DM.bpFold = false; applyFold(); };
+    applyLock();
     if (S.view === 'lintasan' && HA.map) { if (!HA.DM.pop) openBlockPop(b); else applyFold(); setTimeout(function () { fitBlockVisible(b, true); }, 80); }
   }
   // ---------- deteksi blok dari peta PDF ----------
@@ -635,9 +643,13 @@
       delTitle: function (ids) { return ids.length === 1 ? 'Hapus blok ini?' : 'Hapus ' + ids.length + ' blok?'; },
       delMsg: function () { return 'Blok dihapus dari peta. Peta PDF tidak terpengaruh.'; },
       onDelete: function (ids) {
+        var skip = ids.filter(function (i) { var bb = blockById(i); return bb && bb.conf; }).length;
+        ids = ids.filter(function (i) { var bb = blockById(i); return !(bb && bb.conf); });
+        if (skip) toast(skip + ' blok terkonfirmasi terkunci, tidak dihapus');
+        if (!ids.length) { renderData(); return; }
         var set = {}; ids.forEach(function (i) { set[i] = 1; });
         S.settings.blocks = blocksList().filter(function (b) { if (set[String(b.id)]) { HzBlok.cache.del(bid(b)); return false; } return true; });
-        saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); toast(ids.length + ' blok dihapus'); renderData();
+        saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); if (!skip) toast(ids.length + ' blok dihapus'); renderData();
       }
     });
     if ($('shUn')) $('shUn').onclick = function () { askConfirm('Urungkan geser?', 'Posisi blok yang tadi digeser dikembalikan seperti sebelum digeser. Perubahan bentuk setelahnya pada blok yang sama ikut hilang.', 'Urungkan', function () { HA.shiftUndo(); renderData(); }); };
