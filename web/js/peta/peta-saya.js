@@ -54,7 +54,7 @@
     if (!m || !window.HzOverlay) return;
     (m._ovl || []).forEach(function (l) { try { m.removeLayer(l); } catch (e) {} });
     m._ovl = [];
-    if (S.settings.mapMode !== 'osm') return; // lapisan PDF hanya di mode Peta, tidak di Satelit
+    if (S.settings.mapMode !== 'osm' && !m._forceOvl) return; // lapisan PDF hanya di mode Peta, kecuali mode marking
     ovList().forEach(function (o) {
       if (!o.on || !o.cal) return;
       var af = HzOverlay.affOf(o);
@@ -62,7 +62,8 @@
       m._ovl.push(HzOverlay.makeLayer(o, { toLL: HzOverlay.toLLFn(af), opacity: S.settings.ovlOp == null ? 0.8 : S.settings.ovlOp }).addTo(m));
     });
   }
-  function syncAllOverlays() { syncOverlays(HA.map); syncOverlays(HA.mini); }
+  function syncAllOverlays() { syncOverlays(HA.map); syncOverlays(HA.mini); if (HA.SP && HA.SP.map && HA.SP.map._forceOvl) syncOverlays(HA.SP.map); }
+  HA.syncOverlays = syncOverlays;
   function setOvOpacity(v) {
     S.settings.ovlOp = v;
     [HA.map, HA.mini].forEach(function (m) { if (m && m._ovl) m._ovl.forEach(function (l) { l.setOpacity(v); }); });

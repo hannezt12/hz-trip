@@ -25,6 +25,7 @@
   function openOvSheet() { return HA.openOvSheet.apply(this, arguments); }
   // fungsi untuk modul lain
   HA.spShow = spShow;
+  HA.spBtns = spBtns;
   HA.spResetMain = spResetMain;
   HA.spOnFix = spOnFix;
   HA.spSetActive = spSetActive;

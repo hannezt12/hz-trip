@@ -48,8 +48,11 @@
           <div id="spNote"></div>
           <button class="locbtn" id="spToMain" aria-label="Ke Spidometer"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 18a9 9 0 1 1 17 0"/><path d="M12 17l4.2-5.6"/><circle cx="12" cy="17" r="1.3"/><path d="M5.6 12.4l1.2.7M12 7.2v1.4M18.4 12.4l-1.2.7"/></svg></button>
           <button class="locbtn" id="spBat" aria-label="Batas wilayah"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l5-3 6 3 5-2v12l-5 2-6-3-5 3z"/><path d="M9 4v13M15 7v13"/></svg></button>
+          <button class="locbtn" id="spTanda" aria-label="Marking"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10" r="2.3"/></svg></button>
+          <div id="tdHud"></div>
           <button class="locbtn" id="spLoc" aria-label="Posisi saya"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg></button>
         </div>
+        <div id="tdBar" style="display:none"></div>
         <div id="spBar"><button class="btn sm on" id="spFol">Ikuti: ya</button><button class="btn sm on" id="spZoom">Zoom otomatis: ya</button><button class="btn sm" id="spAwake">Layar menyala: tidak</button></div>
               </div>
       </div>
@@ -238,7 +241,7 @@
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
   <a data-go="data">Data peta</a>
-  <div class="ver">by Yohanes div2<br>Versi 0.12.2</div>
+  <div class="ver">by Yohanes div2<br>Versi 0.13.0</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
@@ -272,6 +275,7 @@
 <script src="js/peta/bentuk-ui.js"></script>
 <script src="js/peta/peta-saya.js"></script>
 <script src="js/layar/spidomap.js"></script>
+<script src="js/layar/tanda.js"></script>
 <script src="js/inti/app.js"></script>
 </body>
 </html>
