@@ -142,7 +142,7 @@
 
   // ---------- cetak (drawer > Cetak > Master) ----------
   function ribu(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
-  var PS = { sel: null, fmt: 'pdf', map: true, list: false };
+  var PS = { sel: null, fmt: 'pdf', map: true, list: false, luas: (function () { try { return localStorage.getItem('hz_pmluas') !== '0'; } catch (e) { return true; } })() };
   function printPanel() {
     var ms = masters(); ms.forEach(function (m, i) { if (m.id == null) m.id = Date.now() + i; });
     if (!mById(PS.sel)) PS.sel = ms.length ? ms[0].id : null;
@@ -154,7 +154,7 @@
         return '<label><input type="radio" name="pmSel" value="' + esc(String(x.id)) + '"' + (String(x.id) === String(PS.sel) ? ' checked' : '') + '> ' + esc(x.name) + ' <span class="muted">· ' + n + ' blok · ' + fmtHa(haOf(mm.in.concat(mm.man))) + ' ha' + (mm.pend.length ? ' · ' + mm.pend.length + ' perlu diatur' : '') + '</span></label>';
       }).join('') +
         '<div class="h">FORMAT (pilih satu)</div><div class="seg" id="pmFmt"><button data-f="pdf"' + (PS.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-f="kml"' + (PS.fmt === 'kml' ? ' class="on"' : '') + '>KML</button></div>' +
-        (PS.fmt === 'pdf' ? '<div class="h">ISI PDF</div><label><input type="checkbox" id="pmMap"' + (PS.map ? ' checked' : '') + '> Peta (satu lembar, ber-geo)</label><label><input type="checkbox" id="pmList"' + (PS.list ? ' checked' : '') + '> Daftar blok lengkap</label>'
+        (PS.fmt === 'pdf' ? '<div class="h">ISI PDF</div><label><input type="checkbox" id="pmMap"' + (PS.map ? ' checked' : '') + '> Peta (satu lembar, ber-geo)</label><label><input type="checkbox" id="pmLuas"' + (PS.luas ? ' checked' : '') + '> Tampilkan luas di peta</label><label><input type="checkbox" id="pmList"' + (PS.list ? ' checked' : '') + '> Daftar blok lengkap</label>'
           : '<div class="muted" style="margin-top:6px">KML berisi bentuk dan posisi blok serta batas master, tanpa luasan.</div>') +
         '</div>' +
         '<div class="muted" id="pmInfo" style="margin-top:8px">' + (mem ? (mem.in.length + mem.man.length) + ' blok akan dicetak' + (mem.pend.length ? ' · ' + mem.pend.length + ' blok perbatasan belum diputuskan' : '') : '') + '</div>' +
@@ -167,11 +167,12 @@
     if (!ms.length) return;
     $('sheet').querySelectorAll('input[name=pmSel]').forEach(function (r) { r.onchange = function () { PS.sel = r.value; printPanel(); }; });
     $('pmFmt').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-f]'); if (b) { PS.fmt = b.getAttribute('data-f'); printPanel(); } };
+    if ($('pmLuas')) $('pmLuas').onchange = function () { PS.luas = this.checked; try { localStorage.setItem('hz_pmluas', this.checked ? '1' : '0'); } catch (e) {} };
     if ($('pmMap')) { $('pmMap').onchange = function () { PS.map = this.checked; }; $('pmList').onchange = function () { PS.list = this.checked; }; }
     $('pmAtur').onclick = function () { aturSheet(m, printPanel); };
     $('pmGo').onclick = function () {
       if (PS.fmt === 'pdf' && !PS.map && !PS.list) { toast('Centang minimal Peta atau Daftar blok'); return; }
-      cetak(m, PS.fmt, { map: PS.map, list: PS.list });
+      cetak(m, PS.fmt, { map: PS.map, list: PS.list, luas: PS.luas });
     };
   }
   HA.openPrintMaster = printPanel;
@@ -219,6 +220,33 @@
     var best = null; for (i = 0; i + 1 < xs.length; i += 2) if (!best || xs[i + 1] - xs[i] > best[1] - best[0]) best = [xs[i], xs[i + 1]];
     return best ? [c[0], (best[0] + best[1]) / 2] : c;
   }
+  // titik paling jauh dari semua tepi (pole of inaccessibility), koordinat meter lokal
+  function poi(pts, kx, ky) {
+    var P = pts.map(function (p) { return [p[1] * kx, p[0] * ky]; }), n = P.length, i, j;
+    function dist(x, y) {
+      var ins = false, md = 1e18;
+      for (i = 0, j = n - 1; i < n; j = i++) {
+        var a = P[i], b = P[j];
+        if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) ins = !ins;
+        var dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy, t = l2 ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l2)) : 0, ex = a[0] + t * dx - x, ey = a[1] + t * dy - y, d = ex * ex + ey * ey;
+        if (d < md) md = d;
+      }
+      return (ins ? 1 : -1) * Math.sqrt(md);
+    }
+    var x0 = 1e18, y0 = 1e18, x1 = -1e18, y1 = -1e18; P.forEach(function (q) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); });
+    var w = x1 - x0, h = y1 - y0, cs = Math.min(w, h) / 2 || 1, best = null, q = [], k, c;
+    function mk(x, y, hh) { var d = dist(x, y); return { x: x, y: y, h: hh, d: d, mx: d + hh * 1.4142 }; }
+    for (var xx = x0; xx < x1; xx += cs) for (var yy = y0; yy < y1; yy += cs) q.push(mk(xx + cs / 2, yy + cs / 2, cs / 2));
+    best = mk((x0 + x1) / 2, (y0 + y1) / 2, 0); q.forEach(function (o) { if (o.d > best.d) best = o; });
+    var guard = 0;
+    while (q.length && guard++ < 4000) {
+      q.sort(function (a, b) { return b.mx - a.mx; }); c = q.shift();
+      if (c.d > best.d) best = c;
+      if (c.mx - best.d <= 0.5) continue;
+      var hh = c.h / 2; for (k = 0; k < 4; k++) q.push(mk(c.x + (k & 1 ? hh : -hh), c.y + (k & 2 ? hh : -hh), hh));
+    }
+    return [best.y / ky, best.x / kx];
+  }
   function buildPdfBytes(m, list, lj, mem, opts) {
     opts = opts || { map: true, list: true }; lj = lj || {};
     var objs = [], ver = (document.querySelector('.ver') ? (document.querySelector('.ver').textContent.match(/Versi\s*([\d.]+)/) || [])[1] : '') || '';
@@ -243,16 +271,16 @@
         var s = ''; b.pts.forEach(function (p, i) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); });
         c.push(s + 'h S');
         var q = bbox(b.pts), bw = (q[3] - q[1]) * kx * sc, bh = (q[2] - q[0]) * ky * sc, nm = asc(b.name);
-        infos.push({ b: b, nm: nm, ar: fmtHa(HzBlok.areaHa(b.pts)) + ' ha', fit: Math.min(bw * 0.84 / (Math.max(3, nm.length) * 0.56), bh * 0.42), x0: X(q[1]), x1: X(q[3]), y0: Y(q[0]), y1: Y(q[2]) });
+        infos.push({ b: b, nm: nm, ar: fmtHa(HzBlok.areaHa(b.pts)) + ' ha', fit: Math.min(bw * 0.84 / (Math.max(3, nm.length) * 0.56), bh * (opts.luas === false ? 0.7 : 0.42)), x0: X(q[1]), x1: X(q[3]), y0: Y(q[0]), y1: Y(q[2]) });
       });
-      var s0 = ''; m.pts.forEach(function (p, i) { s0 += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); });
-      c.push('1.4 w [7 4] 0 d ' + s0 + 'h S [] 0 d 0.6 w');
       // ukuran teks seragam: dipilih agar sebagian besar blok muat; blok yang tidak muat tetap berlabel (boleh menyeberang)
-      var fits = infos.map(function (o) { return o.fit; }).sort(function (p, q) { return p - q; }), fsU = Math.max(3, Math.min(9, fits[Math.floor(fits.length * 0.25)] || 6)), fa = fsU * 0.82;
+      var fits = infos.map(function (o) { return o.fit; }).sort(function (p, q) { return p - q; }), fsU = Math.max(3, Math.min(9, fits[Math.floor(fits.length * 0.25)] || 6));
       infos.forEach(function (o) {
-        var ip = interior(o.b.pts), cx = X(ip[1]), cy = Y(ip[0]), w1 = o.nm.length * fsU * 0.55, w2 = o.ar.length * fa * 0.5;
-        c.push('BT /F2 ' + f2(fsU) + ' Tf ' + f2(cx - w1 / 2) + ' ' + f2(cy + fsU * 0.15) + ' Td (' + pe(o.nm) + ') Tj ET');
-        c.push('BT /F1 ' + f2(fa) + ' Tf ' + f2(cx - w2 / 2) + ' ' + f2(cy - fa * 1.05) + ' Td (' + pe(o.ar) + ') Tj ET');
+        var ip = poi(o.b.pts, kx, ky), cx = X(ip[1]), cy = Y(ip[0]), w1 = o.nm.length * fsU * 0.52, w2 = o.ar.length * fsU * 0.52;
+        if (opts.luas !== false) {
+          c.push('BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - w1 / 2) + ' ' + f2(cy + fsU * 0.25) + ' Td (' + pe(o.nm) + ') Tj ET');
+          c.push('BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - w2 / 2) + ' ' + f2(cy - fsU * 0.9) + ' Td (' + pe(o.ar) + ') Tj ET');
+        } else c.push('BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - w1 / 2) + ' ' + f2(cy - fsU * 0.35) + ' Td (' + pe(o.nm) + ') Tj ET');
       });
       // skala dan panah utara
       var L0 = [100, 200, 500, 1000, 2000, 5000].filter(function (v) { return v * sc < fw * 0.25; }).pop() || 100, bx = PW / 2 - L0 * sc / 2, by = M + 16;
