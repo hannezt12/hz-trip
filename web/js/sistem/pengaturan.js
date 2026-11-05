@@ -217,7 +217,8 @@
     var tripTxt = '';
     if (o.tripId) { var x = S.hTrips.filter(function (y) { return y.t.id === o.tripId; })[0]; if (x) tripTxt = ' <span class="muted">· ' + T.hm(x.t.start) + ' – ' + T.hm(x.t.end) + '</span>'; }
     var today = T.ymd(Date.now());
-    openSheet('<div class="grab"></div><div class="st">CETAK LAPORAN</div><div class="plist">' +
+    openSheet('<div class="grab"></div><div class="st">CETAK LAPORAN</div>' +
+      (o.tripId || !HA.openPrintMaster ? '' : '<div class="seg" id="pmMode" style="margin:6px 0 10px"><button data-m="trip" class="on">Trip</button><button data-m="master">Master</button></div>') + '<div class="plist">' +
       '<div class="h">CAKUPAN</div>' +
       (o.tripId ? '<label><input type="radio" name="pscope" value="trip" checked> Satu trip' + tripTxt + '</label>' : '') +
       '<label><input type="radio" name="pscope" value="hari"' + (o.tripId ? '' : ' checked') + '> Satu hari</label>' +
@@ -236,6 +237,7 @@
       '<div class="row" style="margin-top:10px"><button class="btn pri" id="pPdf" style="flex:1.3;height:52px">PDF</button><button class="btn" id="pKml" style="flex:1;height:52px">KML</button></div>' +
       '<button class="btn" id="pClose" style="width:100%;margin-top:8px">Tutup</button>');
     $('pClose').onclick = closeSheet;
+    if ($('pmMode')) $('pmMode').onclick = function (e) { var bt = e.target.closest && e.target.closest('button[data-m]'); if (bt && bt.getAttribute('data-m') === 'master') { closeSheet(); HA.openPrintMaster(); } };
     $('pKc').onchange = function () { S.settings.kmlContour = this.checked; saveSettings(); };
     $('sheet').onchange = onPrintChange;
     $('pPdf').onclick = function () { runExport('pdf'); };

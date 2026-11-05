@@ -192,7 +192,20 @@
     return Math.max(1, Math.ceil(4 / (sp / mpp)));
   }
   function kDens() { var d = +S.settings.kDens; return d === 1 || d === 3 ? d : 2; }
+  // nomor lajur 1,2,3,... (dari lajur pertama), dari kunci lajur hasil hitungan
+  function laneNums(res) {
+    if (!res.lk || res.lk.length !== res.lines.length) return null;
+    var mn = Infinity, i; for (i = 0; i < res.lk.length; i++) if (res.lk[i] < mn) mn = res.lk[i];
+    return res.lk.map(function (v) { return v - mn + 1; });
+  }
+  // mode Datar menurut zoom: zoom 17 tiap 20 lajur, zoom 18 tiap 10 lajur, zoom 19+ semua lajur
+  function datarStep() { var z = HA.map.getZoom(); return z >= 19 ? 1 : z >= 18 ? 10 : 20; }
   function shownLines(b, res, mode) {
+    if (mode === 'datar') {
+      var kd = datarStep(); if (kd <= 1) return res.lines;
+      var nums = laneNums(res);
+      return res.lines.filter(function (_, i) { return (nums ? nums[i] : i + 1) % kd === 0; });
+    }
     var k = thinStep(blkSp(b)) * (mode === 'kontur' ? kDens() : 1);
     if (k <= 1) return res.lines;
     // ditipiskan menurut nomor lajur (bukan urutan di daftar), supaya semua lengan blok C/U ditipiskan sama rata
@@ -253,7 +266,13 @@
     var ls = null;
     if (res && res.lines.length) {
       ls = shownLines(b, res, mode);
-      L.polyline(ls, { color: '#FFFFFF', weight: 0.8, opacity: 0.9, interactive: false, smoothFactor: 0.5 }).addTo(g);
+      var nums19 = mode === 'datar' && HA.map.getZoom() >= 19 ? laneNums(res) : null;
+      if (nums19) {
+        // zoom 19: semua lajur; kelipatan 10 kuning, kelipatan 50 merah muda supaya mudah dihitung
+        var gA = [], gT = [], gF = [];
+        res.lines.forEach(function (l, i) { var n = nums19[i]; (n % 50 === 0 ? gF : n % 10 === 0 ? gT : gA).push(l); });
+        [[gA, '#FFFFFF', 0.8, 0.9], [gT, '#FFE04D', 1.4, 1], [gF, '#FF4D6D', 2, 1]].forEach(function (x) { if (x[0].length) L.polyline(x[0], { color: x[1], weight: x[2], opacity: x[3], interactive: false, smoothFactor: 0.5 }).addTo(g); });
+      } else L.polyline(ls, { color: '#FFFFFF', weight: 0.8, opacity: 0.9, interactive: false, smoothFactor: 0.5 }).addTo(g);
     }
     if (dep && mode === 'kontur') {
       if (ls && dep.flow) drawArrows(g, ls, dep.flow);
@@ -342,8 +361,8 @@
     if (HA.DM.rowLayer) { HA.map.removeLayer(HA.DM.rowLayer); HA.DM.rowLayer = null; }
     HA.DM.rowSeq = (HA.DM.rowSeq || 0) + 1;
     if (!S.settings.rowOn || S.settings.blkOn === false || !blocksList().length || HA.DM.edit) return;
-    var zmin = (S.settings.rowMode || 'datar') === 'kontur' ? 17 : 16;
-    if (HA.map.getZoom() < zmin) { if (hint) toast('Perbesar peta ke zoom ' + zmin + ' untuk melihat ' + (zmin === 17 ? 'kontur' : 'row')); return; }
+    var zmin = 17;
+    if (HA.map.getZoom() < zmin) { if (hint) toast('Perbesar peta ke zoom ' + zmin + ' untuk melihat ' + ((S.settings.rowMode || 'datar') === 'kontur' ? 'kontur' : 'row')); return; }
     var mode = S.settings.rowMode || 'datar', id = HA.DM.rowSeq, bd = HA.map.getBounds(), cc = HA.map.getCenter(), g = L.layerGroup().addTo(HA.map), vis, i = 0, miss = 0, need = [];
     HA.DM.rowLayer = g;
     vis = blocksList().filter(function (b) { return bbHit(b, bd) && (mode === 'kontur' || b.dir != null); });
