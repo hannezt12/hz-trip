@@ -241,6 +241,9 @@
       var v = e.target.getAttribute && e.target.getAttribute('data-sn'); if (!v) return;
       S.settings.satNative = +v; saveSettings(); renderSatNat(); setTiles(); if (HA.SP.map) setBase(HA.SP.map, 'sat');
     };
+    function bufRender() { var v = +S.settings.tdBuf || 15; document.querySelectorAll('#bufSeg button').forEach(function (b) { b.classList.toggle('on', +b.getAttribute('data-b') === v); }); }
+    bufRender();
+    $('bufSeg').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-b]'); if (!b) return; S.settings.tdBuf = +b.getAttribute('data-b'); saveSettings(); bufRender(); };
     $('tcClear').onclick = function () { askConfirm('Bersihkan cache peta?', 'Peta yang tersimpan dihapus. Peta akan diunduh lagi saat Anda melihatnya dengan internet.', 'Bersihkan', function () { HA.TC.clear().then(function () { renderCacheInfo(); toast('Cache peta dibersihkan'); }); }); };
     $('radiusSel').onchange = function () { S.settings.radius = +this.value; saveSettings(); pushSchedule(); };
     $('driverIn').onchange = function () { S.settings.driver = this.value.trim(); saveSettings(); };

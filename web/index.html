@@ -164,6 +164,8 @@
       <div class="h">DETAIL SATELIT</div>
       <div class="card"><div class="muted">Zoom terdalam yang punya foto asli di areamu. Di atas angka ini foto hanya diperbesar (buram), tapi peta tetap bisa di-zoom lebih dekat tanpa tulisan "data not yet available". Kalau foto masih tajam, naikkan; kalau muncul tulisan itu, turunkan.</div>
         <div class="opts" id="satNat" style="margin-top:8px"></div></div>
+        <div class="card"><b>Sekeliling blok (marking dan cetak)</b><div class="muted" style="margin-top:2px">Jarak satelit yang ditampilkan di luar batas blok. KML selalu persis di blok.</div>
+        <div class="seg" id="bufSeg" style="margin-top:8px"><button data-b="10">10 m</button><button data-b="15">15 m</button><button data-b="20">20 m</button></div></div>
 
       <div class="h">CACHE PETA</div>
       <div class="card"><div class="muted" id="tcInfo">Menghitung…</div>
@@ -241,7 +243,7 @@
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
   <a data-go="data">Data peta</a>
-  <div class="ver">by Yohanes div2<br>Versi 0.13.0</div>
+  <div class="ver">by Yohanes div2<br>Versi 0.14.0</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
@@ -276,6 +278,7 @@
 <script src="js/peta/peta-saya.js"></script>
 <script src="js/layar/spidomap.js"></script>
 <script src="js/layar/tanda.js"></script>
+<script src="js/layar/blok-tanda.js"></script>
 <script src="js/inti/app.js"></script>
 </body>
 </html>

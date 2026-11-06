@@ -12,11 +12,33 @@
   function askConfirm() { return HA.askConfirm.apply(this, arguments); }
   function saveFile() { return HA.saveFile.apply(this, arguments); }
   function textB64() { return HA.textB64.apply(this, arguments); }
-  HA.tandaInit = init;
+  HA.tandaFree = function () { modeOn(); }; HA.tandaBrush = function () { return brush(); }; HA.tandaSave = function () { save(); }; HA.tandaClick = function (ev) { onMapClick(ev); }; HA.tandaEdCancel = function () { edCancel(); }; HA.tandaDraw = function () { drawAll(); }; HA.tandaUndo = undoLast; HA.tandaColor = colorSheet; HA.tandaList = function (o) { listSheet(o); }; HA.tandaHud = function (t) { hud(t); }; HA.tandaNewId = function () { return newId(); }; HA.tandaAdd = function (it) { addItem(it); save(); }; HA.tandaInit = init;
   HA.pdfPreview = pdfPreview;
 
   var KEY = 'hz_tanda', KEYW = 'hz_tanda_wk';
-  var PAL = [['Merah', '#E5484D'], ['Oranye', '#F76B15'], ['Kuning', '#FFC53D'], ['Hijau', '#30A46C'], ['Biru', '#0090FF'], ['Ungu', '#8E4EC6'], ['Cokelat', '#A18072'], ['Abu-abu', '#8B8D98']];
+  var PAL = [['Oranye', '#FF6A00'], ['Merah', '#E5484D'], ['Magenta', '#E635B0'], ['Kuning', '#FFD60A'], ['Cyan', '#00C2D1'], ['Biru', '#2F6BFF'], ['Putih', '#FFFFFF'], ['Hitam', '#111111']];
+  function colorName(h) { var r = 'Warna lain'; PAL.forEach(function (c) { if (c[1].toLowerCase() === String(h).toLowerCase()) r = c[0]; }); return r; }
+  function ic(p, fill) { return '<svg width="24" height="24" viewBox="0 0 24 24" fill="' + (fill ? 'currentColor' : 'none') + '" stroke="' + (fill ? 'none' : 'currentColor') + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; }
+  var IC = {
+    pin: ic('<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10" r="2.3"/>'),
+    line: ic('<path d="M4 18l5-9 5 6 6-10"/><circle cx="4" cy="18" r="1.5"/><circle cx="9" cy="9" r="1.5"/><circle cx="14" cy="15" r="1.5"/><circle cx="20" cy="5" r="1.5"/>'),
+    poly: ic('<path d="M5 7l9-3 5 8-4 8H6z"/><circle cx="5" cy="7" r="1.4"/><circle cx="14" cy="4" r="1.4"/><circle cx="19" cy="12" r="1.4"/><circle cx="15" cy="20" r="1.4"/><circle cx="6" cy="20" r="1.4"/>'),
+    block: ic('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/>'),
+    walk: ic('<path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/>', true),
+    list: ic('<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>'),
+    undo: ic('<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>'),
+    loc: ic('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/>'),
+    print: ic('<path d="M7 9V3h10v6"/><path d="M7 17H5a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2"/><rect x="7" y="14" width="10" height="7"/>'),
+    layers: ic('<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>'),
+    down: ic('<path d="M7 18a4 4 0 0 1-.5-8 6 6 0 0 1 11.5 1.5A3.5 3.5 0 0 1 17.5 18"/><path d="M12 11v8M9 16l3 3 3-3"/>'),
+    back: ic('<path d="M15 5l-7 7 7 7"/>'),
+    next: ic('<path d="M9 5l7 7-7 7"/>'),
+    prev: ic('<path d="M15 5l-7 7 7 7"/>'),
+    close: ic('<path d="M6 6l12 12M18 6L6 18"/>'),
+    share: ic('<circle cx="6" cy="12" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 11l8-4M8 13l8 4"/>')
+  };
+  function tb(id, icon, label, on, extra) { return '<button class="tbtn' + (on ? ' on' : '') + '" ' + (id ? 'id="' + id + '" ' : '') + (extra || '') + '>' + icon + '<span>' + label + '</span></button>'; }
+  HA.IC = IC; HA.tb = tb;
   var TD = { on: false, tool: null, D: null, lay: null, ed: null, wk: null, bound: false, prevFollow: null, hud: null, sel: null };
 
   // ---------- penyimpanan terpisah ----------
@@ -27,6 +49,7 @@
     if (!d || !Array.isArray(d.items)) d = { v: 1, cats: defCats(), items: [], brush: { cat: 'c1', col: null }, seq: 1 };
     if (!Array.isArray(d.cats)) d.cats = defCats();
     if (!d.brush) d.brush = { cat: null, col: PAL[0][1] };
+    if (d.brush.cat) { var bc = null; d.cats.forEach(function (c) { if (c.id === d.brush.cat) bc = c; }); d.brush = { cat: null, col: bc ? bc.col : PAL[0][1] }; }
     TD.D = d; return d;
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(TD.D)); } catch (e) { toast('Gagal menyimpan marking'); } }
@@ -35,7 +58,15 @@
   function brush() {
     var b = data().brush, c = b.cat ? catOf(b.cat) : null;
     if (c) return { cat: c.id, col: null, color: c.col, name: c.name };
-    return { cat: null, col: b.col || PAL[0][1], color: b.col || PAL[0][1], name: 'Tanpa kategori' };
+    var cl = b.col || PAL[0][1];
+    return { cat: null, col: cl, color: cl, name: colorName(cl) };
+  }
+  function addItem(it) { data().items.push(it); TD.hist = TD.hist || []; TD.hist.push(it.id); if (TD.hist.length > 50) TD.hist.shift(); return it; }
+  function undoLast() {
+    var d = data(), id = TD.hist && TD.hist.pop(); if (!id) { toast('Tidak ada yang diurungkan'); return; }
+    var n = d.items.length; d.items = d.items.filter(function (x) { return x.id !== id; });
+    if (d.items.length === n) { undoLast(); return; }
+    save(); drawAll(); if (HA.BT) HA.BT.refresh(); toast('Tanda terakhir dibatalkan');
   }
   function newId() { var d = data(); d.seq = (d.seq || 1) + 1; return 't' + Date.now().toString(36) + d.seq; }
 
@@ -114,8 +145,9 @@
   }
 
   // ---------- peta: lapisan tanda ----------
-  function map() { return HA.SP && HA.SP.map; }
-  function ensureLay() { if (!TD.lay && map()) TD.lay = L.layerGroup().addTo(map()); return TD.lay; }
+  function map() { return TD.bm || (HA.SP && HA.SP.map); }
+  function bar() { return $(TD.blk ? 'blBar' : 'tdBar'); }
+  function ensureLay() { if (TD.lay && TD.layMap !== map()) { try { TD.lay.remove(); } catch (e) {} TD.lay = null; } if (!TD.lay && map()) { TD.lay = L.layerGroup().addTo(map()); TD.layMap = map(); } return TD.lay; }
   function drawAll() {
     var m = map(); if (!m || !TD.on) return;
     ensureLay().clearLayers();
@@ -129,6 +161,7 @@
       l.on('click', function (ev) { if (TD.tool || TD.ed || TD.wk) { return; } L.DomEvent.stopPropagation(ev); itemSheet(it); });
       l.addTo(TD.lay);
     });
+    if (HA.BT && TD.blk) HA.BT.refresh();
   }
   function fitItem(it) { var m = map(); if (!m) return; if (it.t === 'pt') m.setView(it.pts[0], Math.max(m.getZoom(), 18), { animate: false }); else m.fitBounds(L.latLngBounds(it.pts), { padding: [40, 40], maxZoom: 19, animate: false }); }
 
@@ -140,7 +173,7 @@
   }
   function modeOn() {
     if (!HA.spShow) return;
-    TD.on = true; data();
+    TD.on = true; TD.blk = null; TD.bm = null; data();
     HA.spShow('map');
     var m = map();
     if (!m) { setTimeout(modeOn, 300); return; }
@@ -166,20 +199,22 @@
     HA.SP.autoPaused = false;
     if (HA.spBtns) HA.spBtns();
   }
-  function hud(t) { var h = $('tdHud'); if (!h) return; h.textContent = t || ''; h.style.display = t ? 'block' : 'none'; }
+  function hud(t) { var h = $(TD.blk ? 'blHud' : 'tdHud'); if (!h) return; h.textContent = t || ''; h.style.display = t ? 'block' : 'none'; }
 
   // ---------- bilah bawah ----------
-  var TOOLS = [['pt', 'Titik'], ['ln', 'Garis'], ['pg', 'Area'], ['bl', 'Blok'], ['wk', 'Walking']];
+  var TOOLS = [['pt', 'pin', 'Titik'], ['ln', 'line', 'Garis'], ['pg', 'poly', 'Area'], ['bl', 'block', 'Blok'], ['wk', 'walk', 'Walking']];
   function barMain() {
+    if (TD.blk && TD.barBlock) { TD.barBlock(); return; }
     var b = brush();
-    $('tdBar').innerHTML = '<div class="tdr">' + TOOLS.map(function (t) { return '<button class="btn sm' + (TD.tool === t[0] ? ' on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
-      '<div class="tdr"><button class="btn sm tdbr" id="tdBr"><i style="background:' + b.color + '"></i>' + esc(b.name) + '</button><button class="btn sm" id="tdLs">Daftar</button><button class="btn sm" id="tdXm">Tutup</button></div>';
-    $('tdBar').querySelectorAll('[data-t]').forEach(function (e) { e.onclick = function () { pickTool(e.getAttribute('data-t')); }; });
-    $('tdBr').onclick = function () { catSheet(function (v) { var d = data(); d.brush = v.cat ? { cat: v.cat, col: null } : { cat: null, col: v.col }; save(); barMain(); }); };
-    $('tdLs').onclick = listSheet;
+    bar().innerHTML = '<div class="tdr">' + TOOLS.map(function (t) { return tb(null, IC[t[1]], t[2], TD.tool === t[0], 'data-t="' + t[0] + '"'); }).join('') + '</div>' +
+      '<div class="tdr">' + tb('tdBr', '<i class="cdot" style="background:' + b.color + '"></i>', b.name) + tb('tdLs', IC.list, 'Daftar') + tb('tdXm', IC.close, 'Tutup') + '</div>';
+    bar().querySelectorAll('[data-t]').forEach(function (e) { e.onclick = function () { pickTool(e.getAttribute('data-t')); }; });
+    $('tdBr').onclick = function () { colorSheet(function (v) { var d = data(); d.brush = { cat: null, col: v.col }; save(); barMain(); }); };
+    $('tdLs').onclick = function () { listSheet(); };
     $('tdXm').onclick = modeOff;
     if (TD.tool === 'pt') hud('Ketuk peta untuk menaruh titik'); else if (TD.tool === 'bl') hud('Ketuk di dalam blok untuk mewarnai utuh');
   }
+  HA.tandaBar = barMain;
   function pickTool(t) {
     if (TD.ed) edCancel();
     if (t === 'wk') { TD.tool = null; wkStart(); return; }
@@ -187,6 +222,7 @@
     if (TD.tool === 'ln' || TD.tool === 'pg') { edStart(TD.tool, null); return; }
     barMain(); if (!TD.tool) hud('');
   }
+  HA.tandaPick = pickTool;
 
   // ---------- gambar dan edit bentuk (titik sudut bisa digeser, ditambah, dihapus) ----------
   function vIcon(mid) { return L.divIcon({ className: 'tdv', html: '<i class="' + (mid ? 'mid' : '') + '"></i>', iconSize: mid ? [18, 18] : [28, 28], iconAnchor: mid ? [9, 9] : [14, 14] }); }
@@ -227,10 +263,12 @@
   }
   function edBar() {
     var e = TD.ed;
-    $('tdBar').innerHTML = '<div class="tdr"><button class="btn sm" id="tdUr">Urung</button><button class="btn sm pri" id="tdOk">Selesai</button><button class="btn sm" id="tdBt">Batal</button></div>';
+    bar().innerHTML = '<div class="tdr">' + tb('tdUr', IC.undo, 'Urung') + tb('tdOk', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>', 'Selesai', true) + tb('tdBt', IC.close, 'Batal') + '</div>' +
+      '<div class="tdr"><button class="tbtn wide" id="tdCl"><i class="cdot" style="background:' + (e.item ? colOf(e.item) : brush().color) + '"></i><span>Warna: ' + esc(e.item ? colorName(colOf(e.item)) : brush().name) + '</span></button></div>';
     $('tdUr').onclick = function () { if (e.pts.length) { e.pts.pop(); edRender(); } };
     $('tdBt').onclick = function () { edCancel(); TD.tool = null; barMain(); };
     $('tdOk').onclick = edDone;
+    $('tdCl').onclick = function () { colorSheet(function (v) { if (e.item) { e.item.cat = null; e.item.col = v.col; } else { var d = data(); d.brush = { cat: null, col: v.col }; } save(); edShape(); edBar(); }); };
   }
   function edCancel() {
     var e = TD.ed, m = map(); if (!e) return;
@@ -244,7 +282,7 @@
     if (e.item) { e.item.pts = e.pts; e.item.t = e.kind; if (e.item.full) { e.item.full = false; e.item.bid = null; } msg = 'Bentuk diperbarui'; }
     else {
       var b = brush(), it = { id: newId(), t: e.kind, pts: e.pts, cat: b.cat, col: b.col, name: '', note: '', ts: Date.now() };
-      d.items.push(it); e.item = it; msg = (e.kind === 'ln' ? 'Garis ' : 'Area ') + 'tersimpan';
+      addItem(it); e.item = it; msg = (e.kind === 'ln' ? 'Garis ' : 'Area ') + 'tersimpan';
     }
     var it2 = e.item, st = statOf(it2);
     save(); TD.ed = null; hud(''); edCleanup(e); drawAll();
@@ -258,10 +296,11 @@
   function onMapClick(ev) {
     if (!TD.on) return;
     var ll = [ev.latlng.lat, ev.latlng.lng];
+    if (TD.blk && TD.tool !== 'mv' && HA.BT && !HA.BT.inside(ll)) { toast('Ketuk di dalam batas blok'); return; }
     if (TD.ed) { TD.ed.pts.push(ll); edRender(); return; }
     if (TD.tool === 'pt') {
       var b = brush(), it = { id: newId(), t: 'pt', pts: [ll], cat: b.cat, col: b.col, name: '', note: '', ts: Date.now() };
-      data().items.push(it); save(); drawAll(); toast('Titik ditambah'); return;
+      addItem(it); save(); drawAll(); toast('Titik ditambah'); return;
     }
     if (TD.tool === 'bl') { markBlock(ll); return; }
     if (TD.wk) return;
@@ -278,46 +317,18 @@
     var dup = data().items.filter(function (i) { return i.full && String(i.bid) === String(hit.id); })[0];
     if (dup) { toast('Blok ' + hit.name + ' sudah ditandai'); itemSheet(dup); return; }
     var b = brush(), it = { id: newId(), t: 'pg', pts: hit.pts.map(function (p) { return [p[0], p[1]]; }), cat: b.cat, col: b.col, name: String(hit.name || ''), note: '', bid: hit.id, full: true, ts: Date.now() };
-    data().items.push(it); save(); drawAll();
+    addItem(it); save(); drawAll();
     var st = statOf(it); toast('Blok ' + it.name + ' · ' + statText(it, st).replace('\n', ' · '));
   }
 
   // ---------- kategori dan warna ----------
-  function swatches(id, sel) { return PAL.map(function (c) { return '<button class="tdsw' + (sel === c[1] ? ' on' : '') + '" data-col="' + c[1] + '" title="' + c[0] + '" style="background:' + c[1] + '"></button>'; }).join(''); }
-  function catSheet(onPick, back) {
-    var d = data();
-    openSheet('<div class="grab"></div><div class="st">KATEGORI</div>' +
-      '<div class="h">TANPA KATEGORI (PILIH WARNA)</div><div class="tdsws" id="tdPal">' + swatches('p', null) + '</div>' +
-      '<div class="h" style="margin-top:12px">KATEGORI</div><div id="tdCats">' + (d.cats.length ? d.cats.map(function (c) { return '<div class="tdcr"><button class="opt" data-c="' + c.id + '"><i class="tdd" style="background:' + c.col + '"></i>' + esc(c.name) + '</button><button class="btn sm" data-e="' + c.id + '">Ubah</button></div>'; }).join('') : '<div class="muted">Belum ada kategori.</div>') + '</div>' +
-      '<button class="btn" id="tdNew" style="width:100%;margin-top:8px">+ Kategori kustom</button><button class="btn" id="tdCx" style="width:100%;margin-top:8px">Tutup</button>');
+  function swatches(id, sel) { return PAL.map(function (c) { return '<button class="tdsw' + (sel && sel.toLowerCase() === c[1].toLowerCase() ? ' on' : '') + '" data-col="' + c[1] + '" title="' + c[0] + '" style="background:' + c[1] + '"><span>' + c[0] + '</span></button>'; }).join(''); }
+  function colorSheet(onPick, back, cur) {
+    openSheet('<div class="grab"></div><div class="st">WARNA TANDA</div><div class="tdsws" id="tdPal">' + swatches('p', cur || brush().color) + '</div><button class="btn" id="tdCx" style="width:100%;margin-top:12px">Tutup</button>');
     $('sheet').querySelectorAll('#tdPal [data-col]').forEach(function (e) { e.onclick = function () { closeSheet(); onPick({ cat: null, col: e.getAttribute('data-col') }); }; });
-    $('sheet').querySelectorAll('#tdCats [data-c]').forEach(function (e) { e.onclick = function () { closeSheet(); onPick({ cat: e.getAttribute('data-c'), col: null }); }; });
-    $('sheet').querySelectorAll('#tdCats [data-e]').forEach(function (e) { e.onclick = function () { catEdit(catOf(e.getAttribute('data-e')), function () { catSheet(onPick, back); }); }; });
-    $('tdNew').onclick = function () { catEdit(null, function () { catSheet(onPick, back); }); };
     $('tdCx').onclick = function () { closeSheet(); if (back) back(); };
   }
-  function catEdit(c, back) {
-    var isNew = !c, col = c ? c.col : PAL[4][1];
-    openSheet('<div class="grab"></div><div class="st">' + (isNew ? 'KATEGORI BARU' : 'UBAH KATEGORI') + '</div>' +
-      '<div class="bnm"><input type="text" id="tdCn" maxlength="30" placeholder="Nama kategori" value="' + esc(c ? c.name : '') + '"></div>' +
-      '<div class="h">WARNA</div><div class="tdsws" id="tdCp">' + swatches('c', col) + '</div>' +
-      '<button class="btn pri" id="tdCs" style="width:100%;margin-top:12px">Simpan</button>' + (isNew ? '' : '<button class="btn" id="tdCd" style="width:100%;margin-top:8px">Hapus kategori</button>') + '<button class="btn" id="tdCb" style="width:100%;margin-top:8px">Kembali</button>');
-    $('tdCp').onclick = function (e) { var b = e.target.closest && e.target.closest('[data-col]'); if (!b) return; col = b.getAttribute('data-col'); $('tdCp').querySelectorAll('.tdsw').forEach(function (x) { x.classList.toggle('on', x === b); }); };
-    $('tdCs').onclick = function () {
-      var n = $('tdCn').value.trim(); if (!n) { toast('Isi nama kategori'); return; }
-      if (isNew) data().cats.push({ id: 'c' + Date.now().toString(36), name: n, col: col }); else { c.name = n; c.col = col; }
-      save(); drawAll(); back();
-    };
-    if (!isNew) $('tdCd').onclick = function () {
-      askConfirm('Hapus kategori ' + c.name + '?', 'Tanda di dalamnya tetap ada, warnanya dipertahankan tanpa kategori.', 'Hapus', function () {
-        var d = data(); d.items.forEach(function (i) { if (i.cat === c.id) { i.col = c.col; i.cat = null; } });
-        if (d.brush.cat === c.id) d.brush = { cat: null, col: c.col };
-        d.cats = d.cats.filter(function (x) { return x !== c; }); save(); drawAll(); barMain(); back();
-      });
-    };
-    $('tdCb').onclick = back;
-  }
-
+  var catSheet = colorSheet;
   // ---------- panel satu tanda ----------
   function typeName(t) { return t === 'pt' ? 'TITIK' : (t === 'ln' ? 'GARIS' : 'AREA'); }
   function itemSheet(it) {
@@ -326,13 +337,13 @@
     openSheet('<div class="grab"></div><div class="st">' + typeName(it.t) + (it.full ? ' · BLOK UTUH' : '') + '</div>' +
       '<div class="bnm"><input type="text" id="tiN" maxlength="40" placeholder="Nama (boleh kosong)" value="' + esc(it.name || '') + '"></div>' +
       '<div class="card" style="white-space:pre-line">' + esc(lines) + '</div>' +
-      '<div class="h" style="margin-top:10px">KATEGORI</div><button class="btn tdbr" id="tiC" style="width:100%"><i style="background:' + colOf(it) + '"></i>' + esc(c ? c.name : 'Tanpa kategori') + '</button>' +
+      '<div class="h" style="margin-top:10px">WARNA</div><button class="btn tdbr" id="tiC" style="width:100%"><i style="background:' + colOf(it) + '"></i>' + esc(colorName(colOf(it))) + '</button>' +
       '<div class="h" style="margin-top:10px">CATATAN</div><div class="bnm"><input type="text" id="tiNt" maxlength="120" value="' + esc(it.note || '') + '"></div>' +
       '<div class="opts" style="margin-top:10px"><button class="opt" id="tiZ">Zoom ke sini</button>' + (it.t !== 'pt' ? '<button class="opt" id="tiE">Edit bentuk</button>' : '<button class="opt" id="tiE">Geser titik</button>') + (it.t === 'ln' && it.pts.length >= 3 ? '<button class="opt" id="tiV">Jadikan area</button>' : '') + (it.t === 'pg' ? '<button class="opt" id="tiV">Jadikan garis</button>' : '') + '</div>' +
       '<button class="btn" id="tiD" style="width:100%;margin-top:10px">Hapus</button><button class="btn pri" id="tiX" style="width:100%;margin-top:8px">Selesai</button>');
     function keep() { it.name = $('tiN').value.trim(); it.note = $('tiNt').value.trim(); save(); drawAll(); }
     $('tiX').onclick = function () { keep(); closeSheet(); };
-    $('tiC').onclick = function () { keep(); catSheet(function (v) { it.cat = v.cat; it.col = v.col; save(); drawAll(); itemSheet(it); }, function () { itemSheet(it); }); };
+    $('tiC').onclick = function () { keep(); colorSheet(function (v) { it.cat = null; it.col = v.col; save(); drawAll(); itemSheet(it); }, function () { itemSheet(it); }, colOf(it)); };
     $('tiZ').onclick = function () { keep(); closeSheet(); fitItem(it); };
     $('tiE').onclick = function () {
       keep(); closeSheet();
@@ -354,40 +365,40 @@
   }
 
   // ---------- daftar dan ringkasan ----------
-  function summary() {
+  function summary(list) {
     var d = data(), g = {}, order = [];
-    d.items.forEach(function (it) {
-      var c = it.cat ? catOf(it.cat) : null, k = c ? c.id : 'x' + colOf(it);
-      if (!g[k]) { g[k] = { name: c ? c.name : 'Tanpa kategori', col: colOf(it), n: 0, pt: 0, ha: 0, lj: 0, lm: 0, m: 0 }; order.push(k); }
+    (list || d.items).forEach(function (it) {
+      var c = it.cat ? catOf(it.cat) : null, k = c ? c.id : 'x' + colOf(it).toLowerCase();
+      if (!g[k]) { g[k] = { name: c ? c.name : colorName(colOf(it)), col: colOf(it), n: 0, pt: 0, ha: 0, lj: 0, lm: 0, m: 0 }; order.push(k); }
       var r = g[k], st = statOf(it); r.n++;
       if (it.t === 'pt') r.pt++; else if (it.t === 'ln') r.m += st.m; else { r.ha += st.ha; r.lj += st.n; r.lm += st.lm; }
     });
     return order.map(function (k) { return g[k]; });
   }
   function sumLine(r) { var a = []; if (r.pt) a.push(r.pt + ' titik'); if (r.m) a.push(fmtM(r.m) + ' garis'); if (r.ha) a.push(fmtHa(r.ha) + ' ha'); if (r.lj) a.push(ribu(r.lj) + ' lajur · ' + fmtM(r.lm)); return a.join(' · ') || '-'; }
-  function listSheet() {
-    var d = data(), sm = summary();
+  function listSheet(only) {
+    var d = data(), src = only || d.items, sm = summary(src);
     openSheet('<div class="grab"></div><div class="st">DAFTAR MARKING</div>' +
       (sm.length ? '<div class="h">RINGKASAN</div>' + sm.map(function (r) { return '<div class="tdli"><i class="tdd" style="background:' + r.col + '"></i><b>' + esc(r.name) + '</b> <span class="muted">· ' + r.n + ' · ' + esc(sumLine(r)) + '</span></div>'; }).join('') +
-        '<div class="h" style="margin-top:12px">TANDA</div><div id="tdIt">' + d.items.slice().reverse().map(function (it) { var st = statOf(it); return '<button class="tdli tdb" data-i="' + it.id + '"><i class="tdd" style="background:' + colOf(it) + '"></i><b>' + esc(it.name || typeName(it.t)) + '</b> <span class="muted">· ' + esc(statText(it, st).replace('\n', ' · ')) + '</span></button>'; }).join('') + '</div>' : '<div class="card muted">Belum ada tanda. Pilih alat lalu ketuk peta.</div>') +
+        '<div class="h" style="margin-top:12px">TANDA</div><div id="tdIt">' + src.slice().reverse().map(function (it) { var st = statOf(it); return '<button class="tdli tdb" data-i="' + it.id + '"><i class="tdd" style="background:' + colOf(it) + '"></i><b>' + esc(it.name || typeName(it.t)) + '</b> <span class="muted">· ' + esc(statText(it, st).replace('\n', ' · ')) + '</span></button>'; }).join('') + '</div>' : '<div class="card muted">Belum ada tanda. Pilih alat lalu ketuk peta.</div>') +
       '<div class="opts" style="margin-top:12px"><button class="opt" id="tlK">Ekspor KML</button><button class="opt" id="tlI">Impor KML</button><button class="opt" id="tlP">Cetak PDF</button></div>' +
-      (d.items.length ? '<button class="btn" id="tlD" style="width:100%;margin-top:10px">Hapus semua tanda</button>' : '') + '<button class="btn pri" id="tlX" style="width:100%;margin-top:8px">Tutup</button>');
+      (src.length ? '<button class="btn" id="tlD" style="width:100%;margin-top:10px">Hapus semua tanda</button>' : '') + '<button class="btn pri" id="tlX" style="width:100%;margin-top:8px">Tutup</button>');
     $('tlX').onclick = closeSheet;
     $('sheet').querySelectorAll('#tdIt [data-i]').forEach(function (e) { e.onclick = function () { var it = data().items.filter(function (x) { return x.id === e.getAttribute('data-i'); })[0]; if (it) { closeSheet(); fitItem(it); itemSheet(it); } }; });
-    $('tlK').onclick = function () { if (!d.items.length) { toast('Belum ada tanda'); return; } closeSheet(); saveFile('Marking_HZTrip_' + stamp() + '.kml', textB64(buildKml()), 'application/vnd.google-earth.kml+xml'); };
+    $('tlK').onclick = function () { if (!src.length) { toast('Belum ada tanda'); return; } closeSheet(); saveFile('Marking_HZTrip_' + stamp() + '.kml', textB64(buildKml(src)), 'application/vnd.google-earth.kml+xml'); };
     $('tlI').onclick = importPick;
-    $('tlP').onclick = function () { if (!d.items.length) { toast('Belum ada tanda'); return; } printSheet(); };
-    if ($('tlD')) $('tlD').onclick = function () { askConfirm('Hapus semua tanda?', d.items.length + ' tanda dihapus. Kategori tetap ada.', 'Hapus', function () { d.items = []; save(); drawAll(); closeSheet(); }); };
+    $('tlP').onclick = function () { if (!src.length) { toast('Belum ada tanda'); return; } printSheet(src); };
+    if ($('tlD')) $('tlD').onclick = function () { askConfirm('Hapus semua tanda' + (only ? ' di blok ini' : '') + '?', src.length + ' tanda dihapus.', 'Hapus', function () { var ids = {}; src.forEach(function (x) { ids[x.id] = 1; }); d.items = d.items.filter(function (x) { return !ids[x.id]; }); save(); drawAll(); closeSheet(); if (HA.BT) HA.BT.refresh(); }); };
   }
   function stamp() { var t = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return t.getFullYear() + p(t.getMonth() + 1) + p(t.getDate()); }
 
   // ---------- KML (tukar dengan Google Earth, Avenza, QField) ----------
   function xe(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function kmlCol(hex, a) { var h = hex.replace('#', ''); return a + h.slice(4, 6) + h.slice(2, 4) + h.slice(0, 2); }
-  function buildKml() {
-    var d = data(), cols = {};
-    d.items.forEach(function (it) { cols[colOf(it)] = 1; });
-    var x = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Marking HZ Trip ' + stamp() + '</name>';
+  function buildKml(listItems, title, groupsIn) {
+    var d = data(), cols = {}, all = listItems || d.items;
+    all.forEach(function (it) { cols[colOf(it)] = 1; });
+    var x = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>' + xe(title || ('Marking HZ Trip ' + stamp())) + '</name>';
     Object.keys(cols).forEach(function (c) {
       var id = 'c' + c.replace('#', '');
       x += '<Style id="' + id + '"><IconStyle><color>' + kmlCol(c, 'ff') + '</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0.9</scale></LabelStyle><LineStyle><color>' + kmlCol(c, 'ff') + '</color><width>3</width></LineStyle><PolyStyle><color>' + kmlCol(c, '66') + '</color></PolyStyle></Style>';
@@ -395,6 +406,7 @@
     function ring(pts) { var a = pts.map(function (p) { return (+p[1]).toFixed(7) + ',' + (+p[0]).toFixed(7) + ',0'; }); a.push(a[0]); return a.join(' '); }
     function pm(it) {
       var st = statOf(it), c = it.cat ? catOf(it.cat) : null, col = colOf(it);
+      if (it.boundary) return '<Placemark><name>' + xe(it.name || '') + '</name><description>Batas blok</description><Style><LineStyle><color>ff00d6ff</color><width>2.5</width></LineStyle><PolyStyle><fill>0</fill></PolyStyle></Style><ExtendedData><Data name="hz_type"><value>blk</value></Data></ExtendedData><Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>' + ring(it.pts) + '</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>';
       var s = '<Placemark><name>' + xe(it.name || '') + '</name><description>' + xe(statText(it, st).replace('\n', ' | ') + (it.note ? ' | ' + it.note : '')) + '</description><styleUrl>#c' + col.replace('#', '') + '</styleUrl>' +
         '<ExtendedData><Data name="hz_type"><value>' + it.t + '</value></Data><Data name="hz_cat"><value>' + xe(c ? c.name : '') + '</value></Data><Data name="hz_col"><value>' + col + '</value></Data><Data name="hz_note"><value>' + xe(it.note || '') + '</value></Data>' + (it.full ? '<Data name="hz_bid"><value>' + xe(it.bid) + '</value></Data>' : '') + '</ExtendedData>';
       if (it.t === 'pt') s += '<Point><coordinates>' + (+it.pts[0][1]).toFixed(7) + ',' + (+it.pts[0][0]).toFixed(7) + ',0</coordinates></Point>';
@@ -403,8 +415,11 @@
       return s + '</Placemark>';
     }
     var groups = {}, order = [];
-    d.items.forEach(function (it) { var c = it.cat ? catOf(it.cat) : null, k = c ? c.name : 'Tanpa kategori'; if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(it); });
-    order.forEach(function (k) { x += '<Folder><name>' + xe(k) + '</name>' + groups[k].map(pm).join('') + '</Folder>'; });
+    if (groupsIn) groupsIn.forEach(function (g) { x += '<Folder><name>' + xe(g.name) + '</name>' + g.items.map(pm).join('') + '</Folder>'; });
+    else {
+      all.forEach(function (it) { var c = it.cat ? catOf(it.cat) : null, k = c ? c.name : colorName(colOf(it)); if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(it); });
+      order.forEach(function (k) { x += '<Folder><name>' + xe(k) + '</name>' + groups[k].map(pm).join('') + '</Folder>'; });
+    }
     return x + '</Document></kml>';
   }
   function nearestPal(hex) {
@@ -427,14 +442,10 @@
     function coords(el) { return (el.textContent || '').trim().split(/\s+/).map(function (s) { var a = s.split(','); return [parseFloat(a[1]), parseFloat(a[0])]; }).filter(function (p) { return isFinite(p[0]) && isFinite(p[1]); }); }
     Array.prototype.forEach.call(doc.getElementsByTagName('Placemark'), function (pm) {
       var ext = {}; Array.prototype.forEach.call(pm.getElementsByTagName('Data'), function (x) { var v = first(x, 'value'); ext[x.getAttribute('name')] = v ? v.textContent : ''; });
+      if (ext.hz_type === 'blk') return;
       var nm = first(pm, 'name'), name = nm ? nm.textContent.trim() : '', su = first(pm, 'styleUrl'), hx = ext.hz_col || (su && styles[su.textContent.trim()]) || null;
       var par = pm.parentNode, fold = par && par.nodeName === 'Folder' ? (first(par, 'name') || {}).textContent : '';
-      var catName = (ext.hz_cat != null && ext.hz_cat !== '') ? ext.hz_cat : (ext.hz_type ? '' : (fold || '')); if (catName === 'Tanpa kategori') catName = '';
       var color = hx ? (ext.hz_col ? hx : nearestPal(hx)) : PAL[0][1], cat = null;
-      if (catName) {
-        cat = d.cats.filter(function (c) { return c.name.toLowerCase() === catName.toLowerCase(); })[0];
-        if (!cat) { cat = { id: 'c' + Date.now().toString(36) + added, name: catName.slice(0, 30), col: color }; d.cats.push(cat); }
-      }
       var geoms = []; ['Point', 'LineString', 'Polygon'].forEach(function (t) { Array.prototype.forEach.call(pm.getElementsByTagName(t), function (g) { geoms.push([t, g]); }); });
       geoms.forEach(function (g) {
         var t = g[0], el = g[1], pts;
@@ -483,11 +494,12 @@
   }
   function wkHud() { var w = TD.wk; if (!w) return; hud('Walking · ' + fmtM(lenLL(w.pts, false)) + ' · ' + w.pts.length + ' titik'); }
   function wkBar() {
-    $('tdBar').innerHTML = '<div class="tdr"><button class="btn sm" id="wkPt">Titik di sini</button><button class="btn sm pri" id="wkSt">Stop</button></div>';
+    bar().innerHTML = '<div class="tdr">' + tb('wkPt', IC.pin, 'Titik di sini') + tb('wkSt', '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>', 'Stop', true) + '</div>';
     $('wkPt').onclick = function () {
       var w = TD.wk; if (!w || !w.last) { toast('Posisi belum ditemukan'); return; }
+      if (TD.blk && HA.BT && !HA.BT.inside(w.last)) { toast('Posisi Anda di luar blok ini'); return; }
       var b = brush(), it = { id: newId(), t: 'pt', pts: [[w.last[0], w.last[1]]], cat: b.cat, col: b.col, name: '', note: '', ts: Date.now() };
-      data().items.push(it); save(); drawAll(); toast('Titik ditambah di posisi Anda');
+      addItem(it); save(); drawAll(); toast('Titik ditambah di posisi Anda');
     };
     $('wkSt').onclick = wkStop;
   }
@@ -508,18 +520,20 @@
     if (out.length < 2) { toast('Jejak terlalu pendek, tidak disimpan'); return; }
     var b = brush(), t = new Date(), p2 = function (n) { return (n < 10 ? '0' : '') + n; };
     var it = { id: newId(), t: 'ln', pts: out, cat: b.cat, col: b.col, name: 'Walking ' + p2(t.getDate()) + '/' + p2(t.getMonth() + 1) + ' ' + p2(t.getHours()) + '.' + p2(t.getMinutes()), note: '', ts: Date.now() };
-    data().items.push(it); save(); try { localStorage.removeItem(KEYW); } catch (e) {}
+    addItem(it); save(); try { localStorage.removeItem(KEYW); } catch (e) {}
     if (TD.on) { drawAll(); fitItem(it); } itemSheet(it);
   }
 
   // ---------- cetak marking (PDF ber-geo) dengan preview ----------
   var PR = { title: '', nama: true, nilai: true, blk: true, fs: 'a', pos: 'c', cats: null };
-  function printSheet() {
-    var d = data(), ks = []; d.cats.forEach(function (c) { ks.push([c.id, c.name, c.col]); }); ks.push(['_', 'Tanpa kategori', '#8B8D98']);
-    if (!PR.cats) { PR.cats = {}; ks.forEach(function (k) { PR.cats[k[0]] = true; }); }
+  function printSheet(listItems, defTitle, blk) {
+    var d = data(), src = listItems || d.items, ks = [], seen = {};
+    src.forEach(function (it) { var k = ck(it); if (!seen[k]) { seen[k] = 1; ks.push([k, ckName(it), colOf(it)]); } });
+    PR.cats = {}; ks.forEach(function (k) { PR.cats[k[0]] = true; });
+    if (defTitle != null) PR.title = defTitle;
     openSheet('<div class="grab"></div><div class="st">CETAK MARKING</div>' +
       '<div class="h">JUDUL</div><input type="text" id="mpT" maxlength="60" placeholder="Kosong = Marking HZ Trip" value="' + esc(PR.title) + '" style="width:100%">' +
-      '<div class="h" style="margin-top:10px">KATEGORI YANG DICETAK</div><div class="plist">' + ks.map(function (k) { return '<label><input type="checkbox" data-k="' + k[0] + '"' + (PR.cats[k[0]] !== false ? ' checked' : '') + '> <i class="tdd" style="background:' + k[2] + '"></i>' + esc(k[1]) + '</label>'; }).join('') + '</div>' +
+      '<div class="h" style="margin-top:10px">WARNA YANG DICETAK</div><div class="plist">' + ks.map(function (k) { return '<label><input type="checkbox" data-k="' + k[0] + '" checked> <i class="tdd" style="background:' + k[2] + '"></i>' + esc(k[1]) + '</label>'; }).join('') + '</div>' +
       '<div class="h" style="margin-top:10px">ISI PETA</div><div class="plist"><label><input type="checkbox" id="mpN"' + (PR.nama ? ' checked' : '') + '> Nama tanda</label><label><input type="checkbox" id="mpV"' + (PR.nilai ? ' checked' : '') + '> Nilai (ha atau meter)</label><label><input type="checkbox" id="mpB"' + (PR.blk ? ' checked' : '') + '> Garis blok terkonfirmasi sebagai latar</label></div>' +
       '<div class="h" style="margin-top:10px">UKURAN TEKS</div><div class="seg" id="mpF">' + [['a', 'Otomatis'], ['s', 'Kecil'], ['m', 'Sedang'], ['l', 'Besar']].map(function (o) { return '<button data-v="' + o[0] + '"' + (PR.fs === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>'; }).join('') + '</div>' +
       '<div class="h" style="margin-top:10px">POSISI TEKS</div><div class="seg" id="mpP">' + [['c', 'Tengah'], ['t', 'Atas'], ['b', 'Bawah']].map(function (o) { return '<button data-v="' + o[0] + '"' + (PR.pos === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>'; }).join('') + '</div>' +
@@ -530,36 +544,45 @@
     }
     function seg(id, key) { $(id).onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-v]'); if (!b) return; PR[key] = b.getAttribute('data-v'); $(id).querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); }; }
     seg('mpF', 'fs'); seg('mpP', 'pos');
-    $('mpX').onclick = function () { grab(); listSheet(); };
+    $('mpX').onclick = function () { grab(); if (listItems) closeSheet(); else listSheet(); };
     function build() {
       grab();
-      var items = d.items.filter(function (it) { return PR.cats[it.cat || '_'] !== false; });
-      if (!items.length) { toast('Pilih minimal satu kategori yang berisi tanda'); return null; }
-      return buildMarkPdf(items, PR);
+      var items = src.filter(function (it) { return PR.cats[ck(it)] !== false; });
+      if (!items.length) { toast('Pilih minimal satu warna yang berisi tanda'); return null; }
+      return buildMarkPdf(items, Object.assign({}, PR, { buf: blk ? bufM() : 0, groups: [{ title: PR.title || (blk ? String(blk.name) : ''), items: items, blk: blk || null }] }));
     }
     $('mpPv').onclick = function () { var b = build(); if (b) pdfPreview(b, function () { saveFile('Marking_HZTrip_' + stamp() + '.pdf', btoa(b), 'application/pdf'); }); };
     $('mpGo').onclick = function () { var b = build(); if (b) saveFile('Marking_HZTrip_' + stamp() + '.pdf', btoa(b), 'application/pdf'); };
   }
+  function bufM() { var v = +S.settings.tdBuf; return (v === 10 || v === 20) ? v : 15; }
+  HA.tandaPrint = printSheet; HA.tandaBuildPdf = buildMarkPdf; HA.tandaBufM = bufM;
 
   function asc(t) { return String(t == null ? '' : t).replace(/[^\x20-\x7E]/g, '?'); }
   function pe(t) { return asc(t).replace(/([\\()])/g, '\\$1'); }
   function f2(v) { return (Math.round(v * 100) / 100).toString(); }
   function rgb(hex) { var h = hex.replace('#', ''); return f2(parseInt(h.slice(0, 2), 16) / 255) + ' ' + f2(parseInt(h.slice(2, 4), 16) / 255) + ' ' + f2(parseInt(h.slice(4, 6), 16) / 255); }
-  function buildMarkPdf(items, o) {
+  function ck(it) { return it.cat ? it.cat : 'x' + colOf(it).toLowerCase(); }
+  function ckName(it) { var c = it.cat ? catOf(it.cat) : null; return c ? c.name : colorName(colOf(it)); }
+  HA.tandaCk = ck;
+  function buildMarkPdf(itemsAll, o) {
     var objs = [], ver = (document.querySelector('.ver') ? (document.querySelector('.ver').textContent.match(/Versi\s*([\d.]+)/) || [])[1] : '') || '';
     function add(b) { objs.push(b); return objs.length; }
     function stream(dict, dt) { return '<< ' + dict + ' /Length ' + dt.length + ' >>\nstream\n' + dt + '\nendstream'; }
     var dd = new Date(), p2 = function (n) { return (n < 10 ? '0' : '') + n; }, tgl = p2(dd.getDate()) + '-' + p2(dd.getMonth() + 1) + '-' + dd.getFullYear();
     var cat = add(''), pages = add(''), f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'), f2o = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'), gs = add('<< /Type /ExtGState /ca 0.35 /CA 1 >>');
     var res = '<< /Font << /F1 ' + f1 + ' 0 R /F2 ' + f2o + ' 0 R >> /ExtGState << /G1 ' + gs + ' 0 R >> >>';
-    var allp = []; items.forEach(function (it) { it.pts.forEach(function (p) { allp.push(p); }); });
-    var mb = bboxOf(allp), latc = (mb[0] + mb[2]) / 2, kx = 111320 * Math.cos(latc * Math.PI / 180), ky = 111320;
+    var groups = o.groups || [{ title: o.title, items: itemsAll }];
+    function page(items, ttlText, blk) {
+    var allp = []; items.forEach(function (it) { it.pts.forEach(function (p) { allp.push(p); }); }); if (blk) blk.pts.forEach(function (p) { allp.push(p); });
+    var mb = bboxOf(allp);
+    if (blk && o.buf) { var lc0 = (mb[0] + mb[2]) / 2, dl = o.buf / 111320, dg = o.buf / (111320 * Math.cos(lc0 * Math.PI / 180)); mb = [mb[0] - dl, mb[1] - dg, mb[2] + dl, mb[3] + dg]; }
+    var latc = (mb[0] + mb[2]) / 2, kx = 111320 * Math.cos(latc * Math.PI / 180), ky = 111320;
     var mw = Math.max(50, (mb[3] - mb[1]) * kx), mh = Math.max(50, (mb[2] - mb[0]) * ky), land = mw >= mh, PW = land ? 1190.55 : 841.89, PH = land ? 841.89 : 1190.55, M = 24;
     var fw = PW - 2 * M, fh = PH - 2 * M - 8, sc = Math.min(fw / (mw * 1.1), fh / (mh * 1.1)), offx = (fw - mw * sc) / 2, offy = (fh - mh * sc) / 2;
     var X = function (lng) { return M + offx + (lng - mb[1]) * kx * sc; }, Y = function (lat) { return M + offy + (lat - mb[0]) * ky * sc; };
     var lngAt = function (x) { return mb[1] + (x - M - offx) / (kx * sc); }, latAt = function (y) { return mb[0] + (y - M - offy) / (ky * sc); };
     var c = [], info = [];
-    var ttl = asc(o.title || 'Marking HZ Trip');
+    var ttl = asc(ttlText || 'Marking HZ Trip');
     c.push('0 g BT /F2 14 Tf ' + f2(PW / 2 - ttl.length * 14 * 0.56 / 2) + ' ' + f2(PH - 18) + ' Td (' + pe(ttl) + ') Tj ET');
     // latar: garis blok terkonfirmasi yang bersinggungan dengan area cetak
     if (o.blk) {
@@ -570,6 +593,7 @@
         var s = ''; b.pts.forEach(function (p, i) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); c.push(s + 'h S');
       });
     }
+    if (blk) { var bs = ''; blk.pts.forEach(function (p, i) { bs += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); c.push('0 G 1.6 w ' + bs + 'h S'); }
     var cols = {}, fits = [];
     items.forEach(function (it) {
       var col = colOf(it), st = statOf(it), lab = [];
@@ -578,7 +602,7 @@
       var q = bboxOf(it.pts), bw = (q[3] - q[1]) * kx * sc, bh = (q[2] - q[0]) * ky * sc, wmax = 1; lab.forEach(function (t) { wmax = Math.max(wmax, t.length); });
       info.push({ it: it, col: col, st: st, lab: lab, x0: X(q[1]), x1: X(q[3]), y0: Y(q[0]), y1: Y(q[2]) });
       if (it.t === 'pg' && lab.length) fits.push(Math.min(bw * 0.84 / (Math.max(3, wmax) * 0.52), bh * 0.7 / (lab.length * 1.15)));
-      var k = it.cat || ('x' + col); if (!cols[k]) cols[k] = { name: (it.cat && catOf(it.cat)) ? catOf(it.cat).name : 'Tanpa kategori', col: col, n: 0, pt: 0, m: 0, ha: 0, lj: 0, lm: 0 };
+      var k = ck(it); if (!cols[k]) cols[k] = { name: ckName(it), col: col, n: 0, pt: 0, m: 0, ha: 0, lj: 0, lm: 0 };
       var r = cols[k]; r.n++; if (it.t === 'pt') r.pt++; else if (it.t === 'ln') r.m += st.m; else { r.ha += st.ha; r.lj += st.n; r.lm += st.lm; }
     });
     fits.sort(function (a, b) { return a - b; });
@@ -641,8 +665,11 @@
     corners.forEach(function (q) { gp.push(latAt(q[1]).toFixed(7), lngAt(q[0]).toFixed(7)); });
     var vp = '/VP [ << /Type /Viewport /Name (Peta) /BBox [' + f2(M) + ' ' + f2(M) + ' ' + f2(PW - M) + ' ' + f2(PH - M) + '] /Measure << /Type /Measure /Subtype /GEO /Bounds [0 0 0 1 1 1 1 0] /GPTS [' + gp.join(' ') + '] /LPTS [' + lp.join(' ') + '] /GCS << /Type /GEOGCS /WKT (GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]) /EPSG 4326 >> /PDU [/M /DEG /DEG] >> >> ]';
     var pg = add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW) + ' ' + f2(PH) + '] /Resources ' + res + ' /Contents ' + cs + ' 0 R ' + vp + ' >>');
+    return pg;
+    }
+    var kids = groups.map(function (g) { return page(g.items, g.title, g.blk); });
     objs[cat - 1] = '<< /Type /Catalog /Pages ' + pages + ' 0 R >>';
-    objs[pages - 1] = '<< /Type /Pages /Count 1 /Kids [' + pg + ' 0 R] >>';
+    objs[pages - 1] = '<< /Type /Pages /Count ' + kids.length + ' /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] >>';
     var out = '%PDF-1.7\n%\xE2\xE3\xCF\xD3\n', offs = [];
     objs.forEach(function (b, i) { offs.push(out.length); out += (i + 1) + ' 0 obj\n' + b + '\nendobj\n'; });
     var xr = out.length; out += 'xref\n0 ' + (objs.length + 1) + '\n0000000000 65535 f \n';
@@ -684,7 +711,7 @@
   // ---------- pasang ----------
   function init() {
     if (!$('spTanda')) return;
-    $('spTanda').onclick = function () { if (TD.on) modeOff(); else modeOn(); };
+    $('spTanda').onclick = function () { if (TD.on) modeOff(); else if (HA.BT) HA.BT.pick(); else modeOn(); };
   }
   HA.TD = TD; HA.tandaData = data; HA.tandaStat = statOf;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
