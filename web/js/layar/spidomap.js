@@ -169,10 +169,10 @@
   }
   function spSetActive(on) {
     if (on === HA.SP.active) return;
-    HA.SP.active = on;
+    HA.SP.active = on; if ($('app')) $('app').classList.toggle('spm', on);
     $('spD0').classList.toggle('on', on); $('spD1').classList.toggle('on', !on);
     if (on) {
-      if (!spEnsureMap()) { $('spNote').style.display = 'block'; $('spNote').textContent = 'Peta tidak tersedia'; HA.SP.active = false; return; }
+      if (!spEnsureMap()) { $('spNote').style.display = 'block'; $('spNote').textContent = 'Peta tidak tersedia'; HA.SP.active = false; if ($('app')) $('app').classList.remove('spm'); return; }
       spBtns();
       setTimeout(function () { if (!HA.SP.active) return; HA.SP.map.invalidateSize(); spRebuild(); if (HA.SP.cur) HA.SP.map.setView(HA.SP.cur, S.mode === 'rekam' ? 17 : 17, { animate: false }); }, 60);
       HA.SP.lastTs = 0; HA.SP.raf = requestAnimationFrame(spLoop);
@@ -216,6 +216,7 @@
   }
   function spInit() {
     var pg = $('spPager'), tm = null;
+    if (S.view === 'spido') $('main').classList.add('pg');
     pg.addEventListener('scroll', function () {
       clearTimeout(tm);
       tm = setTimeout(function () { spSetActive(S.view === 'spido' && !document.hidden && spIdx() === 1); }, 120);

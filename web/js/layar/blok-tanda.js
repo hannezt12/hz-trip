@@ -72,15 +72,18 @@
     var w = $('spMapWrap'), el = document.createElement('div'); el.id = 'tdTop'; el.style.display = 'none';
     el.innerHTML = '<button class="tdChip" id="tdChip" style="display:none"></button><span class="tdGap"></span>';
     w.appendChild(el);
-    [['tdMenu', '', 'Menu peta', IC.menu], ['tdCat', ' tdmi', 'Kategori', IC.tag], ['tdLay', ' tdmi', 'Satelit atau peta', IC.layers], ['tdSr', ' tdmi', 'Cari blok', IC.search]].forEach(function (a) {
+    [['tdMenu', '', 'Menu peta', IC.mark], ['tdCat', ' tdmi', 'Kategori', IC.tag], ['tdLay', ' tdmi', 'Satelit atau peta', IC.layers], ['tdSr', ' tdmi', 'Cari blok', IC.search]].forEach(function (a) {
       var b = document.createElement('button'); b.id = a[0]; b.className = 'locbtn' + a[1]; b.setAttribute('aria-label', a[2]); b.innerHTML = a[3]; w.appendChild(b);
     });
     var sr = document.createElement('div'); sr.id = 'tdSrch'; sr.style.display = 'none';
     sr.innerHTML = '<div class="tdSq"><input type="search" id="tdQ" placeholder="Cari nama blok" autocomplete="off"><button class="ib" id="tdQx" aria-label="Tutup">' + IC.close + '</button></div><div id="tdSl"></div>';
     w.appendChild(sr);
+    var xh = document.createElement('div'); xh.id = 'tdCross'; xh.innerHTML = IC.cross; w.appendChild(xh);
+    var co = document.createElement('div'); co.id = 'tdCoord'; co.innerHTML = '<span id="tdCoordT"></span><button type="button" id="tdCopy" aria-label="Salin koordinat">' + IC.copy + '</button>'; w.appendChild(co);
+    $('tdCopy').onclick = function () { copyTxt($('tdCoordT').textContent); };
     // satu tombol menu: ketuk untuk membuka, ketuk di luar untuk menutup (tanpa memicu peta)
     var swallow = 0;
-    function menuSet(on) { w.classList.toggle('tdmo', on); $('tdMenu').innerHTML = on ? IC.close : IC.menu; }
+    function menuSet(on) { w.classList.toggle('tdmo', on); $('tdMenu').innerHTML = on ? IC.close : IC.mark; }
     BT.menuClose = function () { menuSet(false); };
     function isIn(t) { return !!(t && t.closest && t.closest('#tdMenu,.tdmi')); }
     $('tdMenu').onclick = function (e) { e.stopPropagation(); menuSet(!w.classList.contains('tdmo')); };
@@ -91,13 +94,21 @@
     }, true);
     w.addEventListener('click', function (e) { if (swallow && Date.now() - swallow < 700 && !isIn(e.target)) { swallow = 0; e.stopPropagation(); e.preventDefault(); } }, true);
     w.addEventListener('click', function (e) { if (w.classList.contains('tdmo') && isIn(e.target) && !(e.target.closest && e.target.closest('#tdMenu'))) setTimeout(function () { menuSet(false); }, 0); });
-    $('tdCat').onclick = function () { HA.tandaCatPage(); };
+    $('tdCat').onclick = function () { HA.tandaCatList(); };
     $('tdSr').onclick = function () { if ($('tdSrch').style.display === 'none') srchOpen(); else srchClose(); };
     $('tdQx').onclick = srchClose;
     $('tdQ').oninput = srchList;
     $('tdLay').onclick = function () { bmode = bmode === 'sat' ? 'osm' : 'sat'; HA.setBase(sp(), bmode); sp()._forceOvl = bmode === 'osm'; if (HA.syncOverlays) HA.syncOverlays(sp()); toast(bmode === 'sat' ? 'Mode satelit' : 'Mode peta + peta PDF'); };
     $('tdChip').onclick = function () { if (cur) sp().fitBounds(L.latLngBounds(cur.pts), { padding: [40, 40], maxZoom: 20, animate: true }); };
   }
+  function copyTxt(t) {
+    function ok() { toast('Koordinat disalin'); }
+    function fb() { try { var a = document.createElement('textarea'); a.value = t; a.style.position = 'fixed'; a.style.opacity = '0'; document.body.appendChild(a); a.select(); document.execCommand('copy'); a.remove(); ok(); } catch (e) { toast('Gagal menyalin'); } }
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(ok, fb); return; } } catch (e) {}
+    fb();
+  }
+  function coordUpd() { var m = sp(); if (!m || !$('tdCoordT')) return; var c = m.getCenter(); $('tdCoordT').textContent = c.lat.toFixed(5) + ', ' + c.lng.toFixed(5); }
+  function coordShow() { if (!$('tdCross')) return; var on = TD.on && !cur; $('tdCross').style.display = on ? 'block' : 'none'; $('tdCoord').style.display = on ? 'flex' : 'none'; if (on) coordUpd(); }
   function chip() {
     var c = $('tdChip'); if (!c) return;
     if (!cur) { c.style.display = 'none'; return; }
@@ -127,7 +138,7 @@
     BL = null; ensureTop(); $('tdTop').style.display = 'flex'; $('spMapWrap').classList.add('tdon');
     if (!blkLay) blkLay = L.layerGroup();
     blkLay.addTo(m);
-    if (!bound) { m.on('moveend zoomend', onView); bound = true; }
+    if (!bound) { m.on('moveend zoomend', onView); m.on('move', coordUpd); bound = true; }
     cur = null; TD.blk = null; TD.done = false; SNAP = null; HA.tandaHsInit(false);
     bmode = 'sat'; chip(); drawBlocks(); hudStatus();
     if (navigator.geolocation) navigator.geolocation.getCurrentPosition(function (p) { pos = [p.coords.latitude, p.coords.longitude]; }, function () {}, { timeout: 7000, maximumAge: 60000, enableHighAccuracy: false });
@@ -137,7 +148,7 @@
     srchClose(); cur = null; TD.blk = null; TD.done = false; SNAP = null; HA.tandaHsInit(false);
     if (blkLay) { blkLay.clearLayers(); if (m) try { m.removeLayer(blkLay); } catch (e) {} }
     if ($('tdTop')) $('tdTop').style.display = 'none';
-    if ($('spMapWrap')) { $('spMapWrap').classList.remove('tdon'); $('spMapWrap').classList.remove('tdmo'); } if ($('tdMenu')) $('tdMenu').innerHTML = IC.menu;
+    if ($('spMapWrap')) { $('spMapWrap').classList.remove('tdon'); $('spMapWrap').classList.remove('tdmo'); } if ($('tdMenu')) $('tdMenu').innerHTML = IC.mark; if ($('tdCross')) { $('tdCross').style.display = 'none'; $('tdCoord').style.display = 'none'; }
     if (m && bmode !== 'sat') { HA.setBase(m, 'sat'); bmode = 'sat'; }
     if (m) { m._forceOvl = false; if (HA.syncOverlays) HA.syncOverlays(m); }
   }
@@ -206,6 +217,7 @@
   function fit0() { setTimeout(function () { if (sp()) sp().invalidateSize(); }, 60); }
   function bar() {
     var bx = $('tdBar'); if (!bx) return;
+    coordShow();
     var b = HA.tandaBrush();
     if (!cur) {
       bx.innerHTML = '<div class="tdr">' + tb('tdLs', IC.list, 'Daftar semua') + tb('tdXm', IC.close, 'Tutup') + '</div>';
@@ -222,16 +234,19 @@
       HA.tandaHud(''); fit0(); return;
     }
     if (HA.tandaSubBar && HA.tandaSubBar()) { fit0(); return; }
-    bx.innerHTML = HA.tandaPalHtml({ cat: b.cat, sub: b.sub }, b.op, true) + '<div class="tdr">' + tb(null, IC.pin, 'Titik', TD.tool === 'pt', 'data-t="pt"') + tb(null, IC.line, 'Garis', TD.tool === 'ln', 'data-t="ln"') + tb(null, IC.brush, 'Warnai', TD.tool === 'pg', 'data-t="pg"') + tb(null, IC.walk, 'Jalan', !!TD.wk, 'data-t="wk"') + tb(null, IC.trash, 'Hapus', false, 'data-t="del"') + '</div>' +
-      '<div class="tdr">' + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + tb('blCol', '<i class="cdot" style="background:' + b.color + '"></i>', 'Kategori', TD.palOpen) + tb('blLs', IC.list, 'Daftar') + tb('tdFin', IC.check, 'Selesai', true) + '</div>';
+    var shp = { pt: ['Titik', IC.pin], ln: ['Garis', IC.line], rc: ['Segi empat', IC.rect] }, cs = shp[TD.tool];
+    bx.innerHTML = HA.tandaPalHtml({ cat: b.cat, sub: b.sub }, b.op, TD.tool === 'pg') +
+      (TD.shpOpen ? '<div class="tdr">' + tb(null, IC.pin, 'Titik', TD.tool === 'pt', 'data-t="pt"') + tb(null, IC.line, 'Garis', TD.tool === 'ln', 'data-t="ln"') + tb(null, IC.rect, 'Segi empat', TD.tool === 'rc', 'data-t="rc"') + '</div>' : '') +
+      '<div class="tdr">' + tb('tdShp', cs ? cs[1] : IC.shapes, cs ? cs[0] : 'Bentuk', !!cs || !!TD.shpOpen) + tb(null, IC.brush, 'Warnai', TD.tool === 'pg', 'data-t="pg"') + tb(null, IC.walk, 'Jalan', !!TD.wk, 'data-t="wk"') + tb(null, IC.trash, 'Hapus', false, 'data-t="del"') + '</div>' +
+      '<div class="tdr">' + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + tb('blLs', IC.list, 'Daftar') + tb('tdFin', IC.check, 'Selesai', true) + '</div>';
+    $('tdShp').onclick = function () { TD.shpOpen = !TD.shpOpen; bar(); };
     bx.querySelectorAll('[data-t]').forEach(function (e) { e.onclick = function () { HA.tandaPick(e.getAttribute('data-t')); }; });
     $('tdUn').onclick = function () { HA.tandaUndo(); };
     $('tdRe').onclick = function () { HA.tandaRedo(); };
-    $('blCol').onclick = function () { TD.palOpen = !TD.palOpen; bar(); };
     HA.tandaPalWire(function (cid, sid) { HA.tandaSetBrush(cid, sid); bar(); }, function (v, fin) { HA.tandaData().brush.op = v; if (fin) HA.tandaSave(); });
     $('blLs').onclick = function () { HA.tandaList(itemsOf(cur)); };
     $('tdFin').onclick = function () { HA.tandaEdCancel(); TD.tool = null; TD.done = true; bar(); };
-    if (!TD.tool) HA.tandaHud('Pilih Titik, Garis, Warnai, atau Jalan'); else if (TD.tool === 'pt') HA.tandaHud('Ketuk di dalam blok untuk menaruh titik');
+    if (!TD.tool) HA.tandaHud('Pilih Bentuk, Warnai, atau Jalan'); else if (TD.tool === 'pt') HA.tandaHud('Ketuk di dalam blok untuk menaruh titik');
     fit0();
   }
   function stampN() { var t = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return t.getFullYear() + p(t.getMonth() + 1) + p(t.getDate()); }

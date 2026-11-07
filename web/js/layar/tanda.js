@@ -47,6 +47,12 @@
     search: ic('<circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/>'),
     share: ic('<circle cx="6" cy="12" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 11l8-4M8 13l8 4"/>'),
     menu: ic('<path d="M4 7h16M4 12h16M4 17h16"/>'),
+    mark: ic('<path d="m15 5 4 4"/><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m2 22 5.5-1.5L21.17 6.83a2.82 2.82 0 0 0-4-4L3.5 16.5Z"/><path d="m18 11 .5.5"/>'),
+    gear: ic('<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'),
+    rect: ic('<rect x="4" y="6" width="16" height="12" rx="1.5"/>'),
+    shapes: ic('<rect x="3" y="3" width="9" height="9" rx="1.5"/><circle cx="16.5" cy="16.5" r="4.5"/>'),
+    copy: ic('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>'),
+    cross: ic('<circle cx="12" cy="12" r="6.5"/><path d="M12 2v7M12 15v7M2 12h7M15 12h7"/>'),
     tag: ic('<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3"/>')
   };
   function tb(id, icon, label, on, extra) { return '<button class="tbtn' + (on ? ' on' : '') + '" ' + (id ? 'id="' + id + '" ' : '') + (extra || '') + '>' + icon + '<span>' + label + '</span></button>'; }
@@ -273,11 +279,12 @@
   };
   function pickTool(t) {
     if (TD.ed) edCancel();
-    TD.selIt = null; TD.palOpen = false;
+    TD.selIt = null; TD.palOpen = false; TD.shpOpen = false;
     if (t === 'wk') { TD.tool = null; TD.del = null; wkStart(); return; }
     if (t === 'del') { var on = TD.tool !== 'del'; TD.tool = on ? 'del' : null; TD.del = on ? {} : null; drawAll(); barMain(); return; }
     TD.del = null;
     TD.tool = TD.tool === t ? null : t;
+    if (TD.tool === 'rc') { edStart('pg', null); TD.ed.rect = true; edStatus(); return; }
     if (TD.tool === 'ln' || TD.tool === 'pg') { edStart(TD.tool, null); return; }
     drawAll(); barMain(); if (!TD.tool) hud('');
   }
@@ -303,6 +310,7 @@
   function edStatus() {
     var e = TD.ed; if (!e) return;
     if (e.pan) { hud('Geser peta aktif. Ketuk Geser lagi untuk menggambar'); return; }
+    if (e.rect && e.pts.length < 3) { hud(e.pts.length ? 'Ketuk sudut seberangnya' : 'Seret dari satu sudut ke sudut seberang, atau ketuk 2 sudut'); return; }
     if (e.kind === 'ln') hud(e.pts.length < 2 ? 'Seret jari di peta, atau ketuk untuk menambah titik' : 'Garis ' + fmtM(lenLL(e.pts, false)));
     else if (e.pts.length < 3) hud('Lingkari bagian blok dengan jari, atau ketuk titik sudut');
     else { var P = HzBlok.proj(e.pts[0][0], e.pts[0][1]); hud('Area ' + fmtHa(HzBlok.areaHa(e.pts)) + ' ha · ' + fmtM(lenXY(e.pts.map(P.xy), true))); }
@@ -358,6 +366,14 @@
   }
 
   // ---------- gambar dengan jari (seret di peta) ----------
+  function rectPts(a, b) { var s0 = Math.min(a[0], b[0]), n0 = Math.max(a[0], b[0]), w0 = Math.min(a[1], b[1]), e0 = Math.max(a[1], b[1]); return [[s0, w0], [n0, w0], [n0, e0], [s0, e0]]; }
+  function rectDone(a, b) {
+    var e = TD.ed; if (!e || e.item) return;
+    if (TD.blk && HA.BT && !HA.BT.inside(a)) { toast('Mulai dari dalam batas blok'); return; }
+    var P = HzBlok.proj(a[0], a[1]), p = P.xy(a), q = P.xy(b);
+    if (Math.abs(p[0] - q[0]) < 1.5 || Math.abs(p[1] - q[1]) < 1.5) { toast('Segi empat terlalu kecil'); return; }
+    edPush(); e.pts = rectPts(a, b); edRender(); edDone();
+  }
   function strokeBind() {
     var m = map(); if (!m || TD.sb === m) return; TD.sb = m;
     var c = m.getContainer(), st = null, live = null;
@@ -377,6 +393,7 @@
     c.addEventListener('pointermove', function (ev) {
       if (!st || ev.pointerId !== st.id) return;
       if (!st.moved) { if (Math.hypot(ev.clientX - st.x, ev.clientY - st.y) < 10) return; st.moved = true; }
+      if (TD.ed && TD.ed.rect) { st.pts = [st.pts[0], ll(ev)]; var rb = rectPts(st.pts[0], st.pts[1]), bc = brush(); if (!live) live = L.polygon(rb, { color: bc.color, weight: 3, fillColor: bc.color, fillOpacity: bc.op, dashArray: '6 5', interactive: false }).addTo(m); else live.setLatLngs(rb); return; }
       st.pts.push(ll(ev));
       if (!live) live = L.polyline([], { color: brush().color, weight: 4, opacity: 0.9, interactive: false, dashArray: TD.ed && TD.ed.kind === 'pg' ? '6 5' : null }).addTo(m);
       live.setLatLngs(st.pts);
@@ -384,7 +401,7 @@
     c.addEventListener('pointerup', function (ev) {
       if (!st || ev.pointerId !== st.id) return;
       var s = st; st = null; clearLive();
-      if (s.moved) { TD.stroked = Date.now(); strokeDone(s.pts); }
+      if (s.moved) { TD.stroked = Date.now(); if (TD.ed && TD.ed.rect) rectDone(s.pts[0], s.pts[s.pts.length - 1]); else strokeDone(s.pts); }
     });
     c.addEventListener('pointercancel', function (ev) { if (st && ev.pointerId === st.id) { st = null; clearLive(); } });
   }
@@ -401,23 +418,34 @@
   }
 
   // ---------- palet warna (akordeon) ----------
+  function inkOn(hex) { var h = String(hex).replace('#', ''); if (h.length !== 6) return '#fff'; var r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#111' : '#fff'; }
+  function boxesHtml(selId, withGear) {
+    var d = data();
+    return '<div class="tdKw"><div class="tdKs">' + d.cats.map(function (c) { return '<button type="button" class="tdk' + (c.id === selId ? ' on' : '') + '" data-cat="' + c.id + '" style="background:' + c.col + ';color:' + inkOn(c.col) + '">' + esc(c.name) + '</button>'; }).join('') + '</div>' +
+      (withGear ? '<button type="button" class="tdkg" id="tdKm" aria-label="Kelola kategori">' + IC.gear + '</button>' : '') + '</div>';
+  }
+  function circlesHtml(cc, selSub) {
+    if (!cc || !cc.subs.length) return '';
+    return '<div class="tdSb">' + cc.subs.map(function (s, i) { var c0 = s.col || cc.col; return '<button type="button" class="tdsc' + (selSub === s.id ? ' on' : '') + '" data-cat="' + cc.id + '" data-sub="' + s.id + '" style="background:' + c0 + ';color:' + inkOn(c0) + '" aria-label="' + esc(s.name) + '">' + (i + 1) + '</button>'; }).join('') + '</div>';
+  }
   function palHtml(cur, op, showOp) {
-    if (!TD.palOpen) return '';
-    var d = data(), cc = cur && cur.cat ? catOf(cur.cat) : null;
-    return '<div class="tdPal"><div class="tdKs">' + d.cats.map(function (c) { return '<button type="button" class="tdk' + (cc && c.id === cc.id ? ' on' : '') + '" data-cat="' + c.id + '"><i style="background:' + c.col + '"></i>' + esc(c.name) + '</button>'; }).join('') + '</div>' +
-      (cc && cc.subs.length ? '<div class="tdKs tdKsub"><button type="button" class="tdk' + (!cur.sub ? ' on' : '') + '" data-cat="' + cc.id + '" data-sub=""><i style="background:' + cc.col + '"></i>Tanpa sub</button>' + cc.subs.map(function (s) { return '<button type="button" class="tdk' + (cur.sub === s.id ? ' on' : '') + '" data-cat="' + cc.id + '" data-sub="' + s.id + '"><i style="background:' + (s.col || cc.col) + '"></i>' + esc(s.name || 'Sub') + '</button>'; }).join('') + '</div>' : '') +
-      (showOp ? '<div class="tdOp"><span>Isi warna</span><input type="range" id="tdOpR" min="10" max="90" step="5" value="' + Math.round(op * 100) + '"><b id="tdOpV">' + Math.round(op * 100) + '%</b></div>' : '') +
-      '<button type="button" class="tdkm" id="tdKm">Kelola kategori</button></div>';
+    var cc = cur && cur.cat ? catOf(cur.cat) : null;
+    return '<div class="tdPal">' + boxesHtml(cc ? cc.id : null, true) + circlesHtml(cc, cur ? cur.sub : null) +
+      (showOp ? '<div class="tdOp"><span>Isi warna</span><input type="range" id="tdOpR" min="10" max="90" step="5" value="' + Math.round(op * 100) + '"><b id="tdOpV">' + Math.round(op * 100) + '%</b></div>' : '') + '</div>';
   }
   function palWire(onSel, onOp) {
-    bar().querySelectorAll('.tdk').forEach(function (e) {
+    var bx = bar();
+    bx.querySelectorAll('.tdk').forEach(function (e) { e.onclick = function () { onSel(e.getAttribute('data-cat'), null); }; });
+    bx.querySelectorAll('.tdsc').forEach(function (e) {
       e.onclick = function () {
-        var cid = e.getAttribute('data-cat'), hs = e.hasAttribute('data-sub'), sid = hs ? (e.getAttribute('data-sub') || null) : null, c = catOf(cid);
-        if (hs || !c || !c.subs.length) TD.palOpen = false;
-        onSel(cid, sid);
+        var cid = e.getAttribute('data-cat'), sid = e.getAttribute('data-sub'), c = catOf(cid), sb = subOf(c, sid), was = e.classList.contains('on');
+        if (sb && !was) toast(c.name + ' / ' + (sb.name || 'Sub'));
+        onSel(cid, was ? null : sid);
       };
     });
     if ($('tdKm')) $('tdKm').onclick = function () { catPage(); };
+    var ks = bx.querySelector('.tdKs'), on = ks && ks.querySelector('.tdk.on');
+    if (ks && on) ks.scrollLeft = on.offsetLeft - (ks.clientWidth - on.offsetWidth) / 2;
     var r = $('tdOpR');
     if (r) { r.oninput = function () { $('tdOpV').textContent = r.value + '%'; onOp(+r.value / 100, false); }; r.onchange = function () { onOp(+r.value / 100, true); }; }
   }
@@ -427,12 +455,11 @@
   function edBar() {
     var e = TD.ed, bb = brush(), col = e.item ? colOf(e.item) : bb.color, op = e.item ? opOf(e.item) : bb.op, cur = e.item ? { cat: e.item.cat, sub: e.item.sub } : { cat: bb.cat, sub: bb.sub };
     bar().innerHTML = palHtml(cur, op, e.kind === 'pg') + '<div class="tdr">' + tb('tdUr', IC.undo, 'Urung') + tb('tdRd', IC.redo, 'Ulang') + tb('tdTy', IC.tidy, 'Rapikan') + (e.item ? '' : tb('tdPn', IC.hand, 'Geser', e.pan)) + '</div>' +
-      '<div class="tdr">' + tb('tdCl', '<i class="cdot" style="background:' + col + '"></i>', 'Kategori', TD.palOpen) + tb('tdBt', IC.close, 'Batal') + tb('tdOk', IC.check, 'Simpan', true) + '</div>';
+      '<div class="tdr">' + tb('tdBt', IC.close, 'Batal') + tb('tdOk', IC.check, 'Simpan', true) + '</div>';
     $('tdUr').onclick = edUndo; $('tdRd').onclick = edRedo; $('tdTy').onclick = edTidy;
     if ($('tdPn')) $('tdPn').onclick = function () { e.pan = !e.pan; lockMap(!e.pan); edStatus(); edBar(); };
     $('tdBt').onclick = function () { edCancel(); TD.tool = null; barMain(); };
     $('tdOk').onclick = edDone;
-    $('tdCl').onclick = function () { TD.palOpen = !TD.palOpen; edBar(); };
     palWire(function (cid, sid) {
       if (e.item) { e.item.cat = cid; e.item.sub = sid; e.item.col = null; touch(e.item); } else { var d = data(); d.brush.cat = cid; d.brush.sub = sid; }
       save(); edShape(); edBar();
@@ -502,10 +529,9 @@
     }
     if (TD.selIt) {
       var it = TD.selIt, col = colOf(it);
-      bx.innerHTML = palHtml({ cat: it.cat, sub: it.sub }, opOf(it), it.t === 'pg') + '<div class="tdr">' + (it.t === 'pt' ? '' : tb('siTy', IC.tidy, 'Rapikan')) + tb('siCl', '<i class="cdot" style="background:' + col + '"></i>', 'Kategori', TD.palOpen) + tb('siSh', IC.edit, it.t === 'pt' ? 'Geser' : 'Bentuk') + tb('siDt', IC.list, 'Detail') + tb('siDl', IC.trash, 'Hapus') + '</div>' +
+      bx.innerHTML = palHtml({ cat: it.cat, sub: it.sub }, opOf(it), it.t === 'pg') + '<div class="tdr">' + (it.t === 'pt' ? '' : tb('siTy', IC.tidy, 'Rapikan')) + tb('siSh', IC.edit, it.t === 'pt' ? 'Geser' : 'Bentuk') + tb('siDt', IC.list, 'Detail') + tb('siDl', IC.trash, 'Hapus') + '</div>' +
         '<div class="tdr">' + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + tb('siOk', IC.check, 'Selesai', true) + '</div>';
       if ($('siTy')) $('siTy').onclick = function () { itemTidy(it); };
-      $('siCl').onclick = function () { TD.palOpen = !TD.palOpen; barMain(); };
       $('siSh').onclick = function () { TD.selIt = null; TD.palOpen = false; if (it.t === 'pt') { TD.tool = null; pointMove(it); } else { TD.tool = null; edStart(it.t, it); fitItem(it); } };
       $('siDt').onclick = function () { itemSheet(it); };
       $('siDl').onclick = function () { askConfirm('Hapus tanda ini?', 'Bisa diurungkan dengan tombol Urung.', 'Hapus', function () { var d = data(); d.items = d.items.filter(function (x) { return x.id !== it.id; }); TD.selIt = null; save(); drawAll(); if (HA.BT) HA.BT.refresh(); barMain(); }); };
@@ -527,6 +553,11 @@
     if (TD.tool === 'del') { delTap(ev.latlng); return; }
     if (TD.selIt && !TD.ed) { TD.selIt = null; TD.palOpen = false; drawAll(); barMain(); }
     if (HA.BT && HA.BT.tap(ll)) return;
+    if (TD.ed && TD.ed.rect && TD.ed.pts.length < 2) {
+      if (!TD.ed.pts.length) { if (TD.blk && HA.BT && !HA.BT.inside(ll)) { toast('Mulai dari dalam batas blok'); return; } edPush(); TD.ed.pts = [ll]; edRender(); }
+      else rectDone(TD.ed.pts[0], ll);
+      return;
+    }
     if (TD.ed) { edPush(); TD.ed.pts.push(ll); edRender(); return; }
     if (TD.tool === 'pt') {
       var b = brush(), it = { id: newId(), t: 'pt', pts: [ll], cat: b.cat, col: b.col, name: '', note: '', ts: Date.now() };
@@ -557,6 +588,50 @@
     $('tdCx').onclick = function () { closeSheet(); if (back) back(); };
   }
   var catSheet = colorSheet;
+  // ---------- daftar blok per kategori (ikon label) ----------
+  var CL = { cat: null, sub: null, blk: null };
+  var collId = new Intl.Collator('id', { numeric: true });
+  function catList() {
+    var d = data(); if (!catOf(CL.cat)) { CL.cat = d.cats[0].id; CL.sub = null; CL.blk = null; }
+    var cc = catOf(CL.cat); if (CL.sub && !subOf(cc, CL.sub)) CL.sub = null;
+    var ents = [];
+    if (HA.BT && HA.BT.itemsOf) blks().forEach(function (b) {
+      if (!b.conf || !b.pts || b.pts.length < 3) return;
+      var its = HA.BT.itemsOf(b).filter(function (it) { return it.cat === CL.cat && (!CL.sub || it.sub === CL.sub); });
+      if (its.length) ents.push({ b: b, its: its });
+    });
+    ents.sort(function (x, y) { return collId.compare(String(x.b.name), String(y.b.name)); });
+    var sel = null; ents.forEach(function (x) { if (CL.blk != null && String(x.b.id) === String(CL.blk)) sel = x; });
+    if (!sel) CL.blk = null;
+    var det = '';
+    if (sel) {
+      var ha = 0, lj = 0, lm = 0, np = 0, nl = 0, na = 0, ds = {};
+      sel.its.forEach(function (it) { var st = statOf(it); ds[dateOf(it)] = 1; if (it.t === 'pt') np++; else if (it.t === 'ln') nl++; else { na++; ha += st.ha; lj += st.n; lm += st.lm; } });
+      var dl = Object.keys(ds).sort().map(fmtD8).join(', ');
+      det = '<div class="card tdDet"><b>Blok ' + esc(String(sel.b.name)) + '</b> <span class="muted">· ' + fmtHa(HzBlok.areaHa(sel.b.pts)) + ' ha</span>' +
+        '<div>Tanggal: ' + esc(dl) + '</div><div>Tanda: ' + sel.its.length + ' (' + [np ? np + ' titik' : '', nl ? nl + ' garis' : '', na ? na + ' area' : ''].filter(Boolean).join(', ') + ')</div>' +
+        (na ? '<div>Luas tanda: ' + fmtHa(ha) + ' ha</div><div>Lajur: ' + ribu(lj) + ' · Panjang lajur: ' + ribu(lm) + ' m</div>' : '') + '</div>' +
+        '<button class="btn pri" id="clGo" style="width:100%;margin-top:8px">Buka blok di peta</button>';
+    }
+    openSheet('<div class="grab"></div><div class="st">KATEGORI</div>' + boxesHtml(CL.cat, true) + circlesHtml(cc, CL.sub) +
+      '<div class="h" style="margin-top:10px">BLOK (' + ents.length + ')</div>' +
+      (ents.length ? '<div class="tdBl">' + ents.map(function (x) { return '<button type="button" class="tdbc' + (sel && x === sel ? ' on' : '') + '" data-b="' + esc(String(x.b.id)) + '">' + esc(String(x.b.name)) + '</button>'; }).join('') + '</div>' : '<div class="card muted">Belum ada blok yang memakai kategori ini.</div>') +
+      det + '<button class="btn" id="clX" style="width:100%;margin-top:8px">Tutup</button>');
+    var sh = $('sheet');
+    sh.querySelectorAll('.tdk').forEach(function (e) { e.onclick = function () { CL.cat = e.getAttribute('data-cat'); CL.sub = null; CL.blk = null; catList(); }; });
+    sh.querySelectorAll('.tdsc').forEach(function (e) {
+      e.onclick = function () {
+        var sid = e.getAttribute('data-sub'), c = catOf(CL.cat), sb = subOf(c, sid);
+        if (CL.sub === sid) CL.sub = null; else { CL.sub = sid; if (sb) toast(c.name + ' / ' + (sb.name || 'Sub')); }
+        CL.blk = null; catList();
+      };
+    });
+    sh.querySelectorAll('.tdbc').forEach(function (e) { e.onclick = function () { var id = e.getAttribute('data-b'); CL.blk = CL.blk != null && String(CL.blk) === id ? null : id; catList(); }; });
+    if ($('tdKm')) $('tdKm').onclick = function () { catPage(); };
+    if ($('clGo')) $('clGo').onclick = function () { var b = sel.b; closeSheet(); if (HA.BT) HA.BT.pick(b, true); };
+    $('clX').onclick = closeSheet;
+  }
+  HA.tandaCatList = catList;
   // ---------- halaman kategori ----------
   function catPage() {
     var d = data(), ex = null, foc = null;
