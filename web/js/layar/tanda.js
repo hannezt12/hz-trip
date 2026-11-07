@@ -564,6 +564,13 @@
   function ck(it) { return it.cat ? it.cat : 'x' + colOf(it).toLowerCase(); }
   function ckName(it) { var c = it.cat ? catOf(it.cat) : null; return c ? c.name : colorName(colOf(it)); }
   HA.tandaCk = ck;
+  function pageBox(items, blk, o) {
+    var allp = []; items.forEach(function (it) { it.pts.forEach(function (p) { allp.push(p); }); }); if (blk) blk.pts.forEach(function (p) { allp.push(p); });
+    var mb = bboxOf(allp);
+    if (blk && o.buf) { var lc0 = (mb[0] + mb[2]) / 2, dl = o.buf / 111320, dg = o.buf / (111320 * Math.cos(lc0 * Math.PI / 180)); mb = [mb[0] - dl, mb[1] - dg, mb[2] + dl, mb[3] + dg]; }
+    return mb;
+  }
+  HA.tandaPageBox = pageBox; HA.tandaPal = PAL; HA.tandaColOf = colOf; HA.tandaColorName = colorName;
   function buildMarkPdf(itemsAll, o) {
     var objs = [], ver = (document.querySelector('.ver') ? (document.querySelector('.ver').textContent.match(/Versi\s*([\d.]+)/) || [])[1] : '') || '';
     function add(b) { objs.push(b); return objs.length; }
@@ -572,28 +579,28 @@
     var cat = add(''), pages = add(''), f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'), f2o = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'), gs = add('<< /Type /ExtGState /ca 0.35 /CA 1 >>');
     var res = '<< /Font << /F1 ' + f1 + ' 0 R /F2 ' + f2o + ' 0 R >> /ExtGState << /G1 ' + gs + ' 0 R >> >>';
     var groups = o.groups || [{ title: o.title, items: itemsAll }];
-    function page(items, ttlText, blk) {
-    var allp = []; items.forEach(function (it) { it.pts.forEach(function (p) { allp.push(p); }); }); if (blk) blk.pts.forEach(function (p) { allp.push(p); });
-    var mb = bboxOf(allp);
-    if (blk && o.buf) { var lc0 = (mb[0] + mb[2]) / 2, dl = o.buf / 111320, dg = o.buf / (111320 * Math.cos(lc0 * Math.PI / 180)); mb = [mb[0] - dl, mb[1] - dg, mb[2] + dl, mb[3] + dg]; }
+    function page(items, ttlText, blk, img) {
+    var mb = pageBox(items, blk, o), hasImg = !!img;
     var latc = (mb[0] + mb[2]) / 2, kx = 111320 * Math.cos(latc * Math.PI / 180), ky = 111320;
     var mw = Math.max(50, (mb[3] - mb[1]) * kx), mh = Math.max(50, (mb[2] - mb[0]) * ky), land = mw >= mh, PW = land ? 1190.55 : 841.89, PH = land ? 841.89 : 1190.55, M = 24;
     var fw = PW - 2 * M, fh = PH - 2 * M - 8, sc = Math.min(fw / (mw * 1.1), fh / (mh * 1.1)), offx = (fw - mw * sc) / 2, offy = (fh - mh * sc) / 2;
     var X = function (lng) { return M + offx + (lng - mb[1]) * kx * sc; }, Y = function (lat) { return M + offy + (lat - mb[0]) * ky * sc; };
     var lngAt = function (x) { return mb[1] + (x - M - offx) / (kx * sc); }, latAt = function (y) { return mb[0] + (y - M - offy) / (ky * sc); };
     var c = [], info = [];
-    var ttl = asc(ttlText || 'Marking HZ Trip');
+    var ttl = asc(ttlText || 'Marking HZ Trip'), imN = 0;
+    if (hasImg) { imN = add(stream('/Type /XObject /Subtype /Image /Width ' + img.w + ' /Height ' + img.h + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode', img.data)); c.push('q ' + f2((mb[3] - mb[1]) * kx * sc) + ' 0 0 ' + f2((mb[2] - mb[0]) * ky * sc) + ' ' + f2(X(mb[1])) + ' ' + f2(Y(mb[0])) + ' cm /Im' + imN + ' Do Q'); }
     c.push('0 g BT /F2 14 Tf ' + f2(PW / 2 - ttl.length * 14 * 0.56 / 2) + ' ' + f2(PH - 18) + ' Td (' + pe(ttl) + ') Tj ET');
     // latar: garis blok terkonfirmasi yang bersinggungan dengan area cetak
     if (o.blk) {
       var ex = [mb[0] - (mb[2] - mb[0]) * 0.1, mb[1] - (mb[3] - mb[1]) * 0.1, mb[2] + (mb[2] - mb[0]) * 0.1, mb[3] + (mb[3] - mb[1]) * 0.1], cnt = 0;
-      c.push('0.62 G 0.4 w');
+      c.push(hasImg ? '1 G 0.9 w [3 2] 0 d' : '0.62 G 0.4 w');
       blks().forEach(function (b) {
         if (cnt > 1500 || !b.conf || !b.pts || b.pts.length < 3 || !bbHit(bboxOf(b.pts), ex)) return; cnt++;
         var s = ''; b.pts.forEach(function (p, i) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); c.push(s + 'h S');
       });
+      if (hasImg) c.push('[] 0 d');
     }
-    if (blk) { var bs = ''; blk.pts.forEach(function (p, i) { bs += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); c.push('0 G 1.6 w ' + bs + 'h S'); }
+    if (blk) { var bs = ''; blk.pts.forEach(function (p, i) { bs += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); c.push(hasImg ? '1 0.9 0 RG 2.2 w ' + bs + 'h S' : '0 G 1.6 w ' + bs + 'h S'); }
     var cols = {}, fits = [];
     items.forEach(function (it) {
       var col = colOf(it), st = statOf(it), lab = [];
@@ -630,14 +637,16 @@
       var tot2 = lab.length * fsU * 1.15, top = cy + tot2 / 2 - fsU * 0.85;
       lab.forEach(function (t, i) {
         var w = t.length * fsU * 0.52, x = align === 'l' ? cx : cx - w / 2;
-        c.push('BT /F1 ' + f2(fsU) + ' Tf ' + f2(x) + ' ' + f2(top - i * fsU * 1.15) + ' Td (' + pe(t) + ') Tj ET');
+        c.push('BT /F1 ' + f2(fsU) + ' Tf ' + (hasImg ? '1 1 1 RG ' + f2(Math.max(1, fsU * 0.28)) + ' w 2 Tr ' : '') + f2(x) + ' ' + f2(top - i * fsU * 1.15) + ' Td (' + pe(t) + ') Tj ET');
       });
     });
     // skala dan panah utara
     var L0 = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000].filter(function (v) { return v * sc < fw * 0.25; }).pop() || 10, bx = PW / 2 - L0 * sc / 2, by = M + 16;
+    if (hasImg) c.push('1 g ' + f2(bx - 8) + ' ' + f2(by - 8) + ' ' + f2(L0 * sc + 16) + ' 28 re f 0 g');
     c.push('0 G 1 w ' + f2(bx) + ' ' + f2(by) + ' m ' + f2(bx + L0 * sc) + ' ' + f2(by) + ' l S ' + f2(bx) + ' ' + f2(by - 4) + ' m ' + f2(bx) + ' ' + f2(by + 4) + ' l S ' + f2(bx + L0 * sc) + ' ' + f2(by - 4) + ' m ' + f2(bx + L0 * sc) + ' ' + f2(by + 4) + ' l S');
     c.push('BT /F1 8 Tf ' + f2(bx) + ' ' + f2(by + 7) + ' Td (' + (L0 >= 1000 ? (L0 / 1000) + ' km' : L0 + ' m') + ') Tj ET');
     var nx0 = PW - M - 24, ny0 = PH - M - 52;
+    if (hasImg) c.push('1 g ' + f2(nx0 - 12) + ' ' + f2(ny0 - 14) + ' 24 46 re f 0 g');
     c.push('1 w ' + f2(nx0) + ' ' + f2(ny0) + ' m ' + f2(nx0) + ' ' + f2(ny0 + 28) + ' l S ' + f2(nx0 - 5) + ' ' + f2(ny0 + 20) + ' m ' + f2(nx0) + ' ' + f2(ny0 + 28) + ' l ' + f2(nx0 + 5) + ' ' + f2(ny0 + 20) + ' l S');
     c.push('BT /F2 9 Tf ' + f2(nx0 - 3) + ' ' + f2(ny0 - 10) + ' Td (U) Tj ET');
     // legenda tabel: kategori, jumlah, luas, lajur, meter
@@ -664,10 +673,10 @@
     var corners = [[M, M], [M, PH - M], [PW - M, PH - M], [PW - M, M]], lp = [0, 0, 0, 1, 1, 1, 1, 0], gp = [];
     corners.forEach(function (q) { gp.push(latAt(q[1]).toFixed(7), lngAt(q[0]).toFixed(7)); });
     var vp = '/VP [ << /Type /Viewport /Name (Peta) /BBox [' + f2(M) + ' ' + f2(M) + ' ' + f2(PW - M) + ' ' + f2(PH - M) + '] /Measure << /Type /Measure /Subtype /GEO /Bounds [0 0 0 1 1 1 1 0] /GPTS [' + gp.join(' ') + '] /LPTS [' + lp.join(' ') + '] /GCS << /Type /GEOGCS /WKT (GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]) /EPSG 4326 >> /PDU [/M /DEG /DEG] >> >> ]';
-    var pg = add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW) + ' ' + f2(PH) + '] /Resources ' + res + ' /Contents ' + cs + ' 0 R ' + vp + ' >>');
+    var pg = add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW) + ' ' + f2(PH) + '] /Resources ' + (imN ? res.replace(/ >>$/, ' /XObject << /Im' + imN + ' ' + imN + ' 0 R >> >>') : res) + ' /Contents ' + cs + ' 0 R ' + vp + ' >>');
     return pg;
     }
-    var kids = groups.map(function (g) { return page(g.items, g.title, g.blk); });
+    var kids = groups.map(function (g) { return page(g.items, g.title, g.blk, g.img); });
     objs[cat - 1] = '<< /Type /Catalog /Pages ' + pages + ' 0 R >>';
     objs[pages - 1] = '<< /Type /Pages /Count ' + kids.length + ' /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] >>';
     var out = '%PDF-1.7\n%\xE2\xE3\xCF\xD3\n', offs = [];
@@ -689,6 +698,16 @@
       document.head.appendChild(s);
     });
   }
+  function pdfThumb(bytes, cv, wcss, maxH) {
+    var u8 = new Uint8Array(bytes.length); for (var i = 0; i < bytes.length; i++) u8[i] = bytes.charCodeAt(i) & 255;
+    var np = 1;
+    return loadPdfJs().then(function (lib) { return lib.getDocument({ data: u8 }).promise; }).then(function (doc) { np = doc.numPages; return doc.getPage(1); }).then(function (pg) {
+      var v0 = pg.getViewport({ scale: 1 }), sc = wcss / v0.width * (window.devicePixelRatio || 1) * 1.5, v = pg.getViewport({ scale: sc });
+      cv.width = v.width; cv.height = v.height; cv.style.width = Math.min(wcss, (maxH || 1e5) * v.width / v.height) + 'px'; cv.style.height = 'auto';
+      return pg.render({ canvasContext: cv.getContext('2d'), viewport: v }).promise.then(function () { return np; });
+    });
+  }
+  HA.pdfThumb = pdfThumb;
   function pdfPreview(bytes, onPrint) {
     var old = $('tdPrev'); if (old) old.remove();
     var el = document.createElement('div'); el.id = 'tdPrev';
