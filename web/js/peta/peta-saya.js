@@ -54,7 +54,8 @@
     if (!m || !window.HzOverlay) return;
     (m._ovl || []).forEach(function (l) { try { m.removeLayer(l); } catch (e) {} });
     m._ovl = [];
-    if (S.settings.mapMode !== 'osm' && !m._forceOvl) return; // lapisan PDF hanya di mode Peta, kecuali mode marking
+    var isSp = !!(HA.SP && HA.SP.map === m);
+    if (isSp ? !m._forceOvl : (S.settings.mapMode !== 'osm' && !m._forceOvl)) return; // SpidoMap: lapisan PDF hanya saat marking memilih mode Peta; peta lain hanya di mode Peta
     ovList().forEach(function (o) {
       if (!o.on || !o.cal) return;
       var af = HzOverlay.affOf(o);
