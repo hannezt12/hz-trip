@@ -45,21 +45,27 @@
     eye: ic('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
     save: ic('<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/>'),
     search: ic('<circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/>'),
-    share: ic('<circle cx="6" cy="12" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 11l8-4M8 13l8 4"/>')
+    share: ic('<circle cx="6" cy="12" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 11l8-4M8 13l8 4"/>'),
+    menu: ic('<path d="M4 7h16M4 12h16M4 17h16"/>'),
+    tag: ic('<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3"/>')
   };
   function tb(id, icon, label, on, extra) { return '<button class="tbtn' + (on ? ' on' : '') + '" ' + (id ? 'id="' + id + '" ' : '') + (extra || '') + '>' + icon + '<span>' + label + '</span></button>'; }
   HA.IC = IC; HA.tb = tb;
   var TD = { on: false, tool: null, D: null, lay: null, ed: null, wk: null, bound: false, prevFollow: null, hud: null, sel: null };
 
   // ---------- penyimpanan terpisah ----------
-  function defCats() { return [{ id: 'c1', name: 'Perlu cek', col: PAL[0][1] }, { id: 'c2', name: 'Dalam pekerjaan', col: PAL[2][1] }, { id: 'c3', name: 'Selesai', col: PAL[3][1] }, { id: 'c4', name: 'Catatan', col: PAL[4][1] }]; }
+  function defCats() { return [{ id: 'c1', name: 'Pemupukan', col: PAL[5][1], subs: [] }, { id: 'c2', name: 'Spraying', col: PAL[4][1], subs: [] }, { id: 'c3', name: 'Tebang', col: PAL[0][1], subs: [] }, { id: 'c4', name: 'Kebakaran', col: PAL[1][1], subs: [] }]; }
   function data() {
     if (TD.D) return TD.D;
     var d = null; try { d = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { d = null; }
-    if (!d || !Array.isArray(d.items)) d = { v: 1, cats: defCats(), items: [], brush: { cat: 'c1', col: null }, seq: 1 };
-    if (!Array.isArray(d.cats)) d.cats = defCats();
-    if (!d.brush) d.brush = { cat: null, col: PAL[0][1] };
-    if (d.brush.cat) { var bc = null; d.cats.forEach(function (c) { if (c.id === d.brush.cat) bc = c; }); d.brush = { cat: null, col: bc ? bc.col : PAL[0][1], op: d.brush.op }; }
+    if (!d || !Array.isArray(d.items)) d = { v: 2, cats: defCats(), items: [], brush: { cat: 'c1', sub: null }, seq: 1 };
+    if (!Array.isArray(d.cats) || !d.cats.length) d.cats = defCats();
+    var oldN = ['Perlu cek', 'Dalam pekerjaan', 'Selesai', 'Catatan'];
+    if (d.cats.length === 4 && d.cats.every(function (c, i) { return c.name === oldN[i]; }) && !d.items.some(function (x) { return x.cat; })) d.cats = defCats();
+    d.cats.forEach(function (c) { if (!Array.isArray(c.subs)) c.subs = []; });
+    if (!d.brush) d.brush = {};
+    var bk = null; d.cats.forEach(function (c) { if (c.id === d.brush.cat) bk = c; });
+    if (!bk) { var bc2 = d.cats[0]; if (d.brush.col) d.cats.forEach(function (c) { if (String(c.col).toLowerCase() === String(d.brush.col).toLowerCase()) bc2 = c; }); d.brush = { cat: bc2.id, sub: null, op: d.brush.op }; }
     TD.D = d; return d;
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(TD.D)); } catch (e) { toast('Gagal menyimpan marking'); } hsPush(); }
@@ -78,16 +84,21 @@
   }
   HA.tandaHsInit = hsInit; HA.tandaSetItems = setItems;
   function catOf(id) { var r = null; data().cats.forEach(function (c) { if (c.id === id) r = c; }); return r; }
-  function colOf(it) { var c = it.cat ? catOf(it.cat) : null; return c ? c.col : (it.col || PAL[0][1]); }
+  function subOf(c, id) { var r = null; if (c && id) c.subs.forEach(function (s) { if (s.id === id) r = s; }); return r; }
+  function colOf(it) { var c = it.cat ? catOf(it.cat) : null; if (c) { var s = subOf(c, it.sub); return s && s.col ? s.col : c.col; } return it.col || PAL[0][1]; }
   function brush() {
-    var b = data().brush, c = b.cat ? catOf(b.cat) : null;
+    var b = data().brush, c = catOf(b.cat) || data().cats[0], s = subOf(c, b.sub);
     var bo = (typeof b.op === 'number') ? b.op : 0.35;
-    if (c) return { cat: c.id, col: null, color: c.col, name: c.name, op: bo };
-    var cl = b.col || PAL[0][1];
-    return { cat: null, col: cl, color: cl, name: colorName(cl), op: bo };
+    return { cat: c.id, sub: s ? s.id : null, col: null, color: s && s.col ? s.col : c.col, name: c.name + (s ? ' / ' + s.name : ''), op: bo };
   }
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  function todayISO() { var t = new Date(); return t.getFullYear() + '-' + p2(t.getMonth() + 1) + '-' + p2(t.getDate()); }
+  function dateOf(it) { if (it.date && /^\d{4}-\d{2}-\d{2}$/.test(it.date)) return it.date; var t = new Date(it.ts || Date.now()); return t.getFullYear() + '-' + p2(t.getMonth() + 1) + '-' + p2(t.getDate()); }
+  function fmtD8(iso) { var a = String(iso).split('-'); return a.length === 3 ? a[2] + '-' + a[1] + '-' + a[0].slice(2) : String(iso); }
+  function touch(it) { if (it) it.mod = Date.now(); }
+  function uid(p) { var d = data(); d.seq = (d.seq || 1) + 1; return p + Date.now().toString(36) + d.seq; }
   function opOf(it) { var v = it.op; return (typeof v === 'number' && v >= 0.05 && v <= 0.95) ? v : 0.35; }
-  function addItem(it) { data().items.push(it); return it; }
+  function addItem(it) { if (it.cat && it.sub === undefined) it.sub = brush().sub; if (!it.date) it.date = todayISO(); it.mod = Date.now(); data().items.push(it); return it; }
   function undoLast() { if (TD.ed) edUndo(); else hsGo(-1); }
   function redoLast() { if (TD.ed) edRedo(); else hsGo(1); }
   HA.tandaRedo = redoLast;
@@ -343,7 +354,7 @@
   function itemTidy(it) {
     var n0 = it.pts.length, out = tidyPts(it.pts, it.t);
     if (out.length >= n0) { toast(n0 < 4 ? 'Belum ada yang perlu dirapikan' : 'Sudah rapi'); return; }
-    it.pts = clonePts(out); save(); drawAll(); barMain(); toast('Dirapikan: ' + n0 + ' → ' + out.length + ' titik');
+    it.pts = clonePts(out); touch(it); save(); drawAll(); barMain(); toast('Dirapikan: ' + n0 + ' → ' + out.length + ' titik');
   }
 
   // ---------- gambar dengan jari (seret di peta) ----------
@@ -390,29 +401,40 @@
   }
 
   // ---------- palet warna (akordeon) ----------
-  function palHtml(sel, op, showOp) {
+  function palHtml(cur, op, showOp) {
     if (!TD.palOpen) return '';
-    return '<div class="tdPal"><div class="tdCs">' + PAL.map(function (c) { return '<button type="button" class="tdc' + (sel && sel.toLowerCase() === c[1].toLowerCase() ? ' on' : '') + '" data-col="' + c[1] + '" style="background:' + c[1] + '" aria-label="' + c[0] + '"></button>'; }).join('') + '</div>' +
-      (showOp ? '<div class="tdOp"><span>Isi warna</span><input type="range" id="tdOpR" min="10" max="90" step="5" value="' + Math.round(op * 100) + '"><b id="tdOpV">' + Math.round(op * 100) + '%</b></div>' : '') + '</div>';
+    var d = data(), cc = cur && cur.cat ? catOf(cur.cat) : null;
+    return '<div class="tdPal"><div class="tdKs">' + d.cats.map(function (c) { return '<button type="button" class="tdk' + (cc && c.id === cc.id ? ' on' : '') + '" data-cat="' + c.id + '"><i style="background:' + c.col + '"></i>' + esc(c.name) + '</button>'; }).join('') + '</div>' +
+      (cc && cc.subs.length ? '<div class="tdKs tdKsub"><button type="button" class="tdk' + (!cur.sub ? ' on' : '') + '" data-cat="' + cc.id + '" data-sub=""><i style="background:' + cc.col + '"></i>Tanpa sub</button>' + cc.subs.map(function (s) { return '<button type="button" class="tdk' + (cur.sub === s.id ? ' on' : '') + '" data-cat="' + cc.id + '" data-sub="' + s.id + '"><i style="background:' + (s.col || cc.col) + '"></i>' + esc(s.name || 'Sub') + '</button>'; }).join('') + '</div>' : '') +
+      (showOp ? '<div class="tdOp"><span>Isi warna</span><input type="range" id="tdOpR" min="10" max="90" step="5" value="' + Math.round(op * 100) + '"><b id="tdOpV">' + Math.round(op * 100) + '%</b></div>' : '') +
+      '<button type="button" class="tdkm" id="tdKm">Kelola kategori</button></div>';
   }
-  function palWire(onCol, onOp) {
-    bar().querySelectorAll('.tdc').forEach(function (e) { e.onclick = function () { TD.palOpen = false; onCol(e.getAttribute('data-col')); }; });
+  function palWire(onSel, onOp) {
+    bar().querySelectorAll('.tdk').forEach(function (e) {
+      e.onclick = function () {
+        var cid = e.getAttribute('data-cat'), hs = e.hasAttribute('data-sub'), sid = hs ? (e.getAttribute('data-sub') || null) : null, c = catOf(cid);
+        if (hs || !c || !c.subs.length) TD.palOpen = false;
+        onSel(cid, sid);
+      };
+    });
+    if ($('tdKm')) $('tdKm').onclick = function () { catPage(); };
     var r = $('tdOpR');
     if (r) { r.oninput = function () { $('tdOpV').textContent = r.value + '%'; onOp(+r.value / 100, false); }; r.onchange = function () { onOp(+r.value / 100, true); }; }
   }
   HA.tandaPalHtml = palHtml; HA.tandaPalWire = palWire;
+  HA.tandaSetBrush = function (c, sb) { var d = data(); d.brush.cat = c; d.brush.sub = sb || null; save(); };
 
   function edBar() {
-    var e = TD.ed, col = e.item ? colOf(e.item) : brush().color, op = e.item ? opOf(e.item) : brush().op;
-    bar().innerHTML = palHtml(col, op, e.kind === 'pg') + '<div class="tdr">' + tb('tdUr', IC.undo, 'Urung') + tb('tdRd', IC.redo, 'Ulang') + tb('tdTy', IC.tidy, 'Rapikan') + (e.item ? '' : tb('tdPn', IC.hand, 'Geser', e.pan)) + '</div>' +
-      '<div class="tdr">' + tb('tdCl', '<i class="cdot" style="background:' + col + '"></i>', 'Warna', TD.palOpen) + tb('tdBt', IC.close, 'Batal') + tb('tdOk', IC.check, 'Simpan', true) + '</div>';
+    var e = TD.ed, bb = brush(), col = e.item ? colOf(e.item) : bb.color, op = e.item ? opOf(e.item) : bb.op, cur = e.item ? { cat: e.item.cat, sub: e.item.sub } : { cat: bb.cat, sub: bb.sub };
+    bar().innerHTML = palHtml(cur, op, e.kind === 'pg') + '<div class="tdr">' + tb('tdUr', IC.undo, 'Urung') + tb('tdRd', IC.redo, 'Ulang') + tb('tdTy', IC.tidy, 'Rapikan') + (e.item ? '' : tb('tdPn', IC.hand, 'Geser', e.pan)) + '</div>' +
+      '<div class="tdr">' + tb('tdCl', '<i class="cdot" style="background:' + col + '"></i>', 'Kategori', TD.palOpen) + tb('tdBt', IC.close, 'Batal') + tb('tdOk', IC.check, 'Simpan', true) + '</div>';
     $('tdUr').onclick = edUndo; $('tdRd').onclick = edRedo; $('tdTy').onclick = edTidy;
     if ($('tdPn')) $('tdPn').onclick = function () { e.pan = !e.pan; lockMap(!e.pan); edStatus(); edBar(); };
     $('tdBt').onclick = function () { edCancel(); TD.tool = null; barMain(); };
     $('tdOk').onclick = edDone;
     $('tdCl').onclick = function () { TD.palOpen = !TD.palOpen; edBar(); };
-    palWire(function (c) {
-      if (e.item) { e.item.cat = null; e.item.col = c; } else { var d = data(); d.brush = { cat: null, col: c, op: d.brush.op }; }
+    palWire(function (cid, sid) {
+      if (e.item) { e.item.cat = cid; e.item.sub = sid; e.item.col = null; touch(e.item); } else { var d = data(); d.brush.cat = cid; d.brush.sub = sid; }
       save(); edShape(); edBar();
     }, function (v, fin) {
       if (e.item) e.item.op = v; else data().brush.op = v;
@@ -428,7 +450,7 @@
     var e = TD.ed; if (!e) return;
     if (e.pts.length < edMin()) { toast(e.kind === 'ln' ? 'Garis butuh minimal 2 titik' : 'Area butuh minimal 3 titik'); return; }
     var msg;
-    if (e.item) { e.item.pts = e.pts; e.item.t = e.kind; if (e.item.full) { e.item.full = false; e.item.bid = null; } msg = 'Bentuk diperbarui'; }
+    if (e.item) { e.item.pts = e.pts; e.item.t = e.kind; if (e.item.full) { e.item.full = false; e.item.bid = null; } touch(e.item); msg = 'Bentuk diperbarui'; }
     else {
       var b = brush(), it = { id: newId(), t: e.kind, pts: e.pts, cat: b.cat, col: b.col, name: '', note: '', ts: Date.now() };
       if (e.kind === 'pg') it.op = b.op;
@@ -480,7 +502,7 @@
     }
     if (TD.selIt) {
       var it = TD.selIt, col = colOf(it);
-      bx.innerHTML = palHtml(col, opOf(it), it.t === 'pg') + '<div class="tdr">' + (it.t === 'pt' ? '' : tb('siTy', IC.tidy, 'Rapikan')) + tb('siCl', '<i class="cdot" style="background:' + col + '"></i>', 'Warna', TD.palOpen) + tb('siSh', IC.edit, it.t === 'pt' ? 'Geser' : 'Bentuk') + tb('siDt', IC.list, 'Detail') + tb('siDl', IC.trash, 'Hapus') + '</div>' +
+      bx.innerHTML = palHtml({ cat: it.cat, sub: it.sub }, opOf(it), it.t === 'pg') + '<div class="tdr">' + (it.t === 'pt' ? '' : tb('siTy', IC.tidy, 'Rapikan')) + tb('siCl', '<i class="cdot" style="background:' + col + '"></i>', 'Kategori', TD.palOpen) + tb('siSh', IC.edit, it.t === 'pt' ? 'Geser' : 'Bentuk') + tb('siDt', IC.list, 'Detail') + tb('siDl', IC.trash, 'Hapus') + '</div>' +
         '<div class="tdr">' + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + tb('siOk', IC.check, 'Selesai', true) + '</div>';
       if ($('siTy')) $('siTy').onclick = function () { itemTidy(it); };
       $('siCl').onclick = function () { TD.palOpen = !TD.palOpen; barMain(); };
@@ -489,7 +511,7 @@
       $('siDl').onclick = function () { askConfirm('Hapus tanda ini?', 'Bisa diurungkan dengan tombol Urung.', 'Hapus', function () { var d = data(); d.items = d.items.filter(function (x) { return x.id !== it.id; }); TD.selIt = null; save(); drawAll(); if (HA.BT) HA.BT.refresh(); barMain(); }); };
       $('siOk').onclick = function () { TD.selIt = null; TD.palOpen = false; drawAll(); barMain(); };
       $('tdUn').onclick = function () { hsGo(-1); }; $('tdRe').onclick = function () { hsGo(1); };
-      palWire(function (c) { it.cat = null; it.col = c; save(); drawAll(); barMain(); }, function (v, fin) { it.op = v; drawAll(); if (fin) save(); });
+      palWire(function (cid, sid) { it.cat = cid; it.sub = sid; it.col = null; touch(it); save(); drawAll(); barMain(); }, function (v, fin) { it.op = v; drawAll(); if (fin) save(); });
       hud((it.name ? it.name + ' · ' : '') + (it.t === 'pt' ? 'Titik' : statText(it, statOf(it)).replace('\n', ' · ')));
       return true;
     }
@@ -535,21 +557,87 @@
     $('tdCx').onclick = function () { closeSheet(); if (back) back(); };
   }
   var catSheet = colorSheet;
+  // ---------- halaman kategori ----------
+  function catPage() {
+    var d = data(), ex = null, foc = null;
+    function norm() { d.cats.forEach(function (c, i) { if (!String(c.name).trim()) c.name = 'Kategori ' + (i + 1); c.subs.forEach(function (s, j) { if (!String(s.name).trim()) s.name = 'Sub ' + (j + 1); }); }); }
+    function sw() { return '<div class="tdCs tdCw">' + PAL.map(function (c) { return '<button type="button" class="tdc" data-pc="' + c[1] + '" style="background:' + c[1] + '" aria-label="' + c[0] + '"></button>'; }).join('') + '</div>'; }
+    function draw() {
+      openSheet('<div class="grab"></div><div class="st">KATEGORI</div><div class="muted" style="margin-bottom:8px">Nama dan warna bebas diubah. Sub-kategori ikut warna kategori, tapi warnanya boleh diganti.</div><div id="kgL">' + d.cats.map(function (c) {
+        var h = '<div class="kgc"><div class="kgr"><button type="button" class="kgd" data-pk="c:' + c.id + '" style="background:' + c.col + '" aria-label="Warna"></button><input type="text" maxlength="30" placeholder="Nama kategori" data-nc="' + c.id + '" value="' + esc(c.name) + '"><button type="button" class="ib" data-dc="' + c.id + '" aria-label="Hapus">' + IC.trash + '</button></div>';
+        if (ex === 'c:' + c.id) h += sw();
+        c.subs.forEach(function (s) {
+          var k = 's:' + c.id + ':' + s.id;
+          h += '<div class="kgr kgs"><button type="button" class="kgd" data-pk="' + k + '" style="background:' + (s.col || c.col) + '" aria-label="Warna"></button><input type="text" maxlength="30" placeholder="Nama sub-kategori" data-ns="' + c.id + ':' + s.id + '" value="' + esc(s.name) + '"><button type="button" class="ib" data-ds="' + c.id + ':' + s.id + '" aria-label="Hapus">' + IC.trash + '</button></div>';
+          if (ex === k) h += sw() + (s.col ? '<button type="button" class="btn sm" data-rs="' + c.id + ':' + s.id + '" style="margin:0 0 6px 2rem">Ikut warna kategori</button>' : '');
+        });
+        return h + '<button type="button" class="kga" data-as="' + c.id + '">+ Sub-kategori</button></div>';
+      }).join('') + '</div><button class="btn" id="kgA" style="width:100%;margin-top:10px">+ Kategori baru</button><button class="btn pri" id="kgX" style="width:100%;margin-top:8px">Selesai</button>');
+      var sh = $('sheet');
+      sh.querySelectorAll('[data-nc]').forEach(function (e) { e.oninput = function () { var c = catOf(e.getAttribute('data-nc')); if (c) { c.name = e.value; save(); } }; });
+      sh.querySelectorAll('[data-ns]').forEach(function (e) { e.oninput = function () { var a = e.getAttribute('data-ns').split(':'), s = subOf(catOf(a[0]), a[1]); if (s) { s.name = e.value; save(); } }; });
+      sh.querySelectorAll('[data-pk]').forEach(function (e) { e.onclick = function () { var k = e.getAttribute('data-pk'); ex = ex === k ? null : k; draw(); }; });
+      sh.querySelectorAll('[data-pc]').forEach(function (e) {
+        e.onclick = function () {
+          var a = (ex || '').split(':'), col = e.getAttribute('data-pc'), c = catOf(a[1]);
+          if (a[0] === 'c' && c) c.col = col; else if (a[0] === 's') { var s = subOf(c, a[2]); if (s) s.col = col; }
+          ex = null; save(); draw();
+        };
+      });
+      sh.querySelectorAll('[data-rs]').forEach(function (e) { e.onclick = function () { var a = e.getAttribute('data-rs').split(':'), s = subOf(catOf(a[0]), a[1]); if (s) { s.col = null; ex = null; save(); draw(); } }; });
+      sh.querySelectorAll('[data-as]').forEach(function (e) { e.onclick = function () { var c = catOf(e.getAttribute('data-as')), s = { id: uid('s'), name: '', col: null }; c.subs.push(s); foc = 'ns:' + c.id + ':' + s.id; save(); draw(); }; });
+      sh.querySelectorAll('[data-dc]').forEach(function (e) {
+        e.onclick = function () {
+          var c = catOf(e.getAttribute('data-dc')); if (!c) return;
+          if (d.cats.length <= 1) { toast('Minimal ada satu kategori'); return; }
+          var n = d.items.filter(function (x) { return x.cat === c.id; }).length;
+          function go() {
+            d.items.forEach(function (x) { if (x.cat === c.id) { x.col = colOf(x); x.cat = null; x.sub = null; } });
+            d.cats = d.cats.filter(function (x) { return x !== c; });
+            if (d.brush.cat === c.id) { d.brush.cat = d.cats[0].id; d.brush.sub = null; }
+            save(); draw();
+          }
+          if (n) askConfirm('Hapus kategori ' + c.name + '?', n + ' tanda tetap ada, warnanya dipertahankan tanpa kategori.', 'Hapus', go); else go();
+        };
+      });
+      sh.querySelectorAll('[data-ds]').forEach(function (e) {
+        e.onclick = function () {
+          var a = e.getAttribute('data-ds').split(':'), c = catOf(a[0]); if (!c) return;
+          d.items.forEach(function (x) { if (x.cat === c.id && x.sub === a[1]) x.sub = null; });
+          c.subs = c.subs.filter(function (x) { return x.id !== a[1]; });
+          if (d.brush.sub === a[1]) d.brush.sub = null;
+          save(); draw();
+        };
+      });
+      $('kgA').onclick = function () { var c = { id: uid('k'), name: '', col: (function () { var u = {}; d.cats.forEach(function (x) { u[String(x.col).toLowerCase()] = 1; }); var f = PAL.filter(function (x) { return !u[x[1].toLowerCase()]; })[0]; return (f || PAL[d.cats.length % PAL.length])[1]; })(), subs: [] }; d.cats.push(c); foc = 'nc:' + c.id; save(); draw(); };
+      $('kgX').onclick = function () { norm(); save(); closeSheet(); TD.palOpen = false; drawAll(); if (HA.BT) HA.BT.refresh(); if (TD.ed) edBar(); else barMain(); };
+      if (foc) { var fe = sh.querySelector('[data-' + foc.split(':')[0] + '="' + foc.slice(foc.indexOf(':') + 1) + '"]'); foc = null; if (fe) { try { fe.focus(); } catch (x) {} } }
+    }
+    draw();
+  }
+  HA.tandaCatPage = catPage;
   // ---------- panel satu tanda ----------
   function typeName(t) { return t === 'pt' ? 'TITIK' : (t === 'ln' ? 'GARIS' : 'AREA'); }
+  function catSelHtml(it) {
+    var d = data(), c = it.cat ? catOf(it.cat) : null;
+    return '<select id="tiCa">' + (c ? '' : '<option value="">Tanpa kategori</option>') + d.cats.map(function (x) { return '<option value="' + x.id + '"' + (c && x.id === c.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select>' +
+      '<select id="tiSb"' + (c && c.subs.length ? '' : ' disabled') + '><option value="">Tanpa sub</option>' + (c ? c.subs.map(function (x) { return '<option value="' + x.id + '"' + (it.sub === x.id ? ' selected' : '') + '>' + esc(x.name || 'Sub') + '</option>'; }).join('') : '') + '</select>';
+  }
   function itemSheet(it) {
     var st = statOf(it), c = it.cat ? catOf(it.cat) : null;
     var lines = it.t === 'pt' ? it.pts[0][0].toFixed(6) + ', ' + it.pts[0][1].toFixed(6) : statText(it, st);
     openSheet('<div class="grab"></div><div class="st">' + typeName(it.t) + (it.full ? ' · BLOK UTUH' : '') + '</div>' +
       '<div class="bnm"><input type="text" id="tiN" maxlength="40" placeholder="Nama (boleh kosong)" value="' + esc(it.name || '') + '"></div>' +
       '<div class="card" style="white-space:pre-line">' + esc(lines) + '</div>' +
-      '<div class="h" style="margin-top:10px">WARNA</div><button class="btn tdbr" id="tiC" style="width:100%"><i style="background:' + colOf(it) + '"></i>' + esc(colorName(colOf(it))) + '</button>' +
+      '<div class="h" style="margin-top:10px">KATEGORI</div><div class="tdsel"><i class="cdot" style="background:' + colOf(it) + '"></i>' + catSelHtml(it) + '</div>' +
+      '<div class="h" style="margin-top:10px">TANGGAL</div><div class="bnm"><input type="date" id="tiDt" value="' + dateOf(it) + '"></div>' +
       '<div class="h" style="margin-top:10px">CATATAN</div><div class="bnm"><input type="text" id="tiNt" maxlength="120" value="' + esc(it.note || '') + '"></div>' +
       '<div class="opts" style="margin-top:10px"><button class="opt" id="tiZ">Zoom ke sini</button>' + (it.t !== 'pt' ? '<button class="opt" id="tiE">Edit bentuk</button>' : '<button class="opt" id="tiE">Geser titik</button>') + (it.t === 'ln' && it.pts.length >= 3 ? '<button class="opt" id="tiV">Jadikan area</button>' : '') + (it.t === 'pg' ? '<button class="opt" id="tiV">Jadikan garis</button>' : '') + '</div>' +
       '<button class="btn" id="tiD" style="width:100%;margin-top:10px">Hapus</button><button class="btn pri" id="tiX" style="width:100%;margin-top:8px">Selesai</button>');
-    function keep() { it.name = $('tiN').value.trim(); it.note = $('tiNt').value.trim(); save(); drawAll(); }
+    function keep() { it.name = $('tiN').value.trim(); it.note = $('tiNt').value.trim(); var dv = $('tiDt').value; if (/^\d{4}-\d{2}-\d{2}$/.test(dv)) it.date = dv; touch(it); save(); drawAll(); }
     $('tiX').onclick = function () { keep(); closeSheet(); };
-    $('tiC').onclick = function () { keep(); colorSheet(function (v) { it.cat = null; it.col = v.col; save(); drawAll(); itemSheet(it); }, function () { itemSheet(it); }, colOf(it)); };
+    $('tiCa').onchange = function () { keep(); it.cat = $('tiCa').value; it.sub = null; it.col = null; touch(it); save(); drawAll(); itemSheet(it); };
+    $('tiSb').onchange = function () { keep(); it.sub = $('tiSb').value || null; touch(it); save(); drawAll(); itemSheet(it); };
     $('tiZ').onclick = function () { keep(); closeSheet(); fitItem(it); };
     $('tiE').onclick = function () {
       keep(); closeSheet();
@@ -566,7 +654,7 @@
   function pointMove(it) {
     var m = map(); toast('Ketuk lokasi baru untuk titik ini');
     TD.tool = 'mv';
-    var h = function (ev) { m.off('click', h); it.pts = [[ev.latlng.lat, ev.latlng.lng]]; save(); TD.tool = null; TD.selIt = it; drawAll(); barMain(); };
+    var h = function (ev) { m.off('click', h); it.pts = [[ev.latlng.lat, ev.latlng.lng]]; touch(it); save(); TD.tool = null; TD.selIt = it; drawAll(); barMain(); };
     setTimeout(function () { m.on('click', h); }, 50);
   }
 
@@ -615,7 +703,7 @@
       var st = statOf(it), c = it.cat ? catOf(it.cat) : null, col = colOf(it);
       if (it.boundary) return '<Placemark><name>' + xe(it.name || '') + '</name><description>Batas blok</description><Style><LineStyle><color>ff00d6ff</color><width>2.5</width></LineStyle><PolyStyle><fill>0</fill></PolyStyle></Style><ExtendedData><Data name="hz_type"><value>blk</value></Data></ExtendedData><Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>' + ring(it.pts) + '</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>';
       var s = '<Placemark><name>' + xe(it.name || '') + '</name><description>' + xe(statText(it, st).replace('\n', ' | ') + (it.note ? ' | ' + it.note : '')) + '</description><styleUrl>#' + sidOf(it) + '</styleUrl>' +
-        '<ExtendedData><Data name="hz_type"><value>' + it.t + '</value></Data><Data name="hz_cat"><value>' + xe(c ? c.name : '') + '</value></Data><Data name="hz_col"><value>' + col + '</value></Data>' + (it.t === 'pg' ? '<Data name="hz_op"><value>' + Math.round(opOf(it) * 100) + '</value></Data>' : '') + '<Data name="hz_note"><value>' + xe(it.note || '') + '</value></Data>' + (it.full ? '<Data name="hz_bid"><value>' + xe(it.bid) + '</value></Data>' : '') + '</ExtendedData>';
+        '<ExtendedData><Data name="hz_type"><value>' + it.t + '</value></Data><Data name="hz_cat"><value>' + xe(c ? c.name : '') + '</value></Data><Data name="hz_sub"><value>' + xe((function () { var q = c ? subOf(c, it.sub) : null; return q ? q.name : ''; })()) + '</value></Data><Data name="hz_date"><value>' + dateOf(it) + '</value></Data><Data name="hz_col"><value>' + col + '</value></Data>' + (it.t === 'pg' ? '<Data name="hz_op"><value>' + Math.round(opOf(it) * 100) + '</value></Data>' : '') + '<Data name="hz_note"><value>' + xe(it.note || '') + '</value></Data>' + (it.full ? '<Data name="hz_bid"><value>' + xe(it.bid) + '</value></Data>' : '') + '</ExtendedData>';
       if (it.t === 'pt') s += '<Point><coordinates>' + (+it.pts[0][1]).toFixed(7) + ',' + (+it.pts[0][0]).toFixed(7) + ',0</coordinates></Point>';
       else if (it.t === 'ln') s += '<LineString><tessellate>1</tessellate><coordinates>' + it.pts.map(function (p) { return (+p[1]).toFixed(7) + ',' + (+p[0]).toFixed(7) + ',0'; }).join(' ') + '</coordinates></LineString>';
       else s += '<Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>' + ring(it.pts) + '</coordinates></LinearRing></outerBoundaryIs></Polygon>';
@@ -660,7 +748,7 @@
         else { var c2 = first(el, 'coordinates'); pts = c2 ? coords(c2) : []; }
         if (t === 'Point' && pts.length >= 1) pts = [pts[0]];
         var min = t === 'Point' ? 1 : (t === 'LineString' ? 2 : 3); if (pts.length < min) return;
-        d.items.push({ id: newId(), t: t === 'Point' ? 'pt' : (t === 'LineString' ? 'ln' : 'pg'), pts: pts, cat: cat ? cat.id : null, col: cat ? null : color, name: name, note: ext.hz_note || '', ts: Date.now() }); if (t === 'Polygon' && ext.hz_op && isFinite(+ext.hz_op)) d.items[d.items.length - 1].op = Math.max(0.1, Math.min(0.9, +ext.hz_op / 100)); added++;
+        d.items.push({ id: newId(), t: t === 'Point' ? 'pt' : (t === 'LineString' ? 'ln' : 'pg'), pts: pts, cat: cat ? cat.id : null, col: cat ? null : color, name: name, note: ext.hz_note || '', date: /^\d{4}-\d{2}-\d{2}$/.test(ext.hz_date || '') ? ext.hz_date : todayISO(), ts: Date.now() }); if (t === 'Polygon' && ext.hz_op && isFinite(+ext.hz_op)) d.items[d.items.length - 1].op = Math.max(0.1, Math.min(0.9, +ext.hz_op / 100)); added++;
       });
     });
     save(); drawAll();
@@ -737,9 +825,9 @@
     var d = data(), src = listItems || d.items, ks = [], seen = {};
     src.forEach(function (it) { var k = ck(it); if (!seen[k]) { seen[k] = 1; ks.push([k, ckName(it), colOf(it)]); } });
     PR.cats = {}; ks.forEach(function (k) { PR.cats[k[0]] = true; });
-    if (defTitle != null) PR.title = defTitle;
+    PR.title = defTitle || '';
     openSheet('<div class="grab"></div><div class="st">CETAK MARKING</div>' +
-      '<div class="h">JUDUL</div><input type="text" id="mpT" maxlength="60" placeholder="Kosong = Marking HZ Trip" value="' + esc(PR.title) + '" style="width:100%">' +
+      '<div class="h">JUDUL</div><input type="text" id="mpT" maxlength="60" placeholder="Kosong" value="' + esc(PR.title) + '" style="width:100%">' +
       '<div class="h" style="margin-top:10px">WARNA YANG DICETAK</div><div class="plist">' + ks.map(function (k) { return '<label><input type="checkbox" data-k="' + k[0] + '" checked> <i class="tdd" style="background:' + k[2] + '"></i>' + esc(k[1]) + '</label>'; }).join('') + '</div>' +
       '<div class="h" style="margin-top:10px">ISI PETA</div><div class="plist"><label><input type="checkbox" id="mpN"' + (PR.nama ? ' checked' : '') + '> Nama tanda</label><label><input type="checkbox" id="mpV"' + (PR.nilai ? ' checked' : '') + '> Nilai (ha atau meter)</label><label><input type="checkbox" id="mpB"' + (PR.blk ? ' checked' : '') + '> Garis blok terkonfirmasi sebagai latar</label></div>' +
       '<div class="h" style="margin-top:10px">UKURAN TEKS</div><div class="seg" id="mpF">' + [['a', 'Otomatis'], ['s', 'Kecil'], ['m', 'Sedang'], ['l', 'Besar']].map(function (o) { return '<button data-v="' + o[0] + '"' + (PR.fs === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>'; }).join('') + '</div>' +
@@ -756,7 +844,7 @@
       grab();
       var items = src.filter(function (it) { return PR.cats[ck(it)] !== false; });
       if (!items.length) { toast('Pilih minimal satu warna yang berisi tanda'); return null; }
-      return buildMarkPdf(items, Object.assign({}, PR, { buf: blk ? bufM() : 0, groups: [{ title: PR.title || (blk ? String(blk.name) : ''), items: items, blk: blk || null }] }));
+      return buildMarkPdf(items, Object.assign({}, PR, { buf: blk ? bufM() : 0, groups: [{ title: PR.title, items: items, blk: blk || null }] }));
     }
     $('mpPv').onclick = function () { var b = build(); if (b) pdfPreview(b, function () { saveFile('Marking_HZTrip_' + stamp() + '.pdf', btoa(b), 'application/pdf'); }); };
     $('mpGo').onclick = function () { var b = build(); if (b) saveFile('Marking_HZTrip_' + stamp() + '.pdf', btoa(b), 'application/pdf'); };
@@ -769,8 +857,12 @@
   function f2(v) { return (Math.round(v * 100) / 100).toString(); }
   function rgb(hex) { var h = hex.replace('#', ''); return f2(parseInt(h.slice(0, 2), 16) / 255) + ' ' + f2(parseInt(h.slice(2, 4), 16) / 255) + ' ' + f2(parseInt(h.slice(4, 6), 16) / 255); }
   function ck(it) { return it.cat ? it.cat : 'x' + colOf(it).toLowerCase(); }
-  function ckName(it) { var c = it.cat ? catOf(it.cat) : null; return c ? c.name : colorName(colOf(it)); }
-  HA.tandaCk = ck;
+  function ckName(it) { var c = it.cat ? catOf(it.cat) : null; return c ? c.name : 'Tanpa kategori'; }
+  HA.tandaCk = ck; HA.tandaCatKey = ck;
+  HA.tandaCatInfo = function (it) { var c = it.cat ? catOf(it.cat) : null; return { name: c ? c.name : 'Tanpa kategori', col: c ? c.col : colOf(it) }; };
+  function tabKey(it) { return ck(it) + '|' + (it.sub || '') + '|' + dateOf(it); }
+  function tabName(it) { var c = it.cat ? catOf(it.cat) : null; if (!c) return 'Tanpa kategori'; var s = subOf(c, it.sub); return c.name + (s ? ' / ' + s.name : ''); }
+  function catIdx(it) { var r = 99, sx = 0; data().cats.forEach(function (c, i) { if (c.id === it.cat) { r = i; if (it.sub) c.subs.forEach(function (s, j) { if (s.id === it.sub) sx = j + 1; }); } }); return r * 100 + sx; }
   function pageBox(items, blk, o) {
     var allp = []; items.forEach(function (it) { it.pts.forEach(function (p) { allp.push(p); }); }); if (blk) blk.pts.forEach(function (p) { allp.push(p); });
     var mb = bboxOf(allp);
@@ -782,7 +874,7 @@
     var objs = [], ver = (document.querySelector('.ver') ? (document.querySelector('.ver').textContent.match(/Versi\s*([\d.]+)/) || [])[1] : '') || '';
     function add(b) { objs.push(b); return objs.length; }
     function stream(dict, dt) { return '<< ' + dict + ' /Length ' + dt.length + ' >>\nstream\n' + dt + '\nendstream'; }
-    var dd = new Date(), p2 = function (n) { return (n < 10 ? '0' : '') + n; }, tgl = p2(dd.getDate()) + '-' + p2(dd.getMonth() + 1) + '-' + dd.getFullYear();
+    var dd = new Date(), p2 = function (n) { return (n < 10 ? '0' : '') + n; }, tgl = p2(dd.getDate()) + '-' + p2(dd.getMonth() + 1) + '-' + String(dd.getFullYear()).slice(2);
     var cat = add(''), pages = add(''), f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'), f2o = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
     var gsM = {};
     function gsFor(op) { var k = Math.round(op * 100); if (!gsM[k]) gsM[k] = add('<< /Type /ExtGState /ca ' + (k / 100) + ' /CA 1 >>'); return k; }
@@ -792,14 +884,24 @@
     function page(items, ttlText, blk, img) {
     var mb = pageBox(items, blk, o), hasImg = !!img;
     var latc = (mb[0] + mb[2]) / 2, kx = 111320 * Math.cos(latc * Math.PI / 180), ky = 111320;
-    var mw = Math.max(50, (mb[3] - mb[1]) * kx), mh = Math.max(50, (mb[2] - mb[0]) * ky), land = mw >= mh, PW = land ? 1190.55 : 841.89, PH = land ? 841.89 : 1190.55, M = 24;
-    var fw = PW - 2 * M, fh = PH - 2 * M - 8, sc = Math.min(fw / (mw * 1.1), fh / (mh * 1.1)), offx = (fw - mw * sc) / 2, offy = (fh - mh * sc) / 2;
-    var X = function (lng) { return M + offx + (lng - mb[1]) * kx * sc; }, Y = function (lat) { return M + offy + (lat - mb[0]) * ky * sc; };
-    var lngAt = function (x) { return mb[1] + (x - M - offx) / (kx * sc); }, latAt = function (y) { return mb[0] + (y - M - offy) / (ky * sc); };
-    var c = [], info = [];
-    var ttl = asc(ttlText || 'Marking HZ Trip'), imN = 0;
+    var mw = Math.max(50, (mb[3] - mb[1]) * kx), mh = Math.max(50, (mb[2] - mb[0]) * ky), PW = 595.28, PH = 841.89, M = 24;
+    var trow = {}, tord = [], anyPL = false;
+    items.forEach(function (it) {
+      var k = tabKey(it), st0 = statOf(it);
+      if (!trow[k]) { trow[k] = { name: tabName(it), col: colOf(it), date: dateOf(it), ord: catIdx(it), ha: 0, lj: 0, lm: 0, pt: 0, m: 0 }; tord.push(k); }
+      var r0 = trow[k];
+      if (it.t === 'pt') { r0.pt++; anyPL = true; } else if (it.t === 'ln') { r0.m += st0.m; anyPL = true; } else { r0.ha += st0.ha; r0.lj += st0.n; r0.lm += st0.lm; }
+    });
+    tord.sort(function (a, b) { var p = trow[a], q = trow[b]; return (p.ord - q.ord) || (p.name < q.name ? -1 : (p.name > q.name ? 1 : 0)) || (p.date < q.date ? -1 : (p.date > q.date ? 1 : 0)); });
+    var custom = asc((ttlText || '').trim()), ttl = blk ? 'Blok ' + asc(blk.name) : (custom || 'Marking HZ Trip'), subT = blk ? custom : '';
+    var HH = subT ? 40 : 26, TRH = Math.max(14, Math.min(26, 330 / (tord.length + 1))), TH = TRH * (tord.length + 1) + 16;
+    var ya = M + TH + 10, yb = PH - M - HH, fw = PW - 2 * M, fh = yb - ya, sc = Math.min(fw / (mw * 1.1), fh / (mh * 1.1)), offx = (fw - mw * sc) / 2, offy = (fh - mh * sc) / 2;
+    var X = function (lng) { return M + offx + (lng - mb[1]) * kx * sc; }, Y = function (lat) { return ya + offy + (lat - mb[0]) * ky * sc; };
+    var lngAt = function (x) { return mb[1] + (x - M - offx) / (kx * sc); }, latAt = function (y) { return mb[0] + (y - ya - offy) / (ky * sc); };
+    var c = [], info = [], imN = 0;
     if (hasImg) { imN = add(stream('/Type /XObject /Subtype /Image /Width ' + img.w + ' /Height ' + img.h + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode', img.data)); c.push('q ' + f2((mb[3] - mb[1]) * kx * sc) + ' 0 0 ' + f2((mb[2] - mb[0]) * ky * sc) + ' ' + f2(X(mb[1])) + ' ' + f2(Y(mb[0])) + ' cm /Im' + imN + ' Do Q'); }
-    c.push('0 g BT /F2 14 Tf ' + f2(PW / 2 - ttl.length * 14 * 0.56 / 2) + ' ' + f2(PH - 18) + ' Td (' + pe(ttl) + ') Tj ET');
+    c.push('0 g BT /F2 16 Tf ' + f2(M) + ' ' + f2(PH - M - 14) + ' Td (' + pe(ttl) + ') Tj ET');
+    if (subT) c.push('0 g BT /F1 11 Tf ' + f2(M) + ' ' + f2(PH - M - 30) + ' Td (' + pe(subT) + ') Tj ET');
     // latar: garis blok terkonfirmasi yang bersinggungan dengan area cetak
     if (o.blk) {
       var ex = [mb[0] - (mb[2] - mb[0]) * 0.1, mb[1] - (mb[3] - mb[1]) * 0.1, mb[2] + (mb[2] - mb[0]) * 0.1, mb[3] + (mb[3] - mb[1]) * 0.1], cnt = 0;
@@ -811,7 +913,7 @@
       if (hasImg) c.push('[] 0 d');
     }
     if (blk) { var bs = ''; blk.pts.forEach(function (p, i) { bs += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); c.push(hasImg ? '1 0.9 0 RG 2.2 w ' + bs + 'h S' : '0 G 1.6 w ' + bs + 'h S'); }
-    var cols = {}, fits = [];
+    var fits = [];
     items.forEach(function (it) {
       var col = colOf(it), st = statOf(it), lab = [];
       if (o.nama && it.name) lab.push(asc(it.name));
@@ -819,8 +921,6 @@
       var q = bboxOf(it.pts), bw = (q[3] - q[1]) * kx * sc, bh = (q[2] - q[0]) * ky * sc, wmax = 1; lab.forEach(function (t) { wmax = Math.max(wmax, t.length); });
       info.push({ it: it, col: col, st: st, lab: lab, x0: X(q[1]), x1: X(q[3]), y0: Y(q[0]), y1: Y(q[2]) });
       if (it.t === 'pg' && lab.length) fits.push(Math.min(bw * 0.84 / (Math.max(3, wmax) * 0.52), bh * 0.7 / (lab.length * 1.15)));
-      var k = ck(it); if (!cols[k]) cols[k] = { name: ckName(it), col: col, n: 0, pt: 0, m: 0, ha: 0, lj: 0, lm: 0 };
-      var r = cols[k]; r.n++; if (it.t === 'pt') r.pt++; else if (it.t === 'ln') r.m += st.m; else { r.ha += st.ha; r.lj += st.n; r.lm += st.lm; }
     });
     fits.sort(function (a, b) { return a - b; });
     var fsU = Math.max(4, Math.min(11, fits.length ? fits[Math.floor(fits.length * 0.25)] : 8)); if ({ s: 1, m: 1, l: 1 }[o.fs]) fsU = { s: 5, m: 7.5, l: 11 }[o.fs];
@@ -852,38 +952,43 @@
       });
     });
     // skala dan panah utara
-    var L0 = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000].filter(function (v) { return v * sc < fw * 0.25; }).pop() || 10, bx = PW / 2 - L0 * sc / 2, by = M + 16;
+    var L0 = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000].filter(function (v) { return v * sc < fw * 0.25; }).pop() || 10, bx = PW / 2 - L0 * sc / 2, by = ya + 16;
     if (hasImg) c.push('1 g ' + f2(bx - 8) + ' ' + f2(by - 8) + ' ' + f2(L0 * sc + 16) + ' 28 re f 0 g');
     c.push('0 G 1 w ' + f2(bx) + ' ' + f2(by) + ' m ' + f2(bx + L0 * sc) + ' ' + f2(by) + ' l S ' + f2(bx) + ' ' + f2(by - 4) + ' m ' + f2(bx) + ' ' + f2(by + 4) + ' l S ' + f2(bx + L0 * sc) + ' ' + f2(by - 4) + ' m ' + f2(bx + L0 * sc) + ' ' + f2(by + 4) + ' l S');
     c.push('BT /F1 8 Tf ' + f2(bx) + ' ' + f2(by + 7) + ' Td (' + (L0 >= 1000 ? (L0 / 1000) + ' km' : L0 + ' m') + ') Tj ET');
-    var nx0 = PW - M - 24, ny0 = PH - M - 52;
+    var nx0 = PW - M - 24, ny0 = yb - 52;
     if (hasImg) c.push('1 g ' + f2(nx0 - 12) + ' ' + f2(ny0 - 14) + ' 24 46 re f 0 g');
     c.push('1 w ' + f2(nx0) + ' ' + f2(ny0) + ' m ' + f2(nx0) + ' ' + f2(ny0 + 28) + ' l S ' + f2(nx0 - 5) + ' ' + f2(ny0 + 20) + ' m ' + f2(nx0) + ' ' + f2(ny0 + 28) + ' l ' + f2(nx0 + 5) + ' ' + f2(ny0 + 20) + ' l S');
     c.push('BT /F2 9 Tf ' + f2(nx0 - 3) + ' ' + f2(ny0 - 10) + ' Td (U) Tj ET');
-    // legenda tabel: kategori, jumlah, luas, lajur, meter
-    var rows = Object.keys(cols).map(function (k) { return cols[k]; });
-    var tt = { pt: 0, m: 0, ha: 0, lj: 0, lm: 0, n: 0 }; rows.forEach(function (r) { tt.pt += r.pt; tt.m += r.m; tt.ha += r.ha; tt.lj += r.lj; tt.lm += r.lm; tt.n += r.n; });
-    var CW = [112, 30, 48, 40, 56, 56], LW = CW.reduce(function (a, b) { return a + b; }, 0), RH = 13, nR = rows.length + 3, LH = RH * nR, G = 10;
-    var cands = [[PW - M - G - LW, M + G], [M + G, M + G], [M + G, PH - M - G - LH - 6]];
-    function overlap(cd) { var n = 0; info.forEach(function (q) { if (q.x1 > cd[0] - 6 && q.x0 < cd[0] + LW + 6 && q.y1 > cd[1] - 6 && q.y0 < cd[1] + LH + 6) n++; }); return n; }
-    var best = cands[0], bo = overlap(best); cands.forEach(function (cd) { var v = overlap(cd); if (v < bo) { bo = v; best = cd; } });
-    var lx = best[0], ly = best[1];
-    c.push('1 g 0.5 w ' + f2(lx) + ' ' + f2(ly) + ' ' + f2(LW) + ' ' + f2(LH) + ' re f 0 g 0 G ' + f2(lx) + ' ' + f2(ly) + ' ' + f2(LW) + ' ' + f2(LH) + ' re S');
-    function cell(ci, ri, txt, bold) { var x0 = lx + 4; for (var q = 0; q < ci; q++) x0 += CW[q]; c.push('BT /' + (bold ? 'F2' : 'F1') + ' 7.5 Tf ' + f2(x0 + (ci === 0 && ri > 0 && ri <= rows.length ? 12 : 0)) + ' ' + f2(ly + LH - RH * (ri + 1) + 4) + ' Td (' + pe(txt) + ') Tj ET'); }
-    ['Kategori', 'Jml', 'Ha', 'Lajur', 'Lajur m', 'Garis m'].forEach(function (h, i) { cell(i, 0, h, true); });
-    rows.forEach(function (r, i) {
-      var ri = i + 1, ty = ly + LH - RH * (ri + 1);
-      c.push('0.5 w ' + f2(lx) + ' ' + f2(ty + RH) + ' m ' + f2(lx + LW) + ' ' + f2(ty + RH) + ' l S ' + rgb(r.col) + ' rg ' + f2(lx + 4) + ' ' + f2(ty + 3.5) + ' 7 6 re f 0 g');
-      cell(0, ri, r.name.length > 22 ? r.name.slice(0, 21) + '.' : r.name); cell(1, ri, String(r.n)); cell(2, ri, r.ha ? fmtHa(r.ha) : '-'); cell(3, ri, r.lj ? ribu(r.lj) : '-'); cell(4, ri, r.lm ? ribu(r.lm) : '-'); cell(5, ri, r.m ? ribu(r.m) : '-');
+    // tabel perlakuan per blok
+    var W = PW - 2 * M, dW = 58, hW = 46, lW = 44, mW = 82, pW = anyPL ? 84 : 0, c0W = W - dW - hW - lW - mW - pW, ty0 = M + TH, ncR = tord.length + 1;
+    var bnd = [M, M + c0W, M + c0W + dW, M + c0W + dW + hW, M + c0W + dW + hW + lW, M + c0W + dW + hW + lW + mW]; if (anyPL) bnd.push(M + W);
+    var fsT = Math.min(10, TRH * 0.5 + 1.5), i2;
+    function cut(t, n) { t = asc(t); return t.length > n ? t.slice(0, Math.max(1, n - 1)) + '.' : t; }
+    function txc(x, yb0, t, bold, fz) { c.push('0 g BT /' + (bold ? 'F2' : 'F1') + ' ' + f2(fz) + ' Tf ' + f2(x) + ' ' + f2(yb0) + ' Td (' + pe(t) + ') Tj ET'); }
+    c.push('1 g ' + f2(M) + ' ' + f2(M) + ' ' + f2(W) + ' ' + f2(TH) + ' re f');
+    c.push('0.9 g ' + f2(M) + ' ' + f2(ty0 - TRH) + ' ' + f2(W) + ' ' + f2(TRH) + ' re f');
+    c.push('0 G 0.7 w ' + f2(M) + ' ' + f2(ty0 - TRH * ncR) + ' ' + f2(W) + ' ' + f2(TRH * ncR) + ' re S');
+    for (i2 = 1; i2 < ncR; i2++) c.push('0.5 w ' + f2(M) + ' ' + f2(ty0 - TRH * i2) + ' m ' + f2(M + W) + ' ' + f2(ty0 - TRH * i2) + ' l S');
+    for (i2 = 1; i2 < bnd.length; i2++) c.push('0.5 w ' + f2(bnd[i2]) + ' ' + f2(ty0) + ' m ' + f2(bnd[i2]) + ' ' + f2(ty0 - TRH * ncR) + ' l S');
+    var hb = ty0 - TRH + (TRH - 8) / 2 + 1, hd = [blk ? asc(blk.name) + ' (' + fmtHa(HzBlok.areaHa(blk.pts)) + ' ha)' : 'Kategori', 'Tanggal', 'Ha', 'Lajur', 'Panjang lajur (m)'];
+    if (anyPL) hd.push('Titik / garis');
+    hd.forEach(function (h, i) { txc(bnd[i] + 4 + (i === 0 ? 0 : 0), hb, i === 0 ? cut(h, Math.floor((c0W - 8) / 4.4)) : h, true, 8); });
+    tord.forEach(function (k, i) {
+      var r = trow[k], rowBot = ty0 - TRH * (i + 2), bs = Math.min(TRH - 6, 20), tb0 = rowBot + (TRH - fsT) / 2 + 1;
+      c.push(rgb(r.col) + ' rg 0 G 0.8 w ' + f2(M + 4) + ' ' + f2(rowBot + (TRH - bs) / 2) + ' ' + f2(bs) + ' ' + f2(bs) + ' re B');
+      txc(M + 4 + bs + 6, tb0, cut(r.name, Math.floor((c0W - bs - 14) / (fsT * 0.52))), false, fsT);
+      txc(bnd[1] + 4, tb0, fmtD8(r.date), false, fsT);
+      txc(bnd[2] + 4, tb0, r.ha ? fmtHa(r.ha) : '-', false, fsT);
+      txc(bnd[3] + 4, tb0, r.lj ? ribu(r.lj) : '-', false, fsT);
+      txc(bnd[4] + 4, tb0, r.lm ? ribu(r.lm) : '-', false, fsT);
+      if (anyPL) txc(bnd[5] + 4, tb0, cut((r.pt ? r.pt + ' titik' : '') + (r.pt && r.m ? ', ' : '') + (r.m ? fmtM(r.m) : '') || '-', 16), false, fsT);
     });
-    var tr = rows.length + 1;
-    c.push('0.5 w ' + f2(lx) + ' ' + f2(ly + LH - RH * (tr)) + ' m ' + f2(lx + LW) + ' ' + f2(ly + LH - RH * tr) + ' l S');
-    cell(0, tr, 'Total', true); cell(1, tr, String(tt.n), true); cell(2, tr, tt.ha ? fmtHa(tt.ha) : '-', true); cell(3, tr, tt.lj ? ribu(tt.lj) : '-', true); cell(4, tr, tt.lm ? ribu(tt.lm) : '-', true); cell(5, tr, tt.m ? ribu(tt.m) : '-', true);
-    c.push('0.5 w ' + f2(lx) + ' ' + f2(ly + RH) + ' m ' + f2(lx + LW) + ' ' + f2(ly + RH) + ' l S BT /F1 7 Tf ' + f2(lx + 4) + ' ' + f2(ly + 3.5) + ' Td (' + pe('Dicetak ' + tgl + ' | HZ Trip ' + ver) + ') Tj ET');
+    txc(M, M + 5, 'Dicetak ' + tgl + ' | HZ Trip ' + ver, false, 8);
     var cs = add(stream('', c.join('\n')));
-    var corners = [[M, M], [M, PH - M], [PW - M, PH - M], [PW - M, M]], lp = [0, 0, 0, 1, 1, 1, 1, 0], gp = [];
+    var corners = [[M, ya], [M, yb], [PW - M, yb], [PW - M, ya]], lp = [0, 0, 0, 1, 1, 1, 1, 0], gp = [];
     corners.forEach(function (q) { gp.push(latAt(q[1]).toFixed(7), lngAt(q[0]).toFixed(7)); });
-    var vp = '/VP [ << /Type /Viewport /Name (Peta) /BBox [' + f2(M) + ' ' + f2(M) + ' ' + f2(PW - M) + ' ' + f2(PH - M) + '] /Measure << /Type /Measure /Subtype /GEO /Bounds [0 0 0 1 1 1 1 0] /GPTS [' + gp.join(' ') + '] /LPTS [' + lp.join(' ') + '] /GCS << /Type /GEOGCS /WKT (GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]) /EPSG 4326 >> /PDU [/M /DEG /DEG] >> >> ]';
+    var vp = '/VP [ << /Type /Viewport /Name (Peta) /BBox [' + f2(M) + ' ' + f2(ya) + ' ' + f2(PW - M) + ' ' + f2(yb) + '] /Measure << /Type /Measure /Subtype /GEO /Bounds [0 0 0 1 1 1 1 0] /GPTS [' + gp.join(' ') + '] /LPTS [' + lp.join(' ') + '] /GCS << /Type /GEOGCS /WKT (GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]) /EPSG 4326 >> /PDU [/M /DEG /DEG] >> >> ]';
     var pg = add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW) + ' ' + f2(PH) + '] /Resources ' + (function () { var res = res0 + ' /ExtGState << ' + Object.keys(usedGs).map(function (k) { return '/G' + k + ' ' + gsM[k] + ' 0 R'; }).join(' ') + ' >>' + (imN ? ' /XObject << /Im' + imN + ' ' + imN + ' 0 R >>' : '') + ' >>'; return res; })() + ' /Contents ' + cs + ' 0 R ' + vp + ' >>');
     return pg;
     }

@@ -9,7 +9,7 @@
   function toast() { return HA.toast.apply(this, arguments); }
   function openSheet() { return HA.openSheet.apply(this, arguments); }
   function closeSheet() { return HA.closeSheet.apply(this, arguments); }
-  var BT = HA.BT = { enter: enter, leave: leave, tap: tap, bar: bar, exit: exit, pick: pick, inside: inside, refresh: function () { chip(); }, share: share, bufPoly: bufPoly, preview: preview, itemsOf: itemsOf, back: function () { var p = $('tdSrch'); if (p && p.style.display !== 'none') { srchClose(); return true; } return false; } };
+  var BT = HA.BT = { enter: enter, leave: leave, tap: tap, bar: bar, exit: exit, pick: pick, inside: inside, refresh: function () { chip(); }, share: share, bufPoly: bufPoly, preview: preview, itemsOf: itemsOf, back: function () { var wm = $('spMapWrap'); if (wm && wm.classList.contains('tdmo')) { BT.menuClose(); return true; } var p = $('tdSrch'); if (p && p.style.display !== 'none') { srchClose(); return true; } return false; } };
   var cur = null, collator = new Intl.Collator('id', { numeric: true });
 
   // ---------- data dan geometri ----------
@@ -70,11 +70,28 @@
   function ensureTop() {
     if ($('tdTop')) return;
     var w = $('spMapWrap'), el = document.createElement('div'); el.id = 'tdTop'; el.style.display = 'none';
-    el.innerHTML = '<button class="tdChip" id="tdChip" style="display:none"></button><span class="tdGap"></span><button class="fab" id="tdLay" aria-label="Satelit atau peta">' + IC.layers + '</button><button class="fab" id="tdSr" aria-label="Cari blok">' + IC.search + '</button>';
+    el.innerHTML = '<button class="tdChip" id="tdChip" style="display:none"></button><span class="tdGap"></span>';
     w.appendChild(el);
+    [['tdMenu', '', 'Menu peta', IC.menu], ['tdCat', ' tdmi', 'Kategori', IC.tag], ['tdLay', ' tdmi', 'Satelit atau peta', IC.layers], ['tdSr', ' tdmi', 'Cari blok', IC.search]].forEach(function (a) {
+      var b = document.createElement('button'); b.id = a[0]; b.className = 'locbtn' + a[1]; b.setAttribute('aria-label', a[2]); b.innerHTML = a[3]; w.appendChild(b);
+    });
     var sr = document.createElement('div'); sr.id = 'tdSrch'; sr.style.display = 'none';
     sr.innerHTML = '<div class="tdSq"><input type="search" id="tdQ" placeholder="Cari nama blok" autocomplete="off"><button class="ib" id="tdQx" aria-label="Tutup">' + IC.close + '</button></div><div id="tdSl"></div>';
     w.appendChild(sr);
+    // satu tombol menu: ketuk untuk membuka, ketuk di luar untuk menutup (tanpa memicu peta)
+    var swallow = 0;
+    function menuSet(on) { w.classList.toggle('tdmo', on); $('tdMenu').innerHTML = on ? IC.close : IC.menu; }
+    BT.menuClose = function () { menuSet(false); };
+    function isIn(t) { return !!(t && t.closest && t.closest('#tdMenu,.tdmi')); }
+    $('tdMenu').onclick = function (e) { e.stopPropagation(); menuSet(!w.classList.contains('tdmo')); };
+    document.addEventListener('pointerdown', function (e) {
+      if (!w.classList.contains('tdmo') || isIn(e.target)) return;
+      menuSet(false);
+      if (w.contains(e.target)) { swallow = Date.now(); e.stopPropagation(); }
+    }, true);
+    w.addEventListener('click', function (e) { if (swallow && Date.now() - swallow < 700 && !isIn(e.target)) { swallow = 0; e.stopPropagation(); e.preventDefault(); } }, true);
+    w.addEventListener('click', function (e) { if (w.classList.contains('tdmo') && isIn(e.target) && !(e.target.closest && e.target.closest('#tdMenu'))) setTimeout(function () { menuSet(false); }, 0); });
+    $('tdCat').onclick = function () { HA.tandaCatPage(); };
     $('tdSr').onclick = function () { if ($('tdSrch').style.display === 'none') srchOpen(); else srchClose(); };
     $('tdQx').onclick = srchClose;
     $('tdQ').oninput = srchList;
@@ -120,7 +137,7 @@
     srchClose(); cur = null; TD.blk = null; TD.done = false; SNAP = null; HA.tandaHsInit(false);
     if (blkLay) { blkLay.clearLayers(); if (m) try { m.removeLayer(blkLay); } catch (e) {} }
     if ($('tdTop')) $('tdTop').style.display = 'none';
-    if ($('spMapWrap')) $('spMapWrap').classList.remove('tdon');
+    if ($('spMapWrap')) { $('spMapWrap').classList.remove('tdon'); $('spMapWrap').classList.remove('tdmo'); } if ($('tdMenu')) $('tdMenu').innerHTML = IC.menu;
     if (m && bmode !== 'sat') { HA.setBase(m, 'sat'); bmode = 'sat'; }
     if (m) { m._forceOvl = false; if (HA.syncOverlays) HA.syncOverlays(m); }
   }
@@ -200,18 +217,18 @@
       bx.innerHTML = '<div class="tdr">' + tb('tdBk', IC.back, 'Edit') + tb('tdPv', IC.eye, 'Preview') + tb('tdSh', IC.share, 'Bagikan') + tb('tdSv', IC.save, 'Simpan', true) + '</div>';
       $('tdBk').onclick = function () { TD.done = false; bar(); };
       $('tdPv').onclick = function () { preview(cur); };
-      $('tdSh').onclick = function () { share([cur]); };
+      $('tdSh').onclick = function () { HA.tandaSave(); SNAP = JSON.stringify(HA.tandaData().items); share([cur]); };
       $('tdSv').onclick = function () { toast('Blok ' + cur.name + ' tersimpan · ' + itemsOf(cur).length + ' tanda'); deselect(); };
       HA.tandaHud(''); fit0(); return;
     }
     if (HA.tandaSubBar && HA.tandaSubBar()) { fit0(); return; }
-    bx.innerHTML = HA.tandaPalHtml(b.color, b.op, true) + '<div class="tdr">' + tb(null, IC.pin, 'Titik', TD.tool === 'pt', 'data-t="pt"') + tb(null, IC.line, 'Garis', TD.tool === 'ln', 'data-t="ln"') + tb(null, IC.brush, 'Warnai', TD.tool === 'pg', 'data-t="pg"') + tb(null, IC.walk, 'Jalan', !!TD.wk, 'data-t="wk"') + tb(null, IC.trash, 'Hapus', false, 'data-t="del"') + '</div>' +
-      '<div class="tdr">' + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + tb('blCol', '<i class="cdot" style="background:' + b.color + '"></i>', 'Warna', TD.palOpen) + tb('blLs', IC.list, 'Daftar') + tb('tdFin', IC.check, 'Selesai', true) + '</div>';
+    bx.innerHTML = HA.tandaPalHtml({ cat: b.cat, sub: b.sub }, b.op, true) + '<div class="tdr">' + tb(null, IC.pin, 'Titik', TD.tool === 'pt', 'data-t="pt"') + tb(null, IC.line, 'Garis', TD.tool === 'ln', 'data-t="ln"') + tb(null, IC.brush, 'Warnai', TD.tool === 'pg', 'data-t="pg"') + tb(null, IC.walk, 'Jalan', !!TD.wk, 'data-t="wk"') + tb(null, IC.trash, 'Hapus', false, 'data-t="del"') + '</div>' +
+      '<div class="tdr">' + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + tb('blCol', '<i class="cdot" style="background:' + b.color + '"></i>', 'Kategori', TD.palOpen) + tb('blLs', IC.list, 'Daftar') + tb('tdFin', IC.check, 'Selesai', true) + '</div>';
     bx.querySelectorAll('[data-t]').forEach(function (e) { e.onclick = function () { HA.tandaPick(e.getAttribute('data-t')); }; });
     $('tdUn').onclick = function () { HA.tandaUndo(); };
     $('tdRe').onclick = function () { HA.tandaRedo(); };
     $('blCol').onclick = function () { TD.palOpen = !TD.palOpen; bar(); };
-    HA.tandaPalWire(function (c) { var d = HA.tandaData(); d.brush = { cat: null, col: c, op: d.brush.op }; HA.tandaSave(); bar(); }, function (v, fin) { HA.tandaData().brush.op = v; if (fin) HA.tandaSave(); });
+    HA.tandaPalWire(function (cid, sid) { HA.tandaSetBrush(cid, sid); bar(); }, function (v, fin) { HA.tandaData().brush.op = v; if (fin) HA.tandaSave(); });
     $('blLs').onclick = function () { HA.tandaList(itemsOf(cur)); };
     $('tdFin').onclick = function () { HA.tandaEdCancel(); TD.tool = null; TD.done = true; bar(); };
     if (!TD.tool) HA.tandaHud('Pilih Titik, Garis, Warnai, atau Jalan'); else if (TD.tool === 'pt') HA.tandaHud('Ketuk di dalam blok untuk menaruh titik');
@@ -220,7 +237,7 @@
   function stampN() { var t = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return t.getFullYear() + p(t.getMonth() + 1) + p(t.getDate()); }
   function preview(b) {
     toast('Menyusun preview…');
-    BT.buildPdf([{ title: SH.title || 'Blok ' + b.name, items: itemsOf(b), blk: b }], { nama: SH.nama, nilai: SH.nilai, fs: SH.fs }).then(function (bytes) {
+    BT.buildPdf([{ title: '', items: itemsOf(b), blk: b }], { nama: SH.nama, nilai: SH.nilai, fs: SH.fs }).then(function (bytes) {
       HA.pdfPreview(bytes, function () { HA.saveFile('Blok_' + String(b.name).replace(/[^A-Za-z0-9]+/g, '_') + '_' + stampN() + '.pdf', btoa(bytes), 'application/pdf'); });
     }).catch(function () { toast('Gagal menyusun preview'); });
   }
@@ -308,27 +325,35 @@
   function stamp() { var t = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return t.getFullYear() + p(t.getMonth() + 1) + p(t.getDate()); }
   function share(list) {
     var many = list.length > 1, n = 0, warned = false, seq = 0, tmr = null, miss = [], total = 0;
-    SH.colMap = {};
+    SH.title = '';
     list.forEach(function (b) { n += itemsOf(b).length; });
     var def = many ? 'Marking ' + list.length + ' blok' : 'Blok ' + list[0].name;
-    // warna asli yang dipakai pada tanda di blok-blok ini
-    var used = [], seenC = {};
-    list.forEach(function (b) { itemsOf(b).forEach(function (it) { var c = HA.tandaColOf(it), k = c.toLowerCase(); if (!seenC[k]) { seenC[k] = 1; used.push(c); } }); });
-    var PAL = HA.tandaPal;
-    function colRows() {
-      if (!used.length) return '<div class="muted">Belum ada tanda berwarna.</div>';
-      return used.map(function (o) {
-        var cur2 = SH.colMap[o.toLowerCase()] || o;
-        return '<div class="shcr"><span class="shco"><i style="background:' + o + '"></i>' + esc(HA.tandaColorName(o)) + '</span><span class="shsw">' + PAL.map(function (c) { return '<button type="button" class="shs' + (c[1].toLowerCase() === cur2.toLowerCase() ? ' on' : '') + '" data-o="' + o + '" data-c="' + c[1] + '" style="background:' + c[1] + '" aria-label="' + c[0] + '"></button>'; }).join('') + '</span></div>';
-      }).join('');
+    // kategori pada blok-blok ini; default hanya kategori tanda yang terakhir diedit
+    var cats = [], seenK = {}, lastK = {};
+    list.forEach(function (b) {
+      var best = null;
+      itemsOf(b).forEach(function (it) {
+        var k = HA.tandaCatKey(it);
+        if (!seenK[k]) { var inf = HA.tandaCatInfo(it); seenK[k] = { k: k, name: inf.name, col: inf.col, n: 0 }; cats.push(seenK[k]); }
+        seenK[k].n++;
+        var ts = it.mod || it.ts || 0; if (!best || ts >= best.ts) best = { ts: ts, k: k };
+      });
+      if (best) lastK[best.k] = 1;
+    });
+    SH.cats = {}; cats.forEach(function (c) { SH.cats[c.k] = !!lastK[c.k]; });
+    function catRows() {
+      if (!cats.length) return '<div class="muted">Belum ada tanda.</div>';
+      return cats.map(function (c) { return '<label><input type="checkbox" data-k="' + c.k + '"' + (SH.cats[c.k] ? ' checked' : '') + '><i class="tdd" style="background:' + c.col + '"></i>' + esc(c.name) + ' <span class="muted">(' + c.n + ')</span></label>'; }).join('');
     }
+    function noCat() { return n > 0 && !cats.some(function (c) { return SH.cats[c.k]; }); }
     openSheet('<div class="grab"></div><div class="st">BAGIKAN ' + (many ? list.length + ' BLOK' : 'BLOK ' + esc(String(list[0].name)).toUpperCase()) + '</div>' +
       '<div class="muted" style="margin-bottom:8px">' + n + ' tanda' + (n ? '' : ' · blok akan dicetak tanpa tanda') + '</div>' +
       '<div id="shPvw"><canvas id="shCv"></canvas><div id="shPm" class="muted">Menyusun preview…</div></div><div class="muted" id="shHint" style="text-align:center;margin:4px 0 0">Ketuk gambar untuk mengubah tampilan</div>' +
       '<div id="shW" style="display:none"></div>' +
       '<div class="h" style="margin-top:10px">FORMAT (PILIH SATU)</div><div class="seg" id="shF"><button data-v="pdf"' + (SH.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-v="kml"' + (SH.fmt === 'kml' ? ' class="on"' : '') + '>KML</button></div>' +
-      '<div class="h" style="margin-top:10px">JUDUL</div><input type="text" id="shT" maxlength="60" placeholder="' + esc(def) + '" value="' + esc(SH.title) + '" style="width:100%">' +
-      '<div id="shEd" style="display:none"><div class="h" style="margin-top:12px">WARNA TANDA (HANYA UNTUK HASIL INI)</div><div id="shCols">' + colRows() + '</div>' +
+      '<div class="h" style="margin-top:10px">JUDUL TAMBAHAN (BOLEH KOSONG)</div><input type="text" id="shT" maxlength="60" placeholder="Kosong = hanya nama blok" value="' + esc(SH.title) + '" style="width:100%">' +
+      '<div class="h" style="margin-top:10px">KATEGORI YANG DIBAGIKAN</div><div class="plist" id="shCats">' + catRows() + '</div>' +
+      '<div id="shEd" style="display:none">' +
       '<div id="shP"><div class="h" style="margin-top:10px">SEKELILING BLOK DI PDF</div><div class="seg" id="shB">' + [10, 15, 20].map(function (v) { return '<button data-v="' + v + '"' + (HA.tandaBufM() === v ? ' class="on"' : '') + '>' + v + ' m</button>'; }).join('') + '</div>' +
       '<div class="plist" style="margin-top:8px"><label><input type="checkbox" id="shN"' + (SH.nama ? ' checked' : '') + '> Nama tanda</label><label><input type="checkbox" id="shV"' + (SH.nilai ? ' checked' : '') + '> Nilai (ha atau meter)</label></div>' +
       '<div class="h" style="margin-top:10px">UKURAN TEKS</div><div class="seg" id="shS">' + [['a', 'Otomatis'], ['s', 'Kecil'], ['m', 'Sedang'], ['l', 'Besar']].map(function (o) { return '<button data-v="' + o[0] + '"' + (SH.fs === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>'; }).join('') + '</div></div></div>' +
@@ -336,10 +361,8 @@
       '<button class="btn" id="shPv" style="width:100%;margin-top:12px">Lihat layar penuh</button><button class="btn pri" id="shGo" style="width:100%;margin-top:8px;height:52px">Bagikan</button><button class="btn" id="shX" style="width:100%;margin-top:8px">Tutup</button>');
     function seg(id, f) { $(id).onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-v]'); if (!b) return; f(b.getAttribute('data-v')); $(id).querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); }; }
     function grab() { SH.title = $('shT').value.trim(); SH.nama = $('shN').checked; SH.nilai = $('shV').checked; }
-    function pitems(b) {
-      return itemsOf(b).map(function (it) { var m = SH.colMap[HA.tandaColOf(it).toLowerCase()]; return m ? Object.assign({}, it, { cat: null, col: m }) : it; });
-    }
-    function groupsOf(ls) { return ls.map(function (b) { return { title: SH.title ? (many ? SH.title + ' - ' + b.name : SH.title) : 'Blok ' + b.name, items: pitems(b), blk: b }; }); }
+    function pitems(b) { return itemsOf(b).filter(function (it) { return SH.cats[HA.tandaCatKey(it)]; }); }
+    function groupsOf(ls) { return ls.map(function (b) { return { title: SH.title, items: pitems(b), blk: b }; }); }
     function opts() { return { nama: SH.nama, nilai: SH.nilai, fs: SH.fs }; }
     function pdfBytes() { grab(); return BT.buildPdf(groupsOf(list), opts()); }
     // preview mini: halaman pertama saja
@@ -380,12 +403,7 @@
     seg('shS', function (v) { SH.fs = v; thumb(); });
     $('shN').onchange = $('shV').onchange = thumb;
     $('shT').oninput = lazyThumb;
-    $('shCols').onclick = function (e) {
-      var b = e.target.closest && e.target.closest('button[data-c]'); if (!b) return;
-      var o = b.getAttribute('data-o'), c = b.getAttribute('data-c');
-      if (c.toLowerCase() === o.toLowerCase()) delete SH.colMap[o.toLowerCase()]; else SH.colMap[o.toLowerCase()] = c;
-      $('shCols').innerHTML = colRows(); thumb();
-    };
+    $('shCats').onchange = function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-k'); if (k) { SH.cats[k] = e.target.checked; thumb(); } };
     $('shPvw').onclick = function () { var ed = $('shEd'), open = ed.style.display === 'none'; ed.style.display = open ? '' : 'none'; $('shHint').textContent = open ? 'Ketuk gambar lagi untuk menutup pengaturan' : 'Ketuk gambar untuk mengubah tampilan'; if (open) { try { ed.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (x) {} } };
     sync(); warn(); thumb();
     var fname = function (ext) { return (many ? 'Marking_' + list.length + 'blok' : 'Blok_' + String(list[0].name).replace(/[^A-Za-z0-9]+/g, '_')) + '_' + stamp() + '.' + ext; };
@@ -396,8 +414,9 @@
       return HA.tandaKml(all, SH.title || def, groups);
     }
     $('shX').onclick = function () { clearTimeout(tmr); seq++; closeSheet(); };
-    $('shPv').onclick = function () { var bt = $('shPv'); bt.disabled = true; pdfBytes().then(function (b) { bt.disabled = false; HA.pdfPreview(b, function () { HA.saveFile(fname('pdf'), btoa(b), 'application/pdf'); }); }).catch(function () { bt.disabled = false; toast('Gagal menyusun PDF'); }); };
+    $('shPv').onclick = function () { if (noCat()) { toast('Centang minimal satu kategori'); return; } var bt = $('shPv'); bt.disabled = true; pdfBytes().then(function (b) { bt.disabled = false; HA.pdfPreview(b, function () { HA.saveFile(fname('pdf'), btoa(b), 'application/pdf'); }); }).catch(function () { bt.disabled = false; toast('Gagal menyusun PDF'); }); };
     $('shGo').onclick = function () {
+      if (noCat()) { toast('Centang minimal satu kategori'); return; }
       if (SH.fmt !== 'pdf') { HA.saveFile(fname('kml'), HA.textB64(kmlText()), 'application/vnd.google-earth.kml+xml'); return; }
       if (miss.length && !warned) { warned = true; toast('Citra belum lengkap. Unduh dulu, atau ketuk Bagikan lagi untuk lanjut'); return; }
       var bt = $('shGo'); bt.disabled = true; bt.textContent = 'Menyusun PDF…';

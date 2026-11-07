@@ -611,3 +611,34 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .leaflet-tooltip.mktip{background:#fff;color:#111;border:1px solid rgba(0,0,0,.4);box-shadow:none;font-weight:700;padding:0.0625rem 0.375rem;border-radius:0.25rem;font-size:max(0.6875rem,calc(0.75rem * var(--fs,1)))}
 .leaflet-tooltip.mktip::before{display:none}
 .leaflet-tooltip.bkl{font-size:max(0.5625rem,calc(0.625rem * var(--fs,1)));font-weight:600;opacity:0.9}
+
+/* v0.14.4 kategori, menu tunggal, titik halaman turun */
+.tdKs{display:flex;flex-wrap:wrap;gap:0.375rem}
+.tdKsub{margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid var(--line)}
+.tdk{display:inline-flex;align-items:center;gap:0.4375rem;min-height:2.25rem;padding:0 0.75rem;border-radius:1.125rem;border:1px solid var(--line);background:var(--card);color:var(--tx);font-size:max(0.75rem,calc(0.875rem * var(--fs,1)));cursor:pointer}
+.tdk i{width:0.875rem;height:0.875rem;border-radius:50%;border:1px solid rgba(160,160,160,.7);flex:none}
+.tdk.on{box-shadow:0 0 0 2px var(--tx);font-weight:700}
+.tdkm{margin-top:0.5rem;width:100%;min-height:2.25rem;border:0;background:transparent;color:#4DA3FF;font-size:max(0.75rem,calc(0.875rem * var(--fs,1)));font-weight:600;cursor:pointer}
+.tdCw{flex-wrap:wrap;justify-content:flex-start;margin:0.375rem 0 0.5rem 2.25rem}
+.kgc{border-bottom:1px solid var(--line);padding:0.5rem 0}
+.kgr{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.375rem}
+.kgr input{flex:1;min-width:0;height:2.5rem}
+.kgs{margin-left:1.75rem}
+.kgd{width:2rem;height:2rem;flex:none;border-radius:50%;border:2px solid rgba(160,160,160,.7);padding:0;cursor:pointer}
+.kga{border:0;background:transparent;color:#4DA3FF;font-size:max(0.75rem,calc(0.875rem * var(--fs,1)));min-height:2.25rem;padding:0 0.25rem;margin-left:1.75rem;cursor:pointer}
+.tdsel{display:flex;align-items:center;gap:0.5rem}
+.tdsel select{flex:1;min-width:0;height:2.75rem}
+#tdMenu,#spMapWrap .tdmi{position:absolute;right:0.625rem;margin:0;z-index:600}
+#tdMenu{display:none;bottom:0.625rem}
+#spMapWrap.tdon #tdMenu{display:flex}
+#spMapWrap.tdon .tdmi{display:none}
+#spMapWrap.tdon #spBat{display:none}
+#spMapWrap.tdon.tdmo .tdmi{display:flex}
+#spMapWrap.tdon.tdmo #spLoc{bottom:4rem}
+#spMapWrap.tdon.tdmo #spToMain{bottom:7.375rem}
+#spMapWrap.tdon.tdmo #spTanda{bottom:10.75rem}
+#spMapWrap.tdon.tdmo #tdCat{bottom:14.125rem}
+#spMapWrap.tdon.tdmo #tdLay{bottom:17.5rem}
+#spMapWrap.tdon.tdmo #tdSr{bottom:20.875rem}
+#spDots{bottom:calc(0.125rem + env(safe-area-inset-bottom,0px))}
+#tdBar{padding-bottom:calc(1rem + env(safe-area-inset-bottom,0px))}
