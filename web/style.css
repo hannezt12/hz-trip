@@ -580,3 +580,22 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .shsw{display:flex;flex-wrap:wrap;gap:0.5rem}
 .shs{width:2.25rem;height:2.25rem;border-radius:50%;border:2px solid var(--line);cursor:pointer;padding:0}
 .shs.on{border-color:var(--tx);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--tx)}
+
+/* v0.14.2 marking di peta bebas */
+#tdHud{top:3.75rem}
+#tdTop{position:absolute;left:0.625rem;right:0.625rem;top:0.625rem;z-index:650;display:flex;gap:0.5rem;align-items:flex-start;pointer-events:none}
+#tdTop>*{pointer-events:auto}
+.tdGap{flex:1;pointer-events:none!important}
+.tdChip{display:flex;flex-direction:column;align-items:flex-start;gap:0.0625rem;max-width:62%;min-height:2.75rem;padding:0.25rem 0.75rem;border-radius:1.375rem;border:1px solid var(--line);background:var(--ov);color:var(--tx);cursor:pointer;text-align:left}
+.tdChip b{font-size:max(0.875rem,calc(1rem * var(--fs,1)));white-space:nowrap}
+.tdChip small{font-size:max(0.6875rem,calc(0.75rem * var(--fs,1)));color:var(--tx2);white-space:nowrap}
+#tdSrch{position:absolute;left:0.625rem;right:0.625rem;top:3.75rem;z-index:700;background:var(--card2);border:1px solid var(--line);border-radius:0.875rem;overflow:hidden;box-shadow:0 0.375rem 1.25rem rgba(0,0,0,.35)}
+.tdSq{display:flex;align-items:center;border-bottom:1px solid var(--line)}
+.tdSq input{flex:1;height:2.75rem;border:0;background:transparent;color:var(--tx);padding:0 0.75rem;font-size:max(0.875rem,calc(1rem * var(--fs,1)));outline:none;min-width:0}
+.tdSq .ib{width:2.75rem;height:2.75rem}
+#tdSl .bprow{border-bottom:1px solid var(--line);padding:0.5rem 0.75rem;min-height:3rem}
+.tdSh{padding:0.375rem 0.75rem 0;font-size:max(0.6875rem,calc(0.75rem * var(--fs,1)))}
+.leaflet-tooltip.bkl{background:transparent;border:0;box-shadow:none;color:#fff;font-weight:700;font-size:max(0.6875rem,calc(0.75rem * var(--fs,1)));text-shadow:0 0 3px #000,0 0 3px #000;padding:0}
+.leaflet-tooltip.bkl::before{display:none}
+#spMapWrap.tdon #spHud{display:none}
+.tdSq input::-webkit-search-cancel-button{display:none}

@@ -35,6 +35,11 @@
     next: ic('<path d="M9 5l7 7-7 7"/>'),
     prev: ic('<path d="M15 5l-7 7 7 7"/>'),
     close: ic('<path d="M6 6l12 12M18 6L6 18"/>'),
+    redo: ic('<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>'),
+    check: ic('<path d="M5 12l5 5 9-10"/>'),
+    eye: ic('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
+    save: ic('<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/>'),
+    search: ic('<circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/>'),
     share: ic('<circle cx="6" cy="12" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M8 11l8-4M8 13l8 4"/>')
   };
   function tb(id, icon, label, on, extra) { return '<button class="tbtn' + (on ? ' on' : '') + '" ' + (id ? 'id="' + id + '" ' : '') + (extra || '') + '>' + icon + '<span>' + label + '</span></button>'; }
@@ -52,7 +57,18 @@
     if (d.brush.cat) { var bc = null; d.cats.forEach(function (c) { if (c.id === d.brush.cat) bc = c; }); d.brush = { cat: null, col: bc ? bc.col : PAL[0][1] }; }
     TD.D = d; return d;
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(TD.D)); } catch (e) { toast('Gagal menyimpan marking'); } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(TD.D)); } catch (e) { toast('Gagal menyimpan marking'); } hsPush(); }
+  // riwayat urung/ulang (hanya saat satu blok dipilih)
+  var HS = null;
+  function hsInit(on) { HS = on ? { s: [JSON.stringify(data().items)], i: 0 } : null; }
+  function hsPush() { if (!HS) return; var s = JSON.stringify(TD.D.items); if (s === HS.s[HS.i]) return; HS.s.length = HS.i + 1; HS.s.push(s); HS.i++; if (HS.s.length > 80) { HS.s.shift(); HS.i--; } }
+  function setItems(str) { TD.D.items = JSON.parse(str); try { localStorage.setItem(KEY, JSON.stringify(TD.D)); } catch (e) {} drawAll(); }
+  function hsGo(d) {
+    if (!HS) return; var j = HS.i + d;
+    if (j < 0 || j >= HS.s.length) { toast(d < 0 ? 'Tidak ada yang diurungkan' : 'Tidak ada yang diulang'); return; }
+    HS.i = j; setItems(HS.s[j]); if (HA.BT) HA.BT.refresh(); barMain();
+  }
+  HA.tandaHsInit = hsInit; HA.tandaSetItems = setItems;
   function catOf(id) { var r = null; data().cats.forEach(function (c) { if (c.id === id) r = c; }); return r; }
   function colOf(it) { var c = it.cat ? catOf(it.cat) : null; return c ? c.col : (it.col || PAL[0][1]); }
   function brush() {
@@ -61,13 +77,10 @@
     var cl = b.col || PAL[0][1];
     return { cat: null, col: cl, color: cl, name: colorName(cl) };
   }
-  function addItem(it) { data().items.push(it); TD.hist = TD.hist || []; TD.hist.push(it.id); if (TD.hist.length > 50) TD.hist.shift(); return it; }
-  function undoLast() {
-    var d = data(), id = TD.hist && TD.hist.pop(); if (!id) { toast('Tidak ada yang diurungkan'); return; }
-    var n = d.items.length; d.items = d.items.filter(function (x) { return x.id !== id; });
-    if (d.items.length === n) { undoLast(); return; }
-    save(); drawAll(); if (HA.BT) HA.BT.refresh(); toast('Tanda terakhir dibatalkan');
-  }
+  function addItem(it) { data().items.push(it); return it; }
+  function undoLast() { if (TD.ed) edUndo(); else hsGo(-1); }
+  function redoLast() { if (TD.ed) edRedo(); else hsGo(1); }
+  HA.tandaRedo = redoLast;
   function newId() { var d = data(); d.seq = (d.seq || 1) + 1; return 't' + Date.now().toString(36) + d.seq; }
 
   // ---------- geometri dan hitungan ----------
@@ -145,8 +158,8 @@
   }
 
   // ---------- peta: lapisan tanda ----------
-  function map() { return TD.bm || (HA.SP && HA.SP.map); }
-  function bar() { return $(TD.blk ? 'blBar' : 'tdBar'); }
+  function map() { return HA.SP && HA.SP.map; }
+  function bar() { return $('tdBar'); }
   function ensureLay() { if (TD.lay && TD.layMap !== map()) { try { TD.lay.remove(); } catch (e) {} TD.lay = null; } if (!TD.lay && map()) { TD.lay = L.layerGroup().addTo(map()); TD.layMap = map(); } return TD.lay; }
   function drawAll() {
     var m = map(); if (!m || !TD.on) return;
@@ -182,7 +195,8 @@
     if (!TD.bound) { m.on('click', onMapClick); TD.bound = true; }
     setOverlays(true); ensureLay(); drawAll();
     $('spBar').style.display = 'none'; $('tdBar').style.display = 'flex'; $('spTanda').classList.add('on');
-    barMain(); hud('');
+    if (HA.BT) HA.BT.enter();
+    barMain(); if (!HA.BT) hud('');
     // jika ada draf walking yang belum disimpan
     var dr = null; try { dr = JSON.parse(localStorage.getItem(KEYW) || 'null'); } catch (e) {}
     if (dr && dr.pts && dr.pts.length > 1 && !TD.wk) {
@@ -191,7 +205,11 @@
   }
   function modeOff() {
     if (TD.wk) { toast('Hentikan walking dulu'); return; }
-    edCancel(); TD.tool = null; TD.on = false;
+    if (HA.BT) HA.BT.exit(modeOffNow); else modeOffNow();
+  }
+  HA.tandaOff = modeOff;
+  function modeOffNow() {
+    edCancel(); if (HA.BT) HA.BT.leave(); TD.tool = null; TD.on = false;
     if (TD.lay) { TD.lay.clearLayers(); }
     setOverlays(false);
     $('tdBar').style.display = 'none'; $('spBar').style.display = ''; $('spTanda').classList.remove('on'); hud('');
@@ -199,12 +217,12 @@
     HA.SP.autoPaused = false;
     if (HA.spBtns) HA.spBtns();
   }
-  function hud(t) { var h = $(TD.blk ? 'blHud' : 'tdHud'); if (!h) return; h.textContent = t || ''; h.style.display = t ? 'block' : 'none'; }
+  function hud(t) { var h = $('tdHud'); if (!h) return; h.textContent = t || ''; h.style.display = t ? 'block' : 'none'; }
 
   // ---------- bilah bawah ----------
-  var TOOLS = [['pt', 'pin', 'Titik'], ['ln', 'line', 'Garis'], ['pg', 'poly', 'Area'], ['bl', 'block', 'Blok'], ['wk', 'walk', 'Walking']];
+  var TOOLS = [['pt', 'pin', 'Titik'], ['ln', 'line', 'Garis'], ['pg', 'poly', 'Area'], ['wk', 'walk', 'Walking']];
   function barMain() {
-    if (TD.blk && TD.barBlock) { TD.barBlock(); return; }
+    if (HA.BT) { HA.BT.bar(); return; }
     var b = brush();
     bar().innerHTML = '<div class="tdr">' + TOOLS.map(function (t) { return tb(null, IC[t[1]], t[2], TD.tool === t[0], 'data-t="' + t[0] + '"'); }).join('') + '</div>' +
       '<div class="tdr">' + tb('tdBr', '<i class="cdot" style="background:' + b.color + '"></i>', b.name) + tb('tdLs', IC.list, 'Daftar') + tb('tdXm', IC.close, 'Tutup') + '</div>';
@@ -228,7 +246,7 @@
   function vIcon(mid) { return L.divIcon({ className: 'tdv', html: '<i class="' + (mid ? 'mid' : '') + '"></i>', iconSize: mid ? [18, 18] : [28, 28], iconAnchor: mid ? [9, 9] : [14, 14] }); }
   function edStart(kind, item) {
     edCancel();
-    TD.ed = { kind: kind, item: item, pts: item ? item.pts.map(function (p) { return [p[0], p[1]]; }) : [], vm: [], shape: null };
+    TD.ed = { red: [], kind: kind, item: item, pts: item ? item.pts.map(function (p) { return [p[0], p[1]]; }) : [], vm: [], shape: null };
     drawAll(); edRender(); edBar();
   }
   function edMin() { return TD.ed.kind === 'ln' ? 2 : 3; }
@@ -261,11 +279,13 @@
     });
     edStatus();
   }
+  function edUndo() { var e = TD.ed; if (!e || !e.pts.length) { toast('Tidak ada titik untuk diurungkan'); return; } e.red.push(e.pts.pop()); edRender(); }
+  function edRedo() { var e = TD.ed; if (!e || !e.red.length) { toast('Tidak ada yang diulang'); return; } e.pts.push(e.red.pop()); edRender(); }
   function edBar() {
     var e = TD.ed;
-    bar().innerHTML = '<div class="tdr">' + tb('tdUr', IC.undo, 'Urung') + tb('tdOk', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>', 'Selesai', true) + tb('tdBt', IC.close, 'Batal') + '</div>' +
+    bar().innerHTML = '<div class="tdr">' + tb('tdUr', IC.undo, 'Urung') + tb('tdRd', IC.redo, 'Ulang') + tb('tdOk', IC.check, 'Simpan bentuk', true) + tb('tdBt', IC.close, 'Batal') + '</div>' +
       '<div class="tdr"><button class="tbtn wide" id="tdCl"><i class="cdot" style="background:' + (e.item ? colOf(e.item) : brush().color) + '"></i><span>Warna: ' + esc(e.item ? colorName(colOf(e.item)) : brush().name) + '</span></button></div>';
-    $('tdUr').onclick = function () { if (e.pts.length) { e.pts.pop(); edRender(); } };
+    $('tdUr').onclick = edUndo; $('tdRd').onclick = edRedo;
     $('tdBt').onclick = function () { edCancel(); TD.tool = null; barMain(); };
     $('tdOk').onclick = edDone;
     $('tdCl').onclick = function () { colorSheet(function (v) { if (e.item) { e.item.cat = null; e.item.col = v.col; } else { var d = data(); d.brush = { cat: null, col: v.col }; } save(); edShape(); edBar(); }); };
@@ -288,21 +308,20 @@
     save(); TD.ed = null; hud(''); edCleanup(e); drawAll();
     toast(msg + ' · ' + statText(it2, st).replace('\n', ' · '));
     if (e.reopen) { itemSheet(it2); TD.tool = null; barMain(); return; }
-    // alat tetap aktif untuk gambar berikutnya
-    if (TD.tool === 'ln' || TD.tool === 'pg') edStart(TD.tool, null); else barMain();
+    TD.tool = null; barMain();
   }
   function edCleanup(e) { var m = map(); e.vm.forEach(function (x) { m.removeLayer(x); }); if (e.shape) { m.removeLayer(e.shape); e.shape = null; } }
 
   function onMapClick(ev) {
     if (!TD.on) return;
     var ll = [ev.latlng.lat, ev.latlng.lng];
-    if (TD.blk && TD.tool !== 'mv' && HA.BT && !HA.BT.inside(ll)) { toast('Ketuk di dalam batas blok'); return; }
-    if (TD.ed) { TD.ed.pts.push(ll); edRender(); return; }
+    if (TD.wk) return;
+    if (HA.BT && HA.BT.tap(ll)) return;
+    if (TD.ed) { TD.ed.pts.push(ll); TD.ed.red = []; edRender(); return; }
     if (TD.tool === 'pt') {
       var b = brush(), it = { id: newId(), t: 'pt', pts: [ll], cat: b.cat, col: b.col, name: '', note: '', ts: Date.now() };
       addItem(it); save(); drawAll(); toast('Titik ditambah'); return;
     }
-    if (TD.tool === 'bl') { markBlock(ll); return; }
     if (TD.wk) return;
   }
   function markBlock(ll) {
@@ -730,7 +749,7 @@
   // ---------- pasang ----------
   function init() {
     if (!$('spTanda')) return;
-    $('spTanda').onclick = function () { if (TD.on) modeOff(); else if (HA.BT) HA.BT.pick(); else modeOn(); };
+    $('spTanda').onclick = function () { if (TD.on) modeOff(); else modeOn(); };
   }
   HA.TD = TD; HA.tandaData = data; HA.tandaStat = statOf;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

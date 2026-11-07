@@ -1,4 +1,4 @@
-/* HZ Trip - Marking per blok: pilih blok, lembar blok (satelit dipotong poligon + sekeliling), bagikan */
+/* HZ Trip - Marking per blok di peta bebas SpidoMap: ketuk/cari blok terkonfirmasi, edit, preview, bagikan */
 (function () {
   'use strict';
   var HA = window.HzApp;
@@ -9,9 +9,8 @@
   function toast() { return HA.toast.apply(this, arguments); }
   function openSheet() { return HA.openSheet.apply(this, arguments); }
   function closeSheet() { return HA.closeSheet.apply(this, arguments); }
-  var BT = HA.BT = { pick: pick, open: openBlock, close: closeBlock, inside: inside, refresh: refresh, share: share, bufPoly: bufPoly };
-  var cur = null, bm = null, bmMode = 'sat', bufPts = [], bounds = null, outLay = null, myDot = null, pos = null, collator = new Intl.Collator('id', { numeric: true });
-  var ST = { q: '', f: 'all', m: '', sel: null, shown: 120 };
+  var BT = HA.BT = { enter: enter, leave: leave, tap: tap, bar: bar, exit: exit, pick: pick, inside: inside, refresh: function () { chip(); }, share: share, bufPoly: bufPoly, preview: preview };
+  var cur = null, collator = new Intl.Collator('id', { numeric: true });
 
   // ---------- data dan geometri ----------
   function blocks() { try { return (HA.blocksList() || []).filter(function (b) { return b.conf && b.pts && b.pts.length >= 3; }); } catch (e) { return []; } }
@@ -55,197 +54,174 @@
   function fmtD(m) { return m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
   function fmtHa(v) { return v.toFixed(2).replace('.', ','); }
 
-  // ---------- layar 1: pilih blok ----------
-  function ensurePick() {
-    if ($('blPick')) return;
-    var el = document.createElement('div'); el.id = 'blPick'; el.className = 'blov'; el.style.display = 'none';
-    el.innerHTML = '<div class="blTop"><button class="ib" id="bpBack" aria-label="Kembali">' + IC.back + '</button><div class="blTtl"><b>Pilih blok</b><small id="bpSub"></small></div><button class="ib txt" id="bpFree">Peta bebas</button></div>' +
-      '<div class="bpTools"><input type="search" id="bpQ" placeholder="Cari nama blok" autocomplete="off"><div class="seg" id="bpF"><button data-v="all" class="on">Semua</button><button data-v="mk">Ada tanda</button></div><select id="bpM"></select></div>' +
-      '<div id="bpList"></div><div id="bpSel" style="display:none"></div>';
-    document.body.appendChild(el);
-    $('bpBack').onclick = function () { el.style.display = 'none'; };
-    $('bpFree').onclick = function () { el.style.display = 'none'; HA.tandaFree(); };
-    $('bpQ').oninput = function () { ST.q = this.value.trim().toLowerCase(); ST.shown = 120; drawList(); };
-    $('bpF').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-v]'); if (!b) return; ST.f = b.getAttribute('data-v'); ST.shown = 120; $('bpF').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); drawList(); };
-    $('bpM').onchange = function () { ST.m = this.value; ST.shown = 120; drawList(); };
+  // ---------- peta bebas di SpidoMap: blok terkonfirmasi bisa diketuk (zoom 15+), cari lewat kaca pembesar ----------
+  var MINZ = 15, blkLay = null, pos = null, bound = false, BL = null, SNAP = null, bmode = 'sat';
+  function sp() { return HA.SP && HA.SP.map; }
+  function blocksC() { return BL || (BL = blocks()); }
+  function hit(ll) {
+    var h = null, a0 = 1e18;
+    blocksC().forEach(function (b) {
+      var q = bbox(b.pts); if (ll[0] < q[0] || ll[0] > q[2] || ll[1] < q[1] || ll[1] > q[3]) return;
+      if (pipPts(ll, b.pts)) { var a = HzBlok.areaHa(b.pts); if (a < a0) { a0 = a; h = b; } }
+    });
+    return h;
   }
-  var LST = [], CNT = {};
-  function pick() {
-    if (HA.spShow) HA.spShow('map');
-    ensurePick(); ST.sel = null;
-    var el = $('blPick'); el.style.display = 'flex';
-    LST = blocks(); LST._mm = null; CNT = countsAll(LST);
-    LST.forEach(function (b) { var bb = bbox(b.pts); b._c = [(bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2]; b._d = pos ? dist(pos, b._c) : null; });
-    var ms = (S.settings.masters || []);
-    $('bpM').innerHTML = '<option value="">Semua master</option>' + ms.map(function (m) { return '<option value="' + m.id + '"' + (String(ST.m) === String(m.id) ? ' selected' : '') + '>' + esc(m.name) + '</option>'; }).join('');
-    $('bpM').style.display = ms.length ? '' : 'none';
-    drawList(); selBar();
-    if (navigator.geolocation) navigator.geolocation.getCurrentPosition(function (p) { pos = [p.coords.latitude, p.coords.longitude]; LST.forEach(function (b) { b._d = dist(pos, b._c); }); if (el.style.display !== 'none' && !ST.sel) drawList(); }, function () {}, { timeout: 7000, maximumAge: 60000, enableHighAccuracy: false });
+  function dirty() { return !!cur && JSON.stringify(HA.tandaData().items) !== SNAP; }
+  function ensureTop() {
+    if ($('tdTop')) return;
+    var w = $('spMapWrap'), el = document.createElement('div'); el.id = 'tdTop'; el.style.display = 'none';
+    el.innerHTML = '<button class="tdChip" id="tdChip" style="display:none"></button><span class="tdGap"></span><button class="fab" id="tdLay" aria-label="Satelit atau peta">' + IC.layers + '</button><button class="fab" id="tdSr" aria-label="Cari blok">' + IC.search + '</button>';
+    w.appendChild(el);
+    var sr = document.createElement('div'); sr.id = 'tdSrch'; sr.style.display = 'none';
+    sr.innerHTML = '<div class="tdSq"><input type="search" id="tdQ" placeholder="Cari nama blok" autocomplete="off"><button class="ib" id="tdQx" aria-label="Tutup">' + IC.close + '</button></div><div id="tdSl"></div>';
+    w.appendChild(sr);
+    $('tdSr').onclick = function () { if ($('tdSrch').style.display === 'none') srchOpen(); else srchClose(); };
+    $('tdQx').onclick = srchClose;
+    $('tdQ').oninput = srchList;
+    $('tdLay').onclick = function () { bmode = bmode === 'sat' ? 'osm' : 'sat'; HA.setBase(sp(), bmode); if (HA.syncOverlays) HA.syncOverlays(sp()); toast(bmode === 'sat' ? 'Mode satelit' : 'Mode peta'); };
+    $('tdChip').onclick = function () { if (cur) sp().fitBounds(L.latLngBounds(cur.pts), { padding: [40, 40], maxZoom: 20, animate: true }); };
   }
-  function inMaster(b, mid) {
-    LST._mm = LST._mm || {};
-    if (!LST._mm[mid]) {
-      var m = null; (S.settings.masters || []).forEach(function (x) { if (String(x.id) === String(mid)) m = x; });
-      var ids = {}; if (m && HA.masterMembers) { var r = HA.masterMembers(m); r.in.concat(r.man).forEach(function (x) { ids[String(x.id)] = 1; }); }
-      LST._mm[mid] = ids;
-    }
-    return !!LST._mm[mid][String(b.id)];
+  function chip() {
+    var c = $('tdChip'); if (!c) return;
+    if (!cur) { c.style.display = 'none'; return; }
+    var n = itemsOf(cur).length;
+    c.style.display = ''; c.innerHTML = '<b>Blok ' + esc(String(cur.name)) + '</b><small>' + fmtHa(HzBlok.areaHa(cur.pts)) + ' ha · ' + (n ? n + ' tanda' : 'belum ada tanda') + '</small>';
   }
-  function drawList() {
-    var rows = LST.filter(function (b) {
-      if (ST.q && String(b.name).toLowerCase().indexOf(ST.q) < 0) return false;
-      if (ST.f === 'mk' && !CNT[b.id]) return false;
-      if (ST.m && !inMaster(b, ST.m)) return false;
+  function hudStatus() {
+    if (!TD.on || TD.wk || TD.ed || cur) return;
+    HA.tandaHud(sp().getZoom() < MINZ ? 'Perbesar peta (zoom 15+) lalu ketuk blok' : 'Ketuk blok untuk memilih');
+  }
+  function drawBlocks() {
+    if (!blkLay) return;
+    blkLay.clearLayers();
+    var m = sp(); if (!m || !TD.on || m.getZoom() < MINZ) return;
+    var g = m.getBounds(), bb = [g.getSouth(), g.getWest(), g.getNorth(), g.getEast()], n = 0, z = m.getZoom(), nm = 0;
+    blocksC().forEach(function (o) {
+      if (n > 220) return;
+      var q = bbox(o.pts); if (q[2] < bb[0] || q[0] > bb[2] || q[3] < bb[1] || q[1] > bb[3]) return; n++;
+      var on = cur && cur.id === o.id;
+      var pg = L.polygon(o.pts, { color: on ? '#FFE600' : '#fff', weight: on ? 3 : 1.3, opacity: on ? 1 : (cur ? 0.4 : 0.9), fill: !cur, fillColor: '#fff', fillOpacity: cur ? 0 : 0.05, interactive: false }).addTo(blkLay);
+      if ((on || (z >= 17 && nm < 60)) && (nm++ || true)) pg.bindTooltip(esc(String(o.name)), { permanent: true, direction: 'center', className: 'bkl' });
+    });
+  }
+  function onView() { if (!TD.on) return; drawBlocks(); hudStatus(); }
+  function enter() {
+    var m = sp(); if (!m) return;
+    BL = null; ensureTop(); $('tdTop').style.display = 'flex'; $('spMapWrap').classList.add('tdon');
+    if (!blkLay) blkLay = L.layerGroup();
+    blkLay.addTo(m);
+    if (!bound) { m.on('moveend zoomend', onView); bound = true; }
+    cur = null; TD.blk = null; TD.done = false; SNAP = null; HA.tandaHsInit(false);
+    bmode = 'sat'; chip(); drawBlocks(); hudStatus();
+    if (navigator.geolocation) navigator.geolocation.getCurrentPosition(function (p) { pos = [p.coords.latitude, p.coords.longitude]; }, function () {}, { timeout: 7000, maximumAge: 60000, enableHighAccuracy: false });
+  }
+  function leave() {
+    var m = sp();
+    srchClose(); cur = null; TD.blk = null; TD.done = false; SNAP = null; HA.tandaHsInit(false);
+    if (blkLay) { blkLay.clearLayers(); if (m) try { m.removeLayer(blkLay); } catch (e) {} }
+    if ($('tdTop')) $('tdTop').style.display = 'none';
+    if ($('spMapWrap')) $('spMapWrap').classList.remove('tdon');
+    if (m && bmode !== 'sat') { HA.setBase(m, 'sat'); bmode = 'sat'; }
+  }
+  function select(b, fit) {
+    HA.tandaEdCancel(); cur = b; TD.blk = b; TD.tool = null; TD.done = false;
+    SNAP = JSON.stringify(HA.tandaData().items); HA.tandaHsInit(true);
+    if (fit && sp()) sp().fitBounds(L.latLngBounds(b.pts), { padding: [48, 48], maxZoom: 20, animate: false });
+    drawBlocks(); chip(); HA.tandaDraw(); HA.tandaBar();
+  }
+  function deselect() {
+    HA.tandaEdCancel(); cur = null; TD.blk = null; TD.tool = null; TD.done = false; SNAP = null; HA.tandaHsInit(false);
+    drawBlocks(); chip(); HA.tandaDraw(); HA.tandaBar(); hudStatus();
+  }
+  // keluar dari blok terpilih; bila ada perubahan belum disimpan, tanya dulu
+  function exit(then) {
+    if (TD.wk) { toast('Hentikan walking dulu'); return; }
+    if (!cur || !dirty()) { if (cur) deselect(); if (then) then(); return; }
+    var nm = String(cur.name);
+    openSheet('<div class="grab"></div><div class="st">BLOK ' + esc(nm).toUpperCase() + '</div><div class="card">Ada perubahan tanda yang belum disimpan.</div>' +
+      '<button class="btn pri" id="exS" style="width:100%;margin-top:10px;height:52px">Simpan</button><button class="btn" id="exB" style="width:100%;margin-top:8px">Buang perubahan</button><button class="btn" id="exL" style="width:100%;margin-top:8px">Lanjut edit</button>');
+    $('exS').onclick = function () { closeSheet(); toast('Blok ' + nm + ' tersimpan'); deselect(); if (then) then(); };
+    $('exB').onclick = function () { closeSheet(); HA.tandaSetItems(SNAP); deselect(); if (then) then(); };
+    $('exL').onclick = closeSheet;
+  }
+  function pick(b, fit) {
+    if (cur && cur.id === b.id) { if (fit && sp()) sp().fitBounds(L.latLngBounds(b.pts), { padding: [48, 48], maxZoom: 20, animate: true }); return; }
+    if (cur) exit(function () { select(b, fit); }); else select(b, fit);
+  }
+  // ketukan di peta: true bila sudah ditangani
+  function tap(ll) {
+    if (!sp() || TD.tool === 'mv') return false;
+    if (TD.ed) { if (cur && !inside(ll)) { toast('Ketuk di dalam batas blok'); return true; } return false; }
+    if (!cur) {
+      var h = hit(ll);
+      if (h) select(h, false); else toast(sp().getZoom() < MINZ ? 'Perbesar peta dulu (zoom 15+)' : 'Tidak ada blok terkonfirmasi di sini');
       return true;
-    });
-    rows.sort(function (a, b) { if (a._d != null && b._d != null) return a._d - b._d; return collator.compare(String(a.name), String(b.name)); });
-    $('bpSub').textContent = rows.length + ' blok terkonfirmasi' + (pos ? ' · terdekat dulu' : '');
-    var show = rows.slice(0, ST.shown);
-    $('bpList').innerHTML = show.length ? show.map(function (b) {
-      var n = CNT[b.id] || 0, on = ST.sel && ST.sel[b.id];
-      return '<button class="bprow' + (on ? ' on' : '') + '" data-id="' + esc(String(b.id)) + '">' + (ST.sel ? '<span class="bpck">' + (on ? '✓' : '') + '</span>' : '') + '<span class="bpi"><b>' + esc(String(b.name)) + '</b><small>' + fmtHa(HzBlok.areaHa(b.pts)) + ' ha · ' + (n ? n + ' tanda' : 'belum ada tanda') + (b._d != null ? ' · ' + fmtD(b._d) : '') + '</small></span>' + (ST.sel ? '' : HA.CHEV) + '</button>';
-    }).join('') + (rows.length > show.length ? '<button class="bprow more" id="bpMore">Tampilkan semua (' + rows.length + ')</button>' : '') : '<div class="muted" style="padding:1.5rem;text-align:center">Tidak ada blok terkonfirmasi yang cocok.</div>';
-    if ($('bpMore')) $('bpMore').onclick = function () { ST.shown = 100000; drawList(); };
-    $('bpList').querySelectorAll('.bprow[data-id]').forEach(function (e) {
-      var id = e.getAttribute('data-id'), t = null, long = false;
-      function find() { return LST.filter(function (b) { return String(b.id) === id; })[0]; }
-      e.addEventListener('pointerdown', function () { long = false; t = setTimeout(function () { long = true; if (!ST.sel) ST.sel = {}; ST.sel[id] = true; if (navigator.vibrate) try { navigator.vibrate(15); } catch (x) {} drawList(); selBar(); }, 450); });
-      ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { e.addEventListener(ev, function () { clearTimeout(t); }); });
-      e.onclick = function () {
-        if (long) { long = false; return; }
-        if (ST.sel) { if (ST.sel[id]) delete ST.sel[id]; else ST.sel[id] = true; if (!Object.keys(ST.sel).length) ST.sel = null; drawList(); selBar(); return; }
-        var b = find(); if (b) openBlock(b);
-      };
-    });
-  }
-  function selBar() {
-    var box = $('bpSel'); if (!box) return;
-    if (!ST.sel) { box.style.display = 'none'; return; }
-    var n = Object.keys(ST.sel).length;
-    box.style.display = 'flex';
-    box.innerHTML = '<span><b>' + n + '</b> blok dipilih</span><button class="btn pri" id="bsGo">Bagikan</button><button class="btn" id="bsX">Batal</button>';
-    $('bsX').onclick = function () { ST.sel = null; drawList(); selBar(); };
-    $('bsGo').onclick = function () { var l = LST.filter(function (b) { return ST.sel[b.id]; }); share(l); };
+    }
+    if (TD.tool === 'pt') { if (!inside(ll)) { toast('Ketuk di dalam batas blok'); return true; } return false; }
+    if (TD.tool) return false;
+    var h2 = hit(ll); if (h2 && h2.id !== cur.id) { pick(h2, false); return true; }
+    return false;
   }
 
-  // ---------- layar 3: lembar blok ----------
-  function ensureSheet() {
-    if ($('blSheet')) return;
-    var el = document.createElement('div'); el.id = 'blSheet'; el.className = 'blov'; el.style.display = 'none';
-    el.innerHTML = '<div class="blTop"><button class="ib" id="blBack" aria-label="Kembali">' + IC.back + '</button><div class="blTtl"><b id="blNm"></b><small id="blSub"></small></div><button class="ib" id="blShare" aria-label="Bagikan">' + IC.print + '</button></div>' +
-      '<div class="blMapW"><div id="blMap"></div><div id="blHud"></div><div id="blWarn" style="display:none"></div>' +
-      '<div class="blFab"><button class="fab" id="blUndo" aria-label="Urung">' + IC.undo + '</button><button class="fab" id="blLay" aria-label="Satelit atau peta">' + IC.layers + '</button><button class="fab" id="blLoc" aria-label="Posisi saya">' + IC.loc + '</button></div></div>' +
-      '<div id="blNav"><button class="ib" id="blPrev" aria-label="Sebelumnya">' + IC.prev + '</button><span id="blNavT"></span><button class="ib" id="blNext" aria-label="Berikutnya">' + IC.next + '</button></div><div id="blBar"></div>';
-    document.body.appendChild(el);
-    $('blBack').onclick = closeBlock;
-    $('blShare').onclick = function () { share([cur]); };
-    $('blUndo').onclick = function () { HA.tandaUndo(); };
-    $('blLay').onclick = function () { bmMode = bmMode === 'sat' ? 'osm' : 'sat'; applyBase(); toast(bmMode === 'sat' ? 'Mode satelit' : 'Mode peta'); };
-    $('blLoc').onclick = function () { locate(false); };
-    $('blPrev').onclick = function () { step(-1); };
-    $('blNext').onclick = function () { step(1); };
-  }
-  function applyBase() {
-    if (!bm) return;
-    HA.setBase(bm, bmMode);
-    if (bm._base && bounds) { bm._base.options.bounds = bounds; bm._base.redraw(); }
-    if (bm._base && bm._base.bringToBack) bm._base.bringToBack();
-    if (bm._base) bm._base.once('load', function () { setTimeout(function () { if (cur) checkCache(); }, 500); });
-    applyClip();
-  }
-  function applyClip() {
-    if (!bm || !bufPts.length) return;
-    var pane = bm.getPane('tilePane'), q = bufPts.map(function (p) { return bm.latLngToLayerPoint(p); });
-    pane.style.clipPath = 'polygon(' + q.map(function (a) { return a.x.toFixed(1) + 'px ' + a.y.toFixed(1) + 'px'; }).join(',') + ')';
-  }
-  function openBlock(b) {
-    if (TD.on && !TD.blk) { HA.tandaEdCancel(); }
-    ensureSheet();
-    $('blPick').style.display = 'none';
-    var el = $('blSheet'); el.style.display = 'flex';
-    TD.on = true; TD.tool = null; TD.blk = b; HA.tandaData();
-    if (!bm) {
-      bm = L.map('blMap', { zoomControl: false, attributionControl: false, preferCanvas: true, maxZoom: 22, zoomSnap: 0.5, zoomDelta: 1, inertia: true });
-      bm.on('click', function (ev) { HA.tandaClick(ev); });
-      bm.on('zoomend viewreset', applyClip);
-      bm.getContainer().style.background = '#fff';
-      outLay = L.layerGroup().addTo(bm);
-    }
-    TD.bm = bm; TD.barBlock = barBlock;
-    bm._forceOvl = true;
-    setup(b);
-    setTimeout(function () { bm.invalidateSize(); setup(b, true); if (HA.syncOverlays) HA.syncOverlays(bm); }, 60);
-  }
-  function setup(b, soft) {
-    cur = b; TD.blk = b; TD.bm = bm;
-    var buf = HA.tandaBufM();
-    bufPts = bufPoly(b.pts, buf);
-    var bb = bbox(bufPts); bounds = L.latLngBounds([[bb[0], bb[1]], [bb[2], bb[3]]]);
-    outLay.clearLayers();
-    blocks().forEach(function (o) {
-      if (o.id === b.id) return;
-      var ob = bbox(o.pts); if (ob[2] < bb[0] || ob[0] > bb[2] || ob[3] < bb[1] || ob[1] > bb[3]) return;
-      L.polygon(o.pts, { color: '#fff', weight: 1.2, opacity: 0.85, dashArray: '5 4', fill: false, interactive: false }).addTo(outLay);
+  // ---------- pencarian: kaca pembesar, 5 saran ----------
+  function norm(s) { return String(s).toLowerCase().replace(/\s+/g, ''); }
+  function srchOpen() { $('tdSrch').style.display = 'block'; $('tdQ').value = ''; srchList(); setTimeout(function () { try { $('tdQ').focus(); } catch (e) {} }, 60); }
+  function srchClose() { var s = $('tdSrch'); if (s) { s.style.display = 'none'; try { $('tdQ').blur(); } catch (e) {} } }
+  function srchList() {
+    var q = norm($('tdQ').value), ref = pos, m = sp();
+    if (!ref && m) { var c = m.getCenter(); ref = [c.lat, c.lng]; }
+    var l = blocksC().map(function (b) { var q2 = bbox(b.pts); return { b: b, d: ref ? dist(ref, [(q2[0] + q2[2]) / 2, (q2[1] + q2[3]) / 2]) : 0, n: norm(b.name) }; });
+    if (q) {
+      l = l.filter(function (x) { return x.n.indexOf(q) >= 0; });
+      l.sort(function (a, b) { var s1 = a.n.indexOf(q) === 0 ? 0 : 1, s2 = b.n.indexOf(q) === 0 ? 0 : 1; return s1 - s2 || collator.compare(a.n, b.n); });
+    } else l.sort(function (a, b) { return a.d - b.d; });
+    l = l.slice(0, 5);
+    $('tdSl').innerHTML = l.length ? (q ? '' : '<div class="muted tdSh">' + (pos ? 'Terdekat dari posisi Anda' : 'Terdekat dari tengah peta') + '</div>') + l.map(function (x) {
+      return '<button class="bprow" data-id="' + esc(String(x.b.id)) + '"><span class="bpi"><b>' + esc(String(x.b.name)) + '</b><small>' + fmtHa(HzBlok.areaHa(x.b.pts)) + ' ha · ' + fmtD(x.d) + '</small></span></button>';
+    }).join('') : '<div class="muted" style="padding:0.75rem">Tidak ada blok terkonfirmasi yang cocok.</div>';
+    $('tdSl').querySelectorAll('.bprow').forEach(function (e) {
+      e.onclick = function () { var id = e.getAttribute('data-id'), b = blocksC().filter(function (o) { return String(o.id) === id; })[0]; srchClose(); if (b) pick(b, true); };
     });
-    L.polygon(b.pts, { color: '#FFE600', weight: 1.8, fill: false, interactive: false }).addTo(outLay);
-    bm.setMaxBounds(bounds.pad(0.3));
-    if (!soft) bm.fitBounds(bounds, { animate: false, padding: [6, 6] });
-    applyBase();
-    HA.tandaDraw();
-    barBlock(); title(); navUpdate(); checkCache();
   }
-  function title() {
-    var n = itemsOf(cur).length;
-    $('blNm').textContent = 'Blok ' + cur.name; $('blSub').textContent = n ? n + ' tanda · ' + fmtHa(HzBlok.areaHa(cur.pts)) + ' ha' : 'Belum ada tanda · ' + fmtHa(HzBlok.areaHa(cur.pts)) + ' ha';
-  }
-  function refresh() { if (cur && TD.blk) { title(); navUpdate(); } }
-  function marked() {
-    var l = blocks(), c = countsAll(l);
-    return l.filter(function (b) { return c[b.id] > 0 || (cur && b.id === cur.id && false); }).sort(function (a, b) { return collator.compare(String(a.name), String(b.name)); });
-  }
-  function navUpdate() {
-    var m = marked(), i = -1; m.forEach(function (b, k) { if (b.id === cur.id) i = k; });
-    $('blNavT').textContent = m.length ? (i >= 0 ? (i + 1) + ' dari ' + m.length + ' blok bertanda' : m.length + ' blok bertanda') : 'Belum ada blok bertanda';
-    $('blPrev').disabled = $('blNext').disabled = !m.length || (m.length === 1 && i === 0);
-    BT._m = m; BT._i = i;
-  }
-  function step(d) {
-    var m = BT._m || [], i = BT._i; if (!m.length) return;
-    var k = i < 0 ? (d > 0 ? 0 : m.length - 1) : (i + d + m.length) % m.length;
-    if (TD.wk) { toast('Hentikan walking dulu'); return; }
-    HA.tandaEdCancel(); TD.tool = null; setup(m[k]);
-  }
-  function closeBlock() {
-    if (TD.wk) { toast('Hentikan walking dulu'); return; }
-    HA.tandaEdCancel(); TD.tool = null; TD.on = false; TD.blk = null; TD.bm = null; HA.tandaHud('');
-    if (outLay) outLay.clearLayers();
-    var w = $('blWarn'); if (w) w.style.display = 'none';
-    $('blSheet').style.display = 'none';
-    cur = null; pick();
-  }
-  function barBlock() {
-    var b = HA.tandaBrush ? HA.tandaBrush() : { color: '#FF6A00', name: 'Oranye' };
-    $('blBar').innerHTML = '<button class="big" id="blHere">' + IC.loc + '<span>Tandai di posisi saya</span></button>' +
-      '<div class="tdr">' + tb(null, IC.pin, 'Titik', TD.tool === 'pt', 'data-t="pt"') + tb(null, IC.line, 'Garis', TD.tool === 'ln', 'data-t="ln"') + tb(null, IC.poly, 'Area', TD.tool === 'pg', 'data-t="pg"') + tb(null, IC.walk, 'Walking', false, 'data-t="wk"') + tb('blCol', '<i class="cdot" style="background:' + b.color + '"></i>', 'Warna') + tb('blLs', IC.list, 'Daftar') + '</div>';
-    $('blBar').querySelectorAll('[data-t]').forEach(function (e) { e.onclick = function () { HA.tandaPick(e.getAttribute('data-t')); }; });
-    $('blCol').onclick = function () { HA.tandaColor(function (v) { var d = HA.tandaData(); d.brush = { cat: null, col: v.col }; HA.tandaSave(); barBlock(); }); };
+
+  // ---------- bilah bawah mode marking ----------
+  function fit0() { setTimeout(function () { if (sp()) sp().invalidateSize(); }, 60); }
+  function bar() {
+    var bx = $('tdBar'); if (!bx) return;
+    var b = HA.tandaBrush();
+    if (!cur) {
+      bx.innerHTML = '<div class="tdr">' + tb('tdLs', IC.list, 'Daftar semua') + tb('tdXm', IC.close, 'Tutup') + '</div>';
+      $('tdLs').onclick = function () { HA.tandaList(); };
+      $('tdXm').onclick = function () { HA.tandaOff(); };
+      hudStatus(); fit0(); return;
+    }
+    if (TD.done) {
+      bx.innerHTML = '<div class="tdr">' + tb('tdBk', IC.back, 'Edit') + tb('tdPv', IC.eye, 'Preview') + tb('tdSh', IC.share, 'Bagikan') + tb('tdSv', IC.save, 'Simpan', true) + '</div>';
+      $('tdBk').onclick = function () { TD.done = false; bar(); };
+      $('tdPv').onclick = function () { preview(cur); };
+      $('tdSh').onclick = function () { share([cur]); };
+      $('tdSv').onclick = function () { toast('Blok ' + cur.name + ' tersimpan · ' + itemsOf(cur).length + ' tanda'); deselect(); };
+      HA.tandaHud(''); fit0(); return;
+    }
+    bx.innerHTML = '<div class="tdr">' + tb(null, IC.pin, 'Titik', TD.tool === 'pt', 'data-t="pt"') + tb(null, IC.line, 'Garis', TD.tool === 'ln', 'data-t="ln"') + tb(null, IC.poly, 'Area', TD.tool === 'pg', 'data-t="pg"') + tb(null, IC.walk, 'Jalan', !!TD.wk, 'data-t="wk"') + '</div>' +
+      '<div class="tdr">' + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + tb('blCol', '<i class="cdot" style="background:' + b.color + '"></i>', 'Warna') + tb('blLs', IC.list, 'Daftar') + tb('tdFin', IC.check, 'Selesai', true) + '</div>';
+    bx.querySelectorAll('[data-t]').forEach(function (e) { e.onclick = function () { HA.tandaPick(e.getAttribute('data-t')); }; });
+    $('tdUn').onclick = function () { HA.tandaUndo(); };
+    $('tdRe').onclick = function () { HA.tandaRedo(); };
+    $('blCol').onclick = function () { HA.tandaColor(function (v) { var d = HA.tandaData(); d.brush = { cat: null, col: v.col }; HA.tandaSave(); bar(); }); };
     $('blLs').onclick = function () { HA.tandaList(itemsOf(cur)); };
-    $('blHere').onclick = function () { locate(true); };
-    if (TD.tool === 'pt') HA.tandaHud('Ketuk di dalam blok untuk menaruh titik'); else if (!TD.tool && !TD.ed) HA.tandaHud('');
+    $('tdFin').onclick = function () { HA.tandaEdCancel(); TD.tool = null; TD.done = true; bar(); };
+    if (TD.tool === 'pt') HA.tandaHud('Ketuk di dalam blok untuk menaruh titik'); else if (!TD.tool && !TD.ed) HA.tandaHud('Pilih Titik, Garis, Area, atau Jalan');
+    fit0();
   }
-  function locate(add) {
-    if (!navigator.geolocation) { toast('GPS tidak tersedia'); return; }
-    toast('Mencari posisi…');
-    navigator.geolocation.getCurrentPosition(function (p) {
-      var ll = [p.coords.latitude, p.coords.longitude];
-      if (myDot) { try { myDot.remove(); } catch (e) {} }
-      myDot = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 3, fillColor: '#2F80FF', fillOpacity: 1, interactive: false }).addTo(bm);
-      if (!add) { if (inside(ll) || bounds.contains(ll)) bm.panTo(ll); else toast('Posisi Anda di luar area blok'); return; }
-      if (!inside(ll)) { toast('Posisi Anda di luar blok ini'); return; }
-      var b = HA.tandaBrush(), it = { id: HA.tandaNewId(), t: 'pt', pts: [ll], cat: null, col: b.col, name: '', note: '', ts: Date.now() };
-      HA.tandaAdd(it); HA.tandaDraw(); refresh(); toast('Titik ditandai (±' + Math.round(p.coords.accuracy || 0) + ' m)');
-    }, function (e) { toast(e && e.code === 1 ? 'Izin lokasi ditolak' : 'Posisi belum ditemukan'); }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 2000 });
+  function stampN() { var t = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return t.getFullYear() + p(t.getMonth() + 1) + p(t.getDate()); }
+  function preview(b) {
+    toast('Menyusun preview…');
+    BT.buildPdf([{ title: SH.title || 'Blok ' + b.name, items: itemsOf(b), blk: b }], { nama: SH.nama, nilai: SH.nilai, fs: SH.fs }).then(function (bytes) {
+      HA.pdfPreview(bytes, function () { HA.saveFile('Blok_' + String(b.name).replace(/[^A-Za-z0-9]+/g, '_') + '_' + stampN() + '.pdf', btoa(bytes), 'application/pdf'); });
+    }).catch(function () { toast('Gagal menyusun preview'); });
   }
+
 
   // ---------- citra satelit: daftar kotak, cek cache, unduh ----------
   function satZ() { return S.settings.satNative || 17; }
@@ -263,26 +239,7 @@
     return Promise.all(urls.map(function (u) { return HA.TC.get(u).then(function (b) { return b ? null : u; }).catch(function () { return null; }); })).then(function (r) { return r.filter(Boolean); });
   }
   function mbMB(n) { return Math.max(0.1, n * 0.03).toFixed(1).replace('.', ','); }
-  function checkCache() {
-    var w = $('blWarn'); w.style.display = 'none';
-    var urls = tileUrls(bounds ? [bounds.getSouth(), bounds.getWest(), bounds.getNorth(), bounds.getEast()] : bbox(bufPts)), id = cur.id;
-    if (urls.length > 120) return;
-    checkUrls(urls).then(function (miss) {
-      if (!cur || cur.id !== id) return;
-      BT._miss = miss;
-      if (!miss.length) return;
-      w.style.display = 'flex';
-      w.innerHTML = '<span>Citra satelit blok ini belum tersimpan (' + miss.length + ' dari ' + urls.length + ' kotak). Tanpa internet gambar bisa kosong atau buram.</span><button class="btn sm pri" id="blDl">' + IC.down + '<span>Unduh ≈ ' + mbMB(miss.length) + ' MB</span></button>';
-      $('blDl').onclick = function () {
-        w.innerHTML = '<span id="blDp">Mengunduh 0/' + miss.length + '…</span>';
-        dl(miss, function (n, t) { if ($('blDp')) $('blDp').textContent = 'Mengunduh ' + n + '/' + t + '…'; }, function (fail) {
-          toast(fail ? 'Selesai, ' + fail + ' kotak gagal (cek internet)' : 'Citra satelit tersimpan');
-          if (bm && bm._base) bm._base.redraw();
-          checkCache();
-        });
-      };
-    });
-  }
+
   function dl(miss, prog, done) {
     var i = 0, ok = 0, fail = 0, run = 0, fin = false;
     function nx() {
@@ -293,7 +250,6 @@
     if (!miss.length) { done(0); return; }
     for (var k = 0; k < 4; k++) nx();
   }
-  BT.cacheMissing = function () { return (BT._miss || []).length; };
 
   // ---------- gambar satelit untuk PDF (tile cache -> JPEG, dipotong poligon + sekeliling) ----------
   var IMGC = {};
