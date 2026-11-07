@@ -9,7 +9,7 @@
   function toast() { return HA.toast.apply(this, arguments); }
   function openSheet() { return HA.openSheet.apply(this, arguments); }
   function closeSheet() { return HA.closeSheet.apply(this, arguments); }
-  var BT = HA.BT = { enter: enter, leave: leave, tap: tap, bar: bar, exit: exit, pick: pick, inside: inside, refresh: function () { chip(); }, share: share, bufPoly: bufPoly, preview: preview };
+  var BT = HA.BT = { enter: enter, leave: leave, tap: tap, bar: bar, exit: exit, pick: pick, inside: inside, refresh: function () { chip(); }, share: share, bufPoly: bufPoly, preview: preview, itemsOf: itemsOf, back: function () { var p = $('tdSrch'); if (p && p.style.display !== 'none') { srchClose(); return true; } return false; } };
   var cur = null, collator = new Intl.Collator('id', { numeric: true });
 
   // ---------- data dan geometri ----------
@@ -78,7 +78,7 @@
     $('tdSr').onclick = function () { if ($('tdSrch').style.display === 'none') srchOpen(); else srchClose(); };
     $('tdQx').onclick = srchClose;
     $('tdQ').oninput = srchList;
-    $('tdLay').onclick = function () { bmode = bmode === 'sat' ? 'osm' : 'sat'; HA.setBase(sp(), bmode); if (HA.syncOverlays) HA.syncOverlays(sp()); toast(bmode === 'sat' ? 'Mode satelit' : 'Mode peta'); };
+    $('tdLay').onclick = function () { bmode = bmode === 'sat' ? 'osm' : 'sat'; HA.setBase(sp(), bmode); sp()._forceOvl = bmode === 'osm'; if (HA.syncOverlays) HA.syncOverlays(sp()); toast(bmode === 'sat' ? 'Mode satelit' : 'Mode peta + peta PDF'); };
     $('tdChip').onclick = function () { if (cur) sp().fitBounds(L.latLngBounds(cur.pts), { padding: [40, 40], maxZoom: 20, animate: true }); };
   }
   function chip() {
@@ -95,13 +95,13 @@
     if (!blkLay) return;
     blkLay.clearLayers();
     var m = sp(); if (!m || !TD.on || m.getZoom() < MINZ) return;
-    var g = m.getBounds(), bb = [g.getSouth(), g.getWest(), g.getNorth(), g.getEast()], n = 0, z = m.getZoom(), nm = 0;
+    var g = m.getBounds(), bb = [g.getSouth(), g.getWest(), g.getNorth(), g.getEast()], n = 0;
     blocksC().forEach(function (o) {
       if (n > 220) return;
       var q = bbox(o.pts); if (q[2] < bb[0] || q[0] > bb[2] || q[3] < bb[1] || q[1] > bb[3]) return; n++;
       var on = cur && cur.id === o.id;
-      var pg = L.polygon(o.pts, { color: on ? '#FFE600' : '#fff', weight: on ? 3 : 1.3, opacity: on ? 1 : (cur ? 0.4 : 0.9), fill: !cur, fillColor: '#fff', fillOpacity: cur ? 0 : 0.05, interactive: false }).addTo(blkLay);
-      if ((on || (z >= 17 && nm < 60)) && (nm++ || true)) pg.bindTooltip(esc(String(o.name)), { permanent: true, direction: 'center', className: 'bkl' });
+      var pg = L.polygon(o.pts, { color: on ? '#FFE600' : '#fff', weight: on ? 1.8 : 0.8, opacity: on ? 1 : (cur ? 0.35 : 0.6), fill: false, interactive: false }).addTo(blkLay);
+      pg.bindTooltip(esc(String(o.name)), { permanent: true, direction: 'center', className: 'bkl' });
     });
   }
   function onView() { if (!TD.on) return; drawBlocks(); hudStatus(); }
@@ -122,15 +122,16 @@
     if ($('tdTop')) $('tdTop').style.display = 'none';
     if ($('spMapWrap')) $('spMapWrap').classList.remove('tdon');
     if (m && bmode !== 'sat') { HA.setBase(m, 'sat'); bmode = 'sat'; }
+    if (m) { m._forceOvl = false; if (HA.syncOverlays) HA.syncOverlays(m); }
   }
   function select(b, fit) {
-    HA.tandaEdCancel(); cur = b; TD.blk = b; TD.tool = null; TD.done = false;
+    HA.tandaEdCancel(); cur = b; TD.blk = b; TD.tool = null; TD.done = false; TD.selIt = null; TD.del = null; TD.palOpen = false;
     SNAP = JSON.stringify(HA.tandaData().items); HA.tandaHsInit(true);
     if (fit && sp()) sp().fitBounds(L.latLngBounds(b.pts), { padding: [48, 48], maxZoom: 20, animate: false });
     drawBlocks(); chip(); HA.tandaDraw(); HA.tandaBar();
   }
   function deselect() {
-    HA.tandaEdCancel(); cur = null; TD.blk = null; TD.tool = null; TD.done = false; SNAP = null; HA.tandaHsInit(false);
+    HA.tandaEdCancel(); cur = null; TD.blk = null; TD.tool = null; TD.done = false; TD.selIt = null; TD.del = null; TD.palOpen = false; SNAP = null; HA.tandaHsInit(false);
     drawBlocks(); chip(); HA.tandaDraw(); HA.tandaBar(); hudStatus();
   }
   // keluar dari blok terpilih; bila ada perubahan belum disimpan, tanya dulu
@@ -203,15 +204,17 @@
       $('tdSv').onclick = function () { toast('Blok ' + cur.name + ' tersimpan · ' + itemsOf(cur).length + ' tanda'); deselect(); };
       HA.tandaHud(''); fit0(); return;
     }
-    bx.innerHTML = '<div class="tdr">' + tb(null, IC.pin, 'Titik', TD.tool === 'pt', 'data-t="pt"') + tb(null, IC.line, 'Garis', TD.tool === 'ln', 'data-t="ln"') + tb(null, IC.poly, 'Area', TD.tool === 'pg', 'data-t="pg"') + tb(null, IC.walk, 'Jalan', !!TD.wk, 'data-t="wk"') + '</div>' +
-      '<div class="tdr">' + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + tb('blCol', '<i class="cdot" style="background:' + b.color + '"></i>', 'Warna') + tb('blLs', IC.list, 'Daftar') + tb('tdFin', IC.check, 'Selesai', true) + '</div>';
+    if (HA.tandaSubBar && HA.tandaSubBar()) { fit0(); return; }
+    bx.innerHTML = HA.tandaPalHtml(b.color, b.op, true) + '<div class="tdr">' + tb(null, IC.pin, 'Titik', TD.tool === 'pt', 'data-t="pt"') + tb(null, IC.line, 'Garis', TD.tool === 'ln', 'data-t="ln"') + tb(null, IC.brush, 'Warnai', TD.tool === 'pg', 'data-t="pg"') + tb(null, IC.walk, 'Jalan', !!TD.wk, 'data-t="wk"') + tb(null, IC.trash, 'Hapus', false, 'data-t="del"') + '</div>' +
+      '<div class="tdr">' + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + tb('blCol', '<i class="cdot" style="background:' + b.color + '"></i>', 'Warna', TD.palOpen) + tb('blLs', IC.list, 'Daftar') + tb('tdFin', IC.check, 'Selesai', true) + '</div>';
     bx.querySelectorAll('[data-t]').forEach(function (e) { e.onclick = function () { HA.tandaPick(e.getAttribute('data-t')); }; });
     $('tdUn').onclick = function () { HA.tandaUndo(); };
     $('tdRe').onclick = function () { HA.tandaRedo(); };
-    $('blCol').onclick = function () { HA.tandaColor(function (v) { var d = HA.tandaData(); d.brush = { cat: null, col: v.col }; HA.tandaSave(); bar(); }); };
+    $('blCol').onclick = function () { TD.palOpen = !TD.palOpen; bar(); };
+    HA.tandaPalWire(function (c) { var d = HA.tandaData(); d.brush = { cat: null, col: c, op: d.brush.op }; HA.tandaSave(); bar(); }, function (v, fin) { HA.tandaData().brush.op = v; if (fin) HA.tandaSave(); });
     $('blLs').onclick = function () { HA.tandaList(itemsOf(cur)); };
     $('tdFin').onclick = function () { HA.tandaEdCancel(); TD.tool = null; TD.done = true; bar(); };
-    if (TD.tool === 'pt') HA.tandaHud('Ketuk di dalam blok untuk menaruh titik'); else if (!TD.tool && !TD.ed) HA.tandaHud('Pilih Titik, Garis, Area, atau Jalan');
+    if (!TD.tool) HA.tandaHud('Pilih Titik, Garis, Warnai, atau Jalan'); else if (TD.tool === 'pt') HA.tandaHud('Ketuk di dalam blok untuk menaruh titik');
     fit0();
   }
   function stampN() { var t = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return t.getFullYear() + p(t.getMonth() + 1) + p(t.getDate()); }

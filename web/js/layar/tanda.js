@@ -35,6 +35,11 @@
     next: ic('<path d="M9 5l7 7-7 7"/>'),
     prev: ic('<path d="M15 5l-7 7 7 7"/>'),
     close: ic('<path d="M6 6l12 12M18 6L6 18"/>'),
+    brush: ic('<path d="M18 3l3 3-9 9-3-3z"/><path d="M9 12c-3 0-4 2-4 4 0 2-1 3-2 4 3 1 8 1 8-4"/>'),
+    trash: ic('<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>'),
+    hand: ic('<path d="M8 13V6a1.5 1.5 0 0 1 3 0v6"/><path d="M11 11V4.5a1.5 1.5 0 0 1 3 0V11"/><path d="M14 6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-3l-2.5-4a1.5 1.5 0 0 1 2.5-1.5L8 13"/>'),
+    tidy: ic('<path d="M4 20L15 9"/><path d="M14 4l1-2 1 2 2 1-2 1-1 2-1-2-2-1zM19 12l.7-1.4L21 10l-1.3-.6L19 8l-.7 1.4L17 10l1.3.6z"/>'),
+    edit: ic('<path d="M4 20l1-4 11-11 3 3-11 11z"/><path d="M14 7l3 3"/>'),
     redo: ic('<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>'),
     check: ic('<path d="M5 12l5 5 9-10"/>'),
     eye: ic('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
@@ -54,7 +59,7 @@
     if (!d || !Array.isArray(d.items)) d = { v: 1, cats: defCats(), items: [], brush: { cat: 'c1', col: null }, seq: 1 };
     if (!Array.isArray(d.cats)) d.cats = defCats();
     if (!d.brush) d.brush = { cat: null, col: PAL[0][1] };
-    if (d.brush.cat) { var bc = null; d.cats.forEach(function (c) { if (c.id === d.brush.cat) bc = c; }); d.brush = { cat: null, col: bc ? bc.col : PAL[0][1] }; }
+    if (d.brush.cat) { var bc = null; d.cats.forEach(function (c) { if (c.id === d.brush.cat) bc = c; }); d.brush = { cat: null, col: bc ? bc.col : PAL[0][1], op: d.brush.op }; }
     TD.D = d; return d;
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(TD.D)); } catch (e) { toast('Gagal menyimpan marking'); } hsPush(); }
@@ -66,17 +71,22 @@
   function hsGo(d) {
     if (!HS) return; var j = HS.i + d;
     if (j < 0 || j >= HS.s.length) { toast(d < 0 ? 'Tidak ada yang diurungkan' : 'Tidak ada yang diulang'); return; }
-    HS.i = j; setItems(HS.s[j]); if (HA.BT) HA.BT.refresh(); barMain();
+    HS.i = j; setItems(HS.s[j]);
+    if (TD.selIt) { var sid = TD.selIt.id; TD.selIt = null; TD.D.items.forEach(function (x) { if (x.id === sid) TD.selIt = x; }); }
+    if (TD.del) TD.del = {};
+    drawAll(); if (HA.BT) HA.BT.refresh(); barMain();
   }
   HA.tandaHsInit = hsInit; HA.tandaSetItems = setItems;
   function catOf(id) { var r = null; data().cats.forEach(function (c) { if (c.id === id) r = c; }); return r; }
   function colOf(it) { var c = it.cat ? catOf(it.cat) : null; return c ? c.col : (it.col || PAL[0][1]); }
   function brush() {
     var b = data().brush, c = b.cat ? catOf(b.cat) : null;
-    if (c) return { cat: c.id, col: null, color: c.col, name: c.name };
+    var bo = (typeof b.op === 'number') ? b.op : 0.35;
+    if (c) return { cat: c.id, col: null, color: c.col, name: c.name, op: bo };
     var cl = b.col || PAL[0][1];
-    return { cat: null, col: cl, color: cl, name: colorName(cl) };
+    return { cat: null, col: cl, color: cl, name: colorName(cl), op: bo };
   }
+  function opOf(it) { var v = it.op; return (typeof v === 'number' && v >= 0.05 && v <= 0.95) ? v : 0.35; }
   function addItem(it) { data().items.push(it); return it; }
   function undoLast() { if (TD.ed) edUndo(); else hsGo(-1); }
   function redoLast() { if (TD.ed) edRedo(); else hsGo(1); }
@@ -166,16 +176,23 @@
     ensureLay().clearLayers();
     data().items.forEach(function (it) {
       if (TD.ed && TD.ed.item && TD.ed.item.id === it.id) return;
-      var col = colOf(it), l;
+      var col = colOf(it), l, hc = null;
+      if (TD.del && TD.del[it.id]) hc = '#FF2D55'; else if (TD.selIt && TD.selIt.id === it.id) hc = '#FFFFFF';
+      if (hc) {
+        if (it.t === 'pt') L.circleMarker(it.pts[0], { radius: 14, color: hc, weight: 3, fill: false, interactive: false }).addTo(TD.lay);
+        else if (it.t === 'ln') L.polyline(it.pts, { color: hc, weight: 11, opacity: 0.9, interactive: false }).addTo(TD.lay);
+        else L.polygon(it.pts, { color: hc, weight: 7, fill: false, interactive: false }).addTo(TD.lay);
+      }
       if (it.t === 'pt') l = L.circleMarker(it.pts[0], { radius: 8, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1 });
       else if (it.t === 'ln') l = L.polyline(it.pts, { color: col, weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' });
-      else l = L.polygon(it.pts, { color: col, weight: 2.5, fillColor: col, fillOpacity: 0.35 });
-      if (it.name) l.bindTooltip(esc(it.name), { permanent: true, direction: 'center', className: 'lktip' });
-      l.on('click', function (ev) { if (TD.tool || TD.ed || TD.wk) { return; } L.DomEvent.stopPropagation(ev); itemSheet(it); });
+      else l = L.polygon(it.pts, { color: col, weight: 2.5, fillColor: col, fillOpacity: opOf(it) });
+      if (it.name) l.bindTooltip(esc(it.name), { permanent: true, direction: 'center', className: 'mktip' });
+      l.on('click', function (ev) { if (TD.tool || TD.ed || TD.wk) { return; } L.DomEvent.stopPropagation(ev); selectItem(it); });
       l.addTo(TD.lay);
     });
     if (HA.BT && TD.blk) HA.BT.refresh();
   }
+  function selectItem(it) { TD.selIt = it; TD.palOpen = false; drawAll(); barMain(); }
   function fitItem(it) { var m = map(); if (!m) return; if (it.t === 'pt') m.setView(it.pts[0], Math.max(m.getZoom(), 18), { animate: false }); else m.fitBounds(L.latLngBounds(it.pts), { padding: [40, 40], maxZoom: 19, animate: false }); }
 
   // ---------- mode marking ----------
@@ -186,14 +203,14 @@
   }
   function modeOn() {
     if (!HA.spShow) return;
-    TD.on = true; TD.blk = null; TD.bm = null; data();
+    TD.on = true; TD.blk = null; TD.bm = null; TD.selIt = null; TD.del = null; TD.palOpen = false; data();
     HA.spShow('map');
     var m = map();
     if (!m) { setTimeout(modeOn, 300); return; }
     if (TD.prevFollow == null) TD.prevFollow = HA.SP.follow;
     HA.SP.follow = false; HA.SP.autoPaused = true;
     if (!TD.bound) { m.on('click', onMapClick); TD.bound = true; }
-    setOverlays(true); ensureLay(); drawAll();
+    setOverlays(false); ensureLay(); drawAll(); strokeBind();
     $('spBar').style.display = 'none'; $('tdBar').style.display = 'flex'; $('spTanda').classList.add('on');
     if (HA.BT) HA.BT.enter();
     barMain(); if (!HA.BT) hud('');
@@ -209,7 +226,7 @@
   }
   HA.tandaOff = modeOff;
   function modeOffNow() {
-    edCancel(); if (HA.BT) HA.BT.leave(); TD.tool = null; TD.on = false;
+    edCancel(); if (HA.BT) HA.BT.leave(); TD.tool = null; TD.selIt = null; TD.del = null; TD.palOpen = false; lockMap(false); TD.on = false;
     if (TD.lay) { TD.lay.clearLayers(); }
     setOverlays(false);
     $('tdBar').style.display = 'none'; $('spBar').style.display = ''; $('spTanda').classList.remove('on'); hud('');
@@ -230,36 +247,59 @@
     $('tdBr').onclick = function () { colorSheet(function (v) { var d = data(); d.brush = { cat: null, col: v.col }; save(); barMain(); }); };
     $('tdLs').onclick = function () { listSheet(); };
     $('tdXm').onclick = modeOff;
-    if (TD.tool === 'pt') hud('Ketuk peta untuk menaruh titik'); else if (TD.tool === 'bl') hud('Ketuk di dalam blok untuk mewarnai utuh');
+    if (TD.tool === 'pt') hud('Ketuk peta untuk menaruh titik'); 
   }
   HA.tandaBar = barMain;
+  // tombol Back Android: panel -> gambar -> keluar blok -> keluar marking -> Spidometer
+  HA.tandaBack = function () {
+    var pv = $('tdPrev'); if (pv) { pv.remove(); return true; }
+    if (HA.BT && HA.BT.back && HA.BT.back()) return true;
+    if (!TD.on) return false;
+    if (TD.wk) { toast('Hentikan walking dulu'); return true; }
+    if (TD.ed && !TD.ed.item && TD.ed.pts.length) { edCancel(); TD.tool = null; barMain(); return true; }
+    if (HA.BT && TD.blk) { HA.BT.exit(); return true; }
+    modeOff(); return true;
+  };
   function pickTool(t) {
     if (TD.ed) edCancel();
-    if (t === 'wk') { TD.tool = null; wkStart(); return; }
+    TD.selIt = null; TD.palOpen = false;
+    if (t === 'wk') { TD.tool = null; TD.del = null; wkStart(); return; }
+    if (t === 'del') { var on = TD.tool !== 'del'; TD.tool = on ? 'del' : null; TD.del = on ? {} : null; drawAll(); barMain(); return; }
+    TD.del = null;
     TD.tool = TD.tool === t ? null : t;
     if (TD.tool === 'ln' || TD.tool === 'pg') { edStart(TD.tool, null); return; }
-    barMain(); if (!TD.tool) hud('');
+    drawAll(); barMain(); if (!TD.tool) hud('');
   }
   HA.tandaPick = pickTool;
 
   // ---------- gambar dan edit bentuk (titik sudut bisa digeser, ditambah, dihapus) ----------
   function vIcon(mid) { return L.divIcon({ className: 'tdv', html: '<i class="' + (mid ? 'mid' : '') + '"></i>', iconSize: mid ? [18, 18] : [28, 28], iconAnchor: mid ? [9, 9] : [14, 14] }); }
+  function clonePts(a) { return a.map(function (p) { return [p[0], p[1]]; }); }
+  function lockMap(on) {
+    var m = map(); if (!m) return; var c = m.getContainer();
+    if (on) { m.dragging.disable(); c.style.touchAction = 'none'; }
+    else { if (!m.dragging.enabled()) m.dragging.enable(); c.style.touchAction = ''; }
+  }
   function edStart(kind, item) {
     edCancel();
-    TD.ed = { red: [], kind: kind, item: item, pts: item ? item.pts.map(function (p) { return [p[0], p[1]]; }) : [], vm: [], shape: null };
+    TD.selIt = null; TD.palOpen = false;
+    TD.ed = { h: [], red: [], pan: false, kind: kind, item: item, pts: item ? clonePts(item.pts) : [], vm: [], shape: null };
+    lockMap(!item);
     drawAll(); edRender(); edBar();
   }
+  function edPush() { var e = TD.ed; if (!e) return; e.h.push(clonePts(e.pts)); if (e.h.length > 60) e.h.shift(); e.red = []; }
   function edMin() { return TD.ed.kind === 'ln' ? 2 : 3; }
   function edStatus() {
     var e = TD.ed; if (!e) return;
-    if (e.kind === 'ln') hud(e.pts.length < 2 ? 'Ketuk peta untuk menambah titik' : 'Garis ' + fmtM(lenLL(e.pts, false)));
-    else if (e.pts.length < 3) hud('Ketuk peta untuk menambah titik sudut');
+    if (e.pan) { hud('Geser peta aktif. Ketuk Geser lagi untuk menggambar'); return; }
+    if (e.kind === 'ln') hud(e.pts.length < 2 ? 'Seret jari di peta, atau ketuk untuk menambah titik' : 'Garis ' + fmtM(lenLL(e.pts, false)));
+    else if (e.pts.length < 3) hud('Lingkari bagian blok dengan jari, atau ketuk titik sudut');
     else { var P = HzBlok.proj(e.pts[0][0], e.pts[0][1]); hud('Area ' + fmtHa(HzBlok.areaHa(e.pts)) + ' ha · ' + fmtM(lenXY(e.pts.map(P.xy), true))); }
   }
   function edShape() {
-    var e = TD.ed, m = map(), col = e.item ? colOf(e.item) : brush().color;
+    var e = TD.ed, m = map(), col = e.item ? colOf(e.item) : brush().color, op = e.item ? opOf(e.item) : brush().op;
     if (e.shape) { m.removeLayer(e.shape); e.shape = null; }
-    if (e.pts.length >= 2) e.shape = (e.kind === 'pg' && e.pts.length >= 3 ? L.polygon(e.pts, { color: col, weight: 3, fillColor: col, fillOpacity: 0.3, interactive: false }) : L.polyline(e.pts, { color: col, weight: 4, interactive: false })).addTo(m);
+    if (e.pts.length >= 2) e.shape = (e.kind === 'pg' && e.pts.length >= 3 ? L.polygon(e.pts, { color: col, weight: 3, fillColor: col, fillOpacity: op, interactive: false }) : L.polyline(e.pts, { color: col, weight: 4, interactive: false })).addTo(m);
   }
   function edRender() {
     var e = TD.ed, m = map(); if (!e) return;
@@ -268,61 +308,208 @@
     var closed = e.kind === 'pg';
     e.pts.forEach(function (p, i) {
       var mk = L.marker(p, { icon: vIcon(false), draggable: true, keyboard: false, zIndexOffset: 800 }).addTo(m);
+      mk.on('dragstart', function () { edPush(); });
       mk.on('drag', function () { var ll = mk.getLatLng(); e.pts[i] = [ll.lat, ll.lng]; edShape(); edStatus(); });
       mk.on('dragend', function () { edRender(); });
-      mk.on('click', function (ev) { L.DomEvent.stopPropagation(ev); if (e.pts.length > edMin()) { e.pts.splice(i, 1); edRender(); } else toast('Titik minimal ' + edMin()); });
+      mk.on('click', function (ev) { L.DomEvent.stopPropagation(ev); if (e.pts.length > edMin()) { edPush(); e.pts.splice(i, 1); edRender(); } else toast('Titik minimal ' + edMin()); });
       e.vm.push(mk);
       var j = i + 1; if (j >= e.pts.length) { if (!closed || e.pts.length < 3) return; j = 0; }
       var q = e.pts[j], mid = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2], mm = L.marker(mid, { icon: vIcon(true), keyboard: false, zIndexOffset: 700 }).addTo(m);
-      mm.on('click', function (ev) { L.DomEvent.stopPropagation(ev); e.pts.splice(i + 1, 0, mid); edRender(); });
+      mm.on('click', function (ev) { L.DomEvent.stopPropagation(ev); edPush(); e.pts.splice(i + 1, 0, mid); edRender(); });
       e.vm.push(mm);
     });
     edStatus();
   }
-  function edUndo() { var e = TD.ed; if (!e || !e.pts.length) { toast('Tidak ada titik untuk diurungkan'); return; } e.red.push(e.pts.pop()); edRender(); }
-  function edRedo() { var e = TD.ed; if (!e || !e.red.length) { toast('Tidak ada yang diulang'); return; } e.pts.push(e.red.pop()); edRender(); }
+  function edUndo() { var e = TD.ed; if (!e) return; if (!e.h.length) { toast('Tidak ada yang diurungkan'); return; } e.red.push(clonePts(e.pts)); e.pts = e.h.pop(); edRender(); }
+  function edRedo() { var e = TD.ed; if (!e) return; if (!e.red.length) { toast('Tidak ada yang diulang'); return; } e.h.push(clonePts(e.pts)); e.pts = e.red.pop(); edRender(); }
+
+  // ---------- Rapikan: buang titik berlebih dan getaran jari ----------
+  function tidyPts(pts, kind) {
+    if (pts.length < 4) return pts;
+    var P = HzBlok.proj(pts[0][0], pts[0][1]), xy = pts.map(P.xy), bb = [1e9, 1e9, -1e9, -1e9];
+    xy.forEach(function (q) { bb[0] = Math.min(bb[0], q[0]); bb[1] = Math.min(bb[1], q[1]); bb[2] = Math.max(bb[2], q[0]); bb[3] = Math.max(bb[3], q[1]); });
+    var ext = Math.hypot(bb[2] - bb[0], bb[3] - bb[1]), tol = Math.max(0.6, Math.min(3, ext * 0.02));
+    var ring = kind === 'pg' ? xy.concat([xy[0]]) : xy, keep = dpSimplify(ring, tol);
+    if (kind === 'pg') keep = keep.filter(function (i) { return i < xy.length; });
+    var out = keep.map(function (i) { return pts[i]; });
+    return out.length < (kind === 'ln' ? 2 : 3) ? pts : out;
+  }
+  function edTidy() {
+    var e = TD.ed; if (!e) return;
+    var n0 = e.pts.length, out = tidyPts(e.pts, e.kind);
+    if (out.length >= n0) { toast(n0 < 4 ? 'Belum ada yang perlu dirapikan' : 'Sudah rapi'); return; }
+    edPush(); e.pts = clonePts(out); edRender(); toast('Dirapikan: ' + n0 + ' → ' + out.length + ' titik');
+  }
+  function itemTidy(it) {
+    var n0 = it.pts.length, out = tidyPts(it.pts, it.t);
+    if (out.length >= n0) { toast(n0 < 4 ? 'Belum ada yang perlu dirapikan' : 'Sudah rapi'); return; }
+    it.pts = clonePts(out); save(); drawAll(); barMain(); toast('Dirapikan: ' + n0 + ' → ' + out.length + ' titik');
+  }
+
+  // ---------- gambar dengan jari (seret di peta) ----------
+  function strokeBind() {
+    var m = map(); if (!m || TD.sb === m) return; TD.sb = m;
+    var c = m.getContainer(), st = null, live = null;
+    function ll(ev) { var q = m.mouseEventToLatLng(ev); return [q.lat, q.lng]; }
+    function clearLive() { if (live) { try { m.removeLayer(live); } catch (e) {} live = null; } }
+    function can(ev) {
+      var e = TD.ed; if (!e || e.item || e.pan || TD.wk) return false;
+      var t = ev.target; if (t && t.closest && t.closest('.tdv,.leaflet-control,button')) return false;
+      return true;
+    }
+    c.addEventListener('pointerdown', function (ev) {
+      if (st && ev.pointerId !== st.id) { st = null; clearLive(); return; }
+      if (!can(ev)) return;
+      if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+      st = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, pts: [ll(ev)], moved: false };
+    });
+    c.addEventListener('pointermove', function (ev) {
+      if (!st || ev.pointerId !== st.id) return;
+      if (!st.moved) { if (Math.hypot(ev.clientX - st.x, ev.clientY - st.y) < 10) return; st.moved = true; }
+      st.pts.push(ll(ev));
+      if (!live) live = L.polyline([], { color: brush().color, weight: 4, opacity: 0.9, interactive: false, dashArray: TD.ed && TD.ed.kind === 'pg' ? '6 5' : null }).addTo(m);
+      live.setLatLngs(st.pts);
+    });
+    c.addEventListener('pointerup', function (ev) {
+      if (!st || ev.pointerId !== st.id) return;
+      var s = st; st = null; clearLive();
+      if (s.moved) { TD.stroked = Date.now(); strokeDone(s.pts); }
+    });
+    c.addEventListener('pointercancel', function (ev) { if (st && ev.pointerId === st.id) { st = null; clearLive(); } });
+  }
+  function strokeDone(raw) {
+    var e = TD.ed; if (!e || e.item) return;
+    var arr = raw.filter(function (p) { return !TD.blk || !HA.BT || HA.BT.inside(p); });
+    if (arr.length < 2) { toast('Gambar di dalam batas blok'); return; }
+    var P = HzBlok.proj(arr[0][0], arr[0][1]), keep = dpSimplify(arr.map(P.xy), 0.4);
+    arr = keep.map(function (i) { return arr[i]; });
+    var first = e.pts.length === 0;
+    if (first && e.kind === 'ln' && lenLL(arr, false) < 1.5) return;
+    edPush(); e.pts = e.pts.concat(arr); edRender();
+    if (first && e.pts.length >= edMin()) edDone();
+  }
+
+  // ---------- palet warna (akordeon) ----------
+  function palHtml(sel, op, showOp) {
+    if (!TD.palOpen) return '';
+    return '<div class="tdPal"><div class="tdCs">' + PAL.map(function (c) { return '<button type="button" class="tdc' + (sel && sel.toLowerCase() === c[1].toLowerCase() ? ' on' : '') + '" data-col="' + c[1] + '" style="background:' + c[1] + '" aria-label="' + c[0] + '"></button>'; }).join('') + '</div>' +
+      (showOp ? '<div class="tdOp"><span>Isi warna</span><input type="range" id="tdOpR" min="10" max="90" step="5" value="' + Math.round(op * 100) + '"><b id="tdOpV">' + Math.round(op * 100) + '%</b></div>' : '') + '</div>';
+  }
+  function palWire(onCol, onOp) {
+    bar().querySelectorAll('.tdc').forEach(function (e) { e.onclick = function () { TD.palOpen = false; onCol(e.getAttribute('data-col')); }; });
+    var r = $('tdOpR');
+    if (r) { r.oninput = function () { $('tdOpV').textContent = r.value + '%'; onOp(+r.value / 100, false); }; r.onchange = function () { onOp(+r.value / 100, true); }; }
+  }
+  HA.tandaPalHtml = palHtml; HA.tandaPalWire = palWire;
+
   function edBar() {
-    var e = TD.ed;
-    bar().innerHTML = '<div class="tdr">' + tb('tdUr', IC.undo, 'Urung') + tb('tdRd', IC.redo, 'Ulang') + tb('tdOk', IC.check, 'Simpan bentuk', true) + tb('tdBt', IC.close, 'Batal') + '</div>' +
-      '<div class="tdr"><button class="tbtn wide" id="tdCl"><i class="cdot" style="background:' + (e.item ? colOf(e.item) : brush().color) + '"></i><span>Warna: ' + esc(e.item ? colorName(colOf(e.item)) : brush().name) + '</span></button></div>';
-    $('tdUr').onclick = edUndo; $('tdRd').onclick = edRedo;
+    var e = TD.ed, col = e.item ? colOf(e.item) : brush().color, op = e.item ? opOf(e.item) : brush().op;
+    bar().innerHTML = palHtml(col, op, e.kind === 'pg') + '<div class="tdr">' + tb('tdUr', IC.undo, 'Urung') + tb('tdRd', IC.redo, 'Ulang') + tb('tdTy', IC.tidy, 'Rapikan') + (e.item ? '' : tb('tdPn', IC.hand, 'Geser', e.pan)) + '</div>' +
+      '<div class="tdr">' + tb('tdCl', '<i class="cdot" style="background:' + col + '"></i>', 'Warna', TD.palOpen) + tb('tdBt', IC.close, 'Batal') + tb('tdOk', IC.check, 'Simpan', true) + '</div>';
+    $('tdUr').onclick = edUndo; $('tdRd').onclick = edRedo; $('tdTy').onclick = edTidy;
+    if ($('tdPn')) $('tdPn').onclick = function () { e.pan = !e.pan; lockMap(!e.pan); edStatus(); edBar(); };
     $('tdBt').onclick = function () { edCancel(); TD.tool = null; barMain(); };
     $('tdOk').onclick = edDone;
-    $('tdCl').onclick = function () { colorSheet(function (v) { if (e.item) { e.item.cat = null; e.item.col = v.col; } else { var d = data(); d.brush = { cat: null, col: v.col }; } save(); edShape(); edBar(); }); };
+    $('tdCl').onclick = function () { TD.palOpen = !TD.palOpen; edBar(); };
+    palWire(function (c) {
+      if (e.item) { e.item.cat = null; e.item.col = c; } else { var d = data(); d.brush = { cat: null, col: c, op: d.brush.op }; }
+      save(); edShape(); edBar();
+    }, function (v, fin) {
+      if (e.item) e.item.op = v; else data().brush.op = v;
+      edShape(); if (fin) save();
+    });
   }
   function edCancel() {
     var e = TD.ed, m = map(); if (!e) return;
     e.vm.forEach(function (x) { m.removeLayer(x); }); if (e.shape) m.removeLayer(e.shape);
-    TD.ed = null; hud(''); drawAll();
+    TD.ed = null; lockMap(false); hud(''); drawAll();
   }
   function edDone() {
     var e = TD.ed; if (!e) return;
     if (e.pts.length < edMin()) { toast(e.kind === 'ln' ? 'Garis butuh minimal 2 titik' : 'Area butuh minimal 3 titik'); return; }
-    var d = data(), msg;
+    var msg;
     if (e.item) { e.item.pts = e.pts; e.item.t = e.kind; if (e.item.full) { e.item.full = false; e.item.bid = null; } msg = 'Bentuk diperbarui'; }
     else {
       var b = brush(), it = { id: newId(), t: e.kind, pts: e.pts, cat: b.cat, col: b.col, name: '', note: '', ts: Date.now() };
+      if (e.kind === 'pg') it.op = b.op;
       addItem(it); e.item = it; msg = (e.kind === 'ln' ? 'Garis ' : 'Area ') + 'tersimpan';
     }
     var it2 = e.item, st = statOf(it2);
-    save(); TD.ed = null; hud(''); edCleanup(e); drawAll();
+    save(); TD.ed = null; lockMap(false); hud(''); edCleanup(e); drawAll();
     toast(msg + ' · ' + statText(it2, st).replace('\n', ' · '));
-    if (e.reopen) { itemSheet(it2); TD.tool = null; barMain(); return; }
-    TD.tool = null; barMain();
+    TD.tool = null;
+    if (e.reopen) { itemSheet(it2); barMain(); return; }
+    selectItem(it2);
   }
   function edCleanup(e) { var m = map(); e.vm.forEach(function (x) { m.removeLayer(x); }); if (e.shape) { m.removeLayer(e.shape); e.shape = null; } }
 
+  // ---------- mode Hapus (pilih banyak, satu konfirmasi) dan bilah tanda terpilih ----------
+  function distSeg(p, a, b) { var dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy, t = l2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2)) : 0; return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)); }
+  function itemDist(it, pt, m) {
+    var pp = it.pts.map(function (q) { return m.latLngToContainerPoint(q); }), best = 1e9, i;
+    if (it.t === 'pt') return pt.distanceTo(pp[0]);
+    for (i = 0; i < pp.length - 1; i++) best = Math.min(best, distSeg(pt, pp[i], pp[i + 1]));
+    if (it.t === 'pg') {
+      best = Math.min(best, distSeg(pt, pp[pp.length - 1], pp[0]));
+      if (pipXY(pt.x, pt.y, pp.map(function (q) { return [q.x, q.y]; }))) { var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; pp.forEach(function (q) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); }); best = Math.min(best, 1 + (x1 - x0) * (y1 - y0) / 1e6); }
+    }
+    return best;
+  }
+  function delTap(ll) {
+    var m = map(), pt = m.latLngToContainerPoint(ll), best = null, bd = 1e9;
+    var its = (HA.BT && TD.blk && HA.BT.itemsOf) ? HA.BT.itemsOf(TD.blk) : data().items;
+    its.forEach(function (it) { var d = itemDist(it, pt, m); if (d < bd) { bd = d; best = it; } });
+    if (best && bd <= 22) { TD.del = TD.del || {}; if (TD.del[best.id]) delete TD.del[best.id]; else TD.del[best.id] = 1; drawAll(); barMain(); }
+    else toast('Tidak ada tanda di sini');
+  }
+  function subBar() {
+    var bx = bar(); if (!bx) return false;
+    if (TD.tool === 'del') {
+      var n = Object.keys(TD.del || {}).length;
+      bx.innerHTML = '<div class="tdr">' + tb('dlX', IC.close, 'Batal') + tb('dlGo', IC.trash, n ? 'Hapus (' + n + ')' : 'Hapus', n > 0) + '</div>';
+      $('dlX').onclick = function () { TD.tool = null; TD.del = null; drawAll(); barMain(); };
+      $('dlGo').onclick = function () {
+        if (!n) { toast('Ketuk tanda yang mau dihapus'); return; }
+        askConfirm('Hapus ' + n + ' tanda?', 'Bisa diurungkan dengan tombol Urung.', 'Hapus', function () {
+          var ids = TD.del || {}, d = data(); d.items = d.items.filter(function (x) { return !ids[x.id]; });
+          TD.tool = null; TD.del = null; save(); drawAll(); if (HA.BT) HA.BT.refresh(); barMain(); toast(n + ' tanda dihapus');
+        });
+      };
+      hud(n ? n + ' tanda dipilih' : 'Ketuk tanda yang mau dihapus');
+      return true;
+    }
+    if (TD.selIt) {
+      var it = TD.selIt, col = colOf(it);
+      bx.innerHTML = palHtml(col, opOf(it), it.t === 'pg') + '<div class="tdr">' + (it.t === 'pt' ? '' : tb('siTy', IC.tidy, 'Rapikan')) + tb('siCl', '<i class="cdot" style="background:' + col + '"></i>', 'Warna', TD.palOpen) + tb('siSh', IC.edit, it.t === 'pt' ? 'Geser' : 'Bentuk') + tb('siDt', IC.list, 'Detail') + tb('siDl', IC.trash, 'Hapus') + '</div>' +
+        '<div class="tdr">' + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + tb('siOk', IC.check, 'Selesai', true) + '</div>';
+      if ($('siTy')) $('siTy').onclick = function () { itemTidy(it); };
+      $('siCl').onclick = function () { TD.palOpen = !TD.palOpen; barMain(); };
+      $('siSh').onclick = function () { TD.selIt = null; TD.palOpen = false; if (it.t === 'pt') { TD.tool = null; pointMove(it); } else { TD.tool = null; edStart(it.t, it); fitItem(it); } };
+      $('siDt').onclick = function () { itemSheet(it); };
+      $('siDl').onclick = function () { askConfirm('Hapus tanda ini?', 'Bisa diurungkan dengan tombol Urung.', 'Hapus', function () { var d = data(); d.items = d.items.filter(function (x) { return x.id !== it.id; }); TD.selIt = null; save(); drawAll(); if (HA.BT) HA.BT.refresh(); barMain(); }); };
+      $('siOk').onclick = function () { TD.selIt = null; TD.palOpen = false; drawAll(); barMain(); };
+      $('tdUn').onclick = function () { hsGo(-1); }; $('tdRe').onclick = function () { hsGo(1); };
+      palWire(function (c) { it.cat = null; it.col = c; save(); drawAll(); barMain(); }, function (v, fin) { it.op = v; drawAll(); if (fin) save(); });
+      hud((it.name ? it.name + ' · ' : '') + (it.t === 'pt' ? 'Titik' : statText(it, statOf(it)).replace('\n', ' · ')));
+      return true;
+    }
+    return false;
+  }
+  HA.tandaSubBar = subBar;
+
   function onMapClick(ev) {
     if (!TD.on) return;
+    if (TD.stroked && Date.now() - TD.stroked < 450) return;
     var ll = [ev.latlng.lat, ev.latlng.lng];
     if (TD.wk) return;
+    if (TD.tool === 'del') { delTap(ev.latlng); return; }
+    if (TD.selIt && !TD.ed) { TD.selIt = null; TD.palOpen = false; drawAll(); barMain(); }
     if (HA.BT && HA.BT.tap(ll)) return;
-    if (TD.ed) { TD.ed.pts.push(ll); TD.ed.red = []; edRender(); return; }
+    if (TD.ed) { edPush(); TD.ed.pts.push(ll); edRender(); return; }
     if (TD.tool === 'pt') {
       var b = brush(), it = { id: newId(), t: 'pt', pts: [ll], cat: b.cat, col: b.col, name: '', note: '', ts: Date.now() };
       addItem(it); save(); drawAll(); toast('Titik ditambah'); return;
     }
-    if (TD.wk) return;
   }
   function markBlock(ll) {
     var hit = null, ha0 = 1e18;
@@ -379,7 +566,7 @@
   function pointMove(it) {
     var m = map(); toast('Ketuk lokasi baru untuk titik ini');
     TD.tool = 'mv';
-    var h = function (ev) { m.off('click', h); it.pts = [[ev.latlng.lat, ev.latlng.lng]]; save(); TD.tool = null; drawAll(); barMain(); };
+    var h = function (ev) { m.off('click', h); it.pts = [[ev.latlng.lat, ev.latlng.lng]]; save(); TD.tool = null; TD.selIt = it; drawAll(); barMain(); };
     setTimeout(function () { m.on('click', h); }, 50);
   }
 
@@ -416,18 +603,19 @@
   function kmlCol(hex, a) { var h = hex.replace('#', ''); return a + h.slice(4, 6) + h.slice(2, 4) + h.slice(0, 2); }
   function buildKml(listItems, title, groupsIn) {
     var d = data(), cols = {}, all = listItems || d.items;
-    all.forEach(function (it) { cols[colOf(it)] = 1; });
+    function sidOf(it) { return 'c' + colOf(it).replace('#', '') + 'o' + Math.round(opOf(it) * 100); }
+    all.forEach(function (it) { cols[sidOf(it)] = { c: colOf(it), a: ('0' + Math.round(opOf(it) * 255).toString(16)).slice(-2) }; });
     var x = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>' + xe(title || ('Marking HZ Trip ' + stamp())) + '</name>';
-    Object.keys(cols).forEach(function (c) {
-      var id = 'c' + c.replace('#', '');
-      x += '<Style id="' + id + '"><IconStyle><color>' + kmlCol(c, 'ff') + '</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0.9</scale></LabelStyle><LineStyle><color>' + kmlCol(c, 'ff') + '</color><width>3</width></LineStyle><PolyStyle><color>' + kmlCol(c, '66') + '</color></PolyStyle></Style>';
+    Object.keys(cols).forEach(function (id) {
+      var c = cols[id].c, pa = cols[id].a;
+      x += '<Style id="' + id + '"><IconStyle><color>' + kmlCol(c, 'ff') + '</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0.9</scale></LabelStyle><LineStyle><color>' + kmlCol(c, 'ff') + '</color><width>3</width></LineStyle><PolyStyle><color>' + kmlCol(c, pa) + '</color></PolyStyle></Style>';
     });
     function ring(pts) { var a = pts.map(function (p) { return (+p[1]).toFixed(7) + ',' + (+p[0]).toFixed(7) + ',0'; }); a.push(a[0]); return a.join(' '); }
     function pm(it) {
       var st = statOf(it), c = it.cat ? catOf(it.cat) : null, col = colOf(it);
       if (it.boundary) return '<Placemark><name>' + xe(it.name || '') + '</name><description>Batas blok</description><Style><LineStyle><color>ff00d6ff</color><width>2.5</width></LineStyle><PolyStyle><fill>0</fill></PolyStyle></Style><ExtendedData><Data name="hz_type"><value>blk</value></Data></ExtendedData><Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>' + ring(it.pts) + '</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>';
-      var s = '<Placemark><name>' + xe(it.name || '') + '</name><description>' + xe(statText(it, st).replace('\n', ' | ') + (it.note ? ' | ' + it.note : '')) + '</description><styleUrl>#c' + col.replace('#', '') + '</styleUrl>' +
-        '<ExtendedData><Data name="hz_type"><value>' + it.t + '</value></Data><Data name="hz_cat"><value>' + xe(c ? c.name : '') + '</value></Data><Data name="hz_col"><value>' + col + '</value></Data><Data name="hz_note"><value>' + xe(it.note || '') + '</value></Data>' + (it.full ? '<Data name="hz_bid"><value>' + xe(it.bid) + '</value></Data>' : '') + '</ExtendedData>';
+      var s = '<Placemark><name>' + xe(it.name || '') + '</name><description>' + xe(statText(it, st).replace('\n', ' | ') + (it.note ? ' | ' + it.note : '')) + '</description><styleUrl>#' + sidOf(it) + '</styleUrl>' +
+        '<ExtendedData><Data name="hz_type"><value>' + it.t + '</value></Data><Data name="hz_cat"><value>' + xe(c ? c.name : '') + '</value></Data><Data name="hz_col"><value>' + col + '</value></Data>' + (it.t === 'pg' ? '<Data name="hz_op"><value>' + Math.round(opOf(it) * 100) + '</value></Data>' : '') + '<Data name="hz_note"><value>' + xe(it.note || '') + '</value></Data>' + (it.full ? '<Data name="hz_bid"><value>' + xe(it.bid) + '</value></Data>' : '') + '</ExtendedData>';
       if (it.t === 'pt') s += '<Point><coordinates>' + (+it.pts[0][1]).toFixed(7) + ',' + (+it.pts[0][0]).toFixed(7) + ',0</coordinates></Point>';
       else if (it.t === 'ln') s += '<LineString><tessellate>1</tessellate><coordinates>' + it.pts.map(function (p) { return (+p[1]).toFixed(7) + ',' + (+p[0]).toFixed(7) + ',0'; }).join(' ') + '</coordinates></LineString>';
       else s += '<Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>' + ring(it.pts) + '</coordinates></LinearRing></outerBoundaryIs></Polygon>';
@@ -472,7 +660,7 @@
         else { var c2 = first(el, 'coordinates'); pts = c2 ? coords(c2) : []; }
         if (t === 'Point' && pts.length >= 1) pts = [pts[0]];
         var min = t === 'Point' ? 1 : (t === 'LineString' ? 2 : 3); if (pts.length < min) return;
-        d.items.push({ id: newId(), t: t === 'Point' ? 'pt' : (t === 'LineString' ? 'ln' : 'pg'), pts: pts, cat: cat ? cat.id : null, col: cat ? null : color, name: name, note: ext.hz_note || '', ts: Date.now() }); added++;
+        d.items.push({ id: newId(), t: t === 'Point' ? 'pt' : (t === 'LineString' ? 'ln' : 'pg'), pts: pts, cat: cat ? cat.id : null, col: cat ? null : color, name: name, note: ext.hz_note || '', ts: Date.now() }); if (t === 'Polygon' && ext.hz_op && isFinite(+ext.hz_op)) d.items[d.items.length - 1].op = Math.max(0.1, Math.min(0.9, +ext.hz_op / 100)); added++;
       });
     });
     save(); drawAll();
@@ -595,8 +783,11 @@
     function add(b) { objs.push(b); return objs.length; }
     function stream(dict, dt) { return '<< ' + dict + ' /Length ' + dt.length + ' >>\nstream\n' + dt + '\nendstream'; }
     var dd = new Date(), p2 = function (n) { return (n < 10 ? '0' : '') + n; }, tgl = p2(dd.getDate()) + '-' + p2(dd.getMonth() + 1) + '-' + dd.getFullYear();
-    var cat = add(''), pages = add(''), f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'), f2o = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'), gs = add('<< /Type /ExtGState /ca 0.35 /CA 1 >>');
-    var res = '<< /Font << /F1 ' + f1 + ' 0 R /F2 ' + f2o + ' 0 R >> /ExtGState << /G1 ' + gs + ' 0 R >> >>';
+    var cat = add(''), pages = add(''), f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'), f2o = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+    var gsM = {};
+    function gsFor(op) { var k = Math.round(op * 100); if (!gsM[k]) gsM[k] = add('<< /Type /ExtGState /ca ' + (k / 100) + ' /CA 1 >>'); return k; }
+    var res0 = '<< /Font << /F1 ' + f1 + ' 0 R /F2 ' + f2o + ' 0 R >>';
+    var usedGs = {};
     var groups = o.groups || [{ title: o.title, items: itemsAll }];
     function page(items, ttlText, blk, img) {
     var mb = pageBox(items, blk, o), hasImg = !!img;
@@ -636,7 +827,7 @@
     // bentuk
     info.forEach(function (n) {
       var it = n.it, s = '', i;
-      if (it.t === 'pg') { it.pts.forEach(function (p, i2) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i2 ? ' l ' : ' m '); }); c.push('q /G1 gs ' + rgb(n.col) + ' rg ' + s + 'h f Q ' + rgb(n.col) + ' RG 1.3 w ' + s + 'h S'); }
+      if (it.t === 'pg') { it.pts.forEach(function (p, i2) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i2 ? ' l ' : ' m '); }); usedGs[gsFor(opOf(it))] = 1; c.push('q /G' + gsFor(opOf(it)) + ' gs ' + rgb(n.col) + ' rg ' + s + 'h f Q ' + rgb(n.col) + ' RG 1.3 w ' + s + 'h S'); }
       else if (it.t === 'ln') { it.pts.forEach(function (p, i2) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i2 ? ' l ' : ' m '); }); c.push(rgb(n.col) + ' RG 2.4 w 1 J 1 j ' + s + 'S 0 J 0 j'); }
       else { var px = X(it.pts[0][1]), py = Y(it.pts[0][0]), r = 4.2, k = r * 0.5523; c.push(rgb(n.col) + ' rg 1 G 0.9 w ' + f2(px + r) + ' ' + f2(py) + ' m ' + f2(px + r) + ' ' + f2(py + k) + ' ' + f2(px + k) + ' ' + f2(py + r) + ' ' + f2(px) + ' ' + f2(py + r) + ' c ' + f2(px - k) + ' ' + f2(py + r) + ' ' + f2(px - r) + ' ' + f2(py + k) + ' ' + f2(px - r) + ' ' + f2(py) + ' c ' + f2(px - r) + ' ' + f2(py - k) + ' ' + f2(px - k) + ' ' + f2(py - r) + ' ' + f2(px) + ' ' + f2(py - r) + ' c ' + f2(px + k) + ' ' + f2(py - r) + ' ' + f2(px + r) + ' ' + f2(py - k) + ' ' + f2(px + r) + ' ' + f2(py) + ' c B'); }
     });
@@ -655,8 +846,9 @@
       } else { cx = X(it.pts[0][1]) + 7; cy = Y(it.pts[0][0]) + (o.pos === 't' ? fsU : (o.pos === 'b' ? -fsU : 0)); align = 'l'; }
       var tot2 = lab.length * fsU * 1.15, top = cy + tot2 / 2 - fsU * 0.85;
       lab.forEach(function (t, i) {
-        var w = t.length * fsU * 0.52, x = align === 'l' ? cx : cx - w / 2;
-        c.push('BT /F1 ' + f2(fsU) + ' Tf ' + (hasImg ? '1 1 1 RG ' + f2(Math.max(1, fsU * 0.28)) + ' w 2 Tr ' : '') + f2(x) + ' ' + f2(top - i * fsU * 1.15) + ' Td (' + pe(t) + ') Tj ET');
+        var w = t.length * fsU * 0.52, x = align === 'l' ? cx : cx - w / 2, yb = top - i * fsU * 1.15;
+        c.push('q 1 g ' + f2(x - 2) + ' ' + f2(yb - fsU * 0.25) + ' ' + f2(w + 4) + ' ' + f2(fsU * 1.15) + ' re f Q');
+        c.push('0 g BT /F1 ' + f2(fsU) + ' Tf ' + f2(x) + ' ' + f2(yb) + ' Td (' + pe(t) + ') Tj ET');
       });
     });
     // skala dan panah utara
@@ -692,7 +884,7 @@
     var corners = [[M, M], [M, PH - M], [PW - M, PH - M], [PW - M, M]], lp = [0, 0, 0, 1, 1, 1, 1, 0], gp = [];
     corners.forEach(function (q) { gp.push(latAt(q[1]).toFixed(7), lngAt(q[0]).toFixed(7)); });
     var vp = '/VP [ << /Type /Viewport /Name (Peta) /BBox [' + f2(M) + ' ' + f2(M) + ' ' + f2(PW - M) + ' ' + f2(PH - M) + '] /Measure << /Type /Measure /Subtype /GEO /Bounds [0 0 0 1 1 1 1 0] /GPTS [' + gp.join(' ') + '] /LPTS [' + lp.join(' ') + '] /GCS << /Type /GEOGCS /WKT (GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]) /EPSG 4326 >> /PDU [/M /DEG /DEG] >> >> ]';
-    var pg = add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW) + ' ' + f2(PH) + '] /Resources ' + (imN ? res.replace(/ >>$/, ' /XObject << /Im' + imN + ' ' + imN + ' 0 R >> >>') : res) + ' /Contents ' + cs + ' 0 R ' + vp + ' >>');
+    var pg = add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW) + ' ' + f2(PH) + '] /Resources ' + (function () { var res = res0 + ' /ExtGState << ' + Object.keys(usedGs).map(function (k) { return '/G' + k + ' ' + gsM[k] + ' 0 R'; }).join(' ') + ' >>' + (imN ? ' /XObject << /Im' + imN + ' ' + imN + ' 0 R >>' : '') + ' >>'; return res; })() + ' /Contents ' + cs + ' 0 R ' + vp + ' >>');
     return pg;
     }
     var kids = groups.map(function (g) { return page(g.items, g.title, g.blk, g.img); });
