@@ -123,13 +123,13 @@
     if (!blkLay) return;
     blkLay.clearLayers();
     var m = sp(); if (!m || !TD.on || m.getZoom() < MINZ) return;
-    var g = m.getBounds(), bb = [g.getSouth(), g.getWest(), g.getNorth(), g.getEast()], n = 0;
+    var z = m.getZoom(), g = m.getBounds(), bb = [g.getSouth(), g.getWest(), g.getNorth(), g.getEast()], n = 0;
     blocksC().forEach(function (o) {
       if (n > 220) return;
       var q = bbox(o.pts); if (q[2] < bb[0] || q[0] > bb[2] || q[3] < bb[1] || q[1] > bb[3]) return; n++;
       var on = cur && cur.id === o.id;
       var pg = L.polygon(o.pts, { color: on ? '#FFE600' : '#fff', weight: on ? 1.8 : 0.8, opacity: on ? 1 : (cur ? 0.35 : 0.6), fill: false, interactive: false }).addTo(blkLay);
-      pg.bindTooltip(esc(String(o.name)), { permanent: true, direction: 'center', className: 'bkl' });
+      if (z >= 16) pg.bindTooltip(esc(String(o.name)), { permanent: true, direction: 'center', className: z >= 17 ? 'bkl bkb' : 'bkl' });
     });
   }
   function onView() { if (!TD.on) return; drawBlocks(); hudStatus(); }
@@ -220,7 +220,8 @@
     coordShow();
     var b = HA.tandaBrush();
     if (!cur) {
-      bx.innerHTML = '<div class="tdr">' + tb('tdLs', IC.list, 'Daftar semua') + tb('tdXm', IC.close, 'Tutup') + '</div>';
+      bx.innerHTML = '<div class="tdr">' + tb('tdWk', IC.walk, 'Walking') + tb('tdLs', IC.list, 'Daftar semua') + tb('tdXm', IC.close, 'Tutup') + '</div>';
+      $('tdWk').onclick = function () { HA.tandaPick('wk'); };
       $('tdLs').onclick = function () { HA.tandaList(); };
       $('tdXm').onclick = function () { HA.tandaOff(); };
       hudStatus(); fit0(); return;
@@ -238,11 +239,12 @@
     bx.innerHTML = HA.tandaPalHtml({ cat: b.cat, sub: b.sub }, b.op, TD.tool === 'pg') +
       (TD.shpOpen ? '<div class="tdr">' + tb(null, IC.pin, 'Titik', TD.tool === 'pt', 'data-t="pt"') + tb(null, IC.line, 'Garis', TD.tool === 'ln', 'data-t="ln"') + tb(null, IC.rect, 'Segi empat', TD.tool === 'rc', 'data-t="rc"') + '</div>' : '') +
       '<div class="tdr">' + tb('tdShp', cs ? cs[1] : IC.shapes, cs ? cs[0] : 'Bentuk', !!cs || !!TD.shpOpen) + tb(null, IC.brush, 'Warnai', TD.tool === 'pg', 'data-t="pg"') + tb(null, IC.walk, 'Jalan', !!TD.wk, 'data-t="wk"') + tb(null, IC.trash, 'Hapus', false, 'data-t="del"') + '</div>' +
-      '<div class="tdr">' + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + tb('blLs', IC.list, 'Daftar') + tb('tdFin', IC.check, 'Selesai', true) + '</div>';
+      '<div class="tdr">' + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + HA.tandaKatBtn() + tb('blLs', IC.list, 'Daftar') + tb('tdFin', IC.check, 'Selesai', true) + '</div>';
     $('tdShp').onclick = function () { TD.shpOpen = !TD.shpOpen; bar(); };
     bx.querySelectorAll('[data-t]').forEach(function (e) { e.onclick = function () { HA.tandaPick(e.getAttribute('data-t')); }; });
     $('tdUn').onclick = function () { HA.tandaUndo(); };
     $('tdRe').onclick = function () { HA.tandaRedo(); };
+    HA.tandaKatWire(bar);
     HA.tandaPalWire(function (cid, sid) { HA.tandaSetBrush(cid, sid); bar(); }, function (v, fin) { HA.tandaData().brush.op = v; if (fin) HA.tandaSave(); });
     $('blLs').onclick = function () { HA.tandaList(itemsOf(cur)); };
     $('tdFin').onclick = function () { HA.tandaEdCancel(); TD.tool = null; TD.done = true; bar(); };
