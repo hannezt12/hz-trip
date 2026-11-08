@@ -9,7 +9,7 @@
   function toast() { return HA.toast.apply(this, arguments); }
   function openSheet() { return HA.openSheet.apply(this, arguments); }
   function closeSheet() { return HA.closeSheet.apply(this, arguments); }
-  var BT = HA.BT = { enter: enter, leave: leave, tap: tap, bar: bar, exit: exit, pick: pick, inside: inside, refresh: function () { chip(); }, share: share, bufPoly: bufPoly, preview: preview, itemsOf: itemsOf, back: function () { var wm = $('spMapWrap'); if (wm && wm.classList.contains('tdmo')) { BT.menuClose(); return true; } var p = $('tdSrch'); if (p && p.style.display !== 'none') { srchClose(); return true; } return false; } };
+  var BT = HA.BT = { enter: enter, leave: leave, tap: tap, bar: bar, exit: exit, pick: pick, inside: inside, refresh: function () { chip(); if (cur && !TD.done) { var a = hasAct(); if (a !== lastAct && !TD.ed && !TD.sp && !TD.selIt && TD.tool !== 'del') bar(); } }, share: share, bufPoly: bufPoly, preview: preview, itemsOf: itemsOf, back: function () { var wm = $('spMapWrap'); if (wm && wm.classList.contains('tdmo')) { BT.menuClose(); return true; } var p = $('tdSrch'); if (p && p.style.display !== 'none') { srchClose(); return true; } return false; } };
   var cur = null, collator = new Intl.Collator('id', { numeric: true });
 
   // ---------- data dan geometri ----------
@@ -100,7 +100,7 @@
     $('tdQx').onclick = srchClose;
     $('tdQ').oninput = srchList;
     $('tdLay').onclick = function () { bmode = bmode === 'sat' ? 'osm' : 'sat'; HA.setBase(sp(), bmode); sp()._forceOvl = bmode === 'osm'; if (HA.syncOverlays) HA.syncOverlays(sp()); toast(bmode === 'sat' ? 'Mode satelit' : 'Mode peta + peta PDF'); };
-    $('tdChip').onclick = function () { if (cur) sp().fitBounds(L.latLngBounds(cur.pts), { padding: [40, 40], maxZoom: 20, animate: true }); };
+    $('tdChip').onclick = function () { if (!cur) return; if (itemsOf(cur).length) history(null); else zoomBlk(); };
   }
   function copyTxt(t) {
     function ok() { toast('Koordinat disalin'); }
@@ -110,11 +110,41 @@
   }
   function coordUpd() { var m = sp(); if (!m || !$('tdCoordT')) return; var c = m.getCenter(); $('tdCoordT').textContent = c.lat.toFixed(5) + ', ' + c.lng.toFixed(5); }
   function coordShow() { if (!$('tdCross')) return; var on = TD.on && !cur; $('tdCross').style.display = on ? 'block' : 'none'; $('tdCoord').style.display = on ? 'flex' : 'none'; if (on) coordUpd(); }
+  var lastAct = false;
+  function hasAct() { return !!cur && (dirty() || itemsOf(cur).length > 0); }
   function chip() {
     var c = $('tdChip'); if (!c) return;
     if (!cur) { c.style.display = 'none'; return; }
     var n = itemsOf(cur).length;
     c.style.display = ''; c.innerHTML = '<b>Blok ' + esc(String(cur.name)) + '</b><small>' + fmtHa(HzBlok.areaHa(cur.pts)) + ' ha · ' + (n ? n + ' tanda' : 'belum ada tanda') + '</small>';
+  }
+  function zoomBlk() { if (cur) sp().fitBounds(L.latLngBounds(cur.pts), { padding: [40, 40], maxZoom: 20, animate: true }); }
+  // Riwayat blok: semua lapisan, terbaru di atas
+  function history(ll) {
+    if (!cur) return;
+    var U = HA.tandaU, P = HzBlok.proj(cur.pts[0][0], cur.pts[0][1]), pxy = ll ? P.xy(ll) : null, bxy = cur.pts.map(P.xy);
+    function dseg(p, a, c) { var dx = c[0] - a[0], dy = c[1] - a[1], l2 = dx * dx + dy * dy, u = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)) : 0; return Math.hypot(p[0] - a[0] - u * dx, p[1] - a[1] - u * dy); }
+    function pip(p, poly) { var o = false, i, j; for (i = 0, j = poly.length - 1; i < poly.length; j = i++) { if ((poly[i][1] > p[1]) !== (poly[j][1] > p[1]) && p[0] < (poly[j][0] - poly[i][0]) * (p[1] - poly[i][1]) / (poly[j][1] - poly[i][1]) + poly[i][0]) o = !o; } return o; }
+    function hit(it) {
+      if (!pxy) return false; var xy = it.pts.map(P.xy), i;
+      if (it.t === 'pt') return Math.hypot(xy[0][0] - pxy[0], xy[0][1] - pxy[1]) < 4;
+      if (it.t === 'ln') { for (i = 0; i < xy.length - 1; i++) if (dseg(pxy, xy[i], xy[i + 1]) < 4) return true; return false; }
+      return pip(pxy, xy);
+    }
+    var its = itemsOf(cur).slice().sort(function (a, c) { return (c.ts || 0) - (a.ts || 0); });
+    function p2(n) { return (n < 10 ? '0' : '') + n; }
+    var h = '<div class="grab"></div><div class="st">RIWAYAT BLOK ' + esc(String(cur.name)).toUpperCase() + '</div><div class="muted" style="margin-bottom:6px">' + its.length + ' tanda \u00B7 terbaru di atas \u00B7 ketuk untuk memilih</div>';
+    its.forEach(function (it, i) {
+      var inf = HA.tandaCatInfo(it), st = HA.tandaStat(it), tt = new Date(it.ts || 0), a = [];
+      a.push(U.d8(U.dateOf(it)) + ' ' + p2(tt.getHours()) + '.' + p2(tt.getMinutes()));
+      if (it.t === 'pg') { a.push(U.ha(st.ha) + ' ha'); if (st.lm) a.push(U.ribu(st.lm) + ' m lajur'); } else if (it.t === 'ln') a.push(U.ribu(st.m) + ' m garis'); else a.push('titik');
+      h += '<button type="button" class="rwR" data-i="' + i + '"><i class="tdd" style="background:' + inf.col + '"></i><span class="lsT"><b>' + esc(HA.tandaTabName(it).replace(/ \/ /, ' / ')) + '</b>' + (it.name ? ' <span class="muted">' + esc(it.name) + '</span>' : '') + '<br><span class="lsS">' + esc(a.join(' \u00B7 ')) + '</span></span>' + (hit(it) ? '<span class="rwH">di titik ini</span>' : '') + '</button>';
+    });
+    h += '<div class="lsFoot"><button class="btn" id="rwZ">Zoom ke blok</button><button class="btn" id="rwX">Tutup</button></div>';
+    openSheet(h);
+    document.querySelectorAll('#sheet .rwR').forEach(function (e) { e.onclick = function () { var it = its[+e.getAttribute('data-i')]; closeSheet(); if (it) { HA.tandaSelect(it); } }; });
+    $('rwZ').onclick = function () { closeSheet(); zoomBlk(); };
+    $('rwX').onclick = closeSheet;
   }
   function hudStatus() {
     if (!TD.on || TD.wk || TD.ed || cur) return;
@@ -229,30 +259,30 @@
       hudStatus(); fit0(); return;
     }
     if (TD.done) {
-      bx.innerHTML = '<div class="tdr">' + tb('tdBk', IC.back, 'Edit') + tb('tdPv', IC.eye, 'Preview') + tb('tdSh', IC.share, 'Bagikan') + tb('tdSv', IC.save, 'Simpan', true) + '</div>';
+      bx.innerHTML = '<div class="tdr">' + tb('tdBk', IC.back, 'Edit') + tb('tdSh', IC.share, 'Bagikan', true) + tb('tdXb', IC.close, 'Tutup') + '</div>';
       $('tdBk').onclick = function () { TD.done = false; bar(); };
-      $('tdPv').onclick = function () { preview(cur); };
       $('tdSh').onclick = function () { HA.tandaSave(); SNAP = JSON.stringify(HA.tandaData().items); share([cur]); };
-      $('tdSv').onclick = function () { toast('Blok ' + cur.name + ' tersimpan · ' + itemsOf(cur).length + ' tanda'); deselect(); };
+      $('tdXb').onclick = function () { deselect(); };
       HA.tandaHud(''); fit0(); return;
     }
     if (HA.tandaSubBar && HA.tandaSubBar()) { fit0(); return; }
     var shp = { pt: ['Titik', IC.pin], ln: ['Garis', IC.line], rc: ['Segi empat', IC.rect], bl: ['Belah', IC.split] }, cs = shp[TD.tool];
+    var act = hasAct(); lastAct = act;
     bx.innerHTML = HA.tandaPalHtml({ cat: b.cat, sub: b.sub }, b.op, TD.tool === 'pg') +
       (TD.shpOpen ? '<div class="tdr">' + tb(null, IC.pin, 'Titik', TD.tool === 'pt', 'data-t="pt"') + tb(null, IC.line, 'Garis', TD.tool === 'ln', 'data-t="ln"') + tb(null, IC.rect, 'Segi empat', TD.tool === 'rc', 'data-t="rc"') + tb(null, IC.split, 'Belah', TD.tool === 'bl', 'data-t="bl"') + '</div>' : '') +
-      '<div class="tdr">' + tb('tdShp', cs ? cs[1] : IC.shapes, cs ? cs[0] : 'Bentuk', !!cs || !!TD.shpOpen) + tb(null, IC.brush, 'Warnai', TD.tool === 'pg', 'data-t="pg"') + tb(null, IC.walk, 'Jalan', !!TD.wk, 'data-t="wk"') + tb(null, IC.trash, 'Hapus', false, 'data-t="del"') + '</div>' +
-      '<div class="tdr">' + tb('tdCn', IC.close, 'Batal') + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + HA.tandaKatBtn() + tb('tdFin', IC.check, 'Selesai', true) + '</div>';
+      '<div class="tdr">' + tb('tdShp', cs ? cs[1] : IC.shapes, cs ? cs[0] : 'Bentuk', !!cs || !!TD.shpOpen) + tb(null, IC.brush, 'Warnai', TD.tool === 'pg', 'data-t="pg"') + tb(null, IC.walk, 'Jalan', !!TD.wk, 'data-t="wk"') + HA.tandaKatBtn() + '</div>' +
+      (act ? '<div class="tdr tdr2">' + HA.ti('tdUn', IC.undo, 'Urung') + HA.ti('tdRe', IC.redo, 'Ulang') + HA.ti(null, IC.trash, 'Hapus', 'data-t="del"', 'dn') + tb('tdCn', IC.close, 'Batal') + tb('tdFin', IC.check, 'Selesai', true) + '</div>'
+        : '<div class="tdr tdr2">' + tb('tdCn', IC.close, 'Tutup') + '</div>');
     $('tdShp').onclick = function () { TD.shpOpen = !TD.shpOpen; bar(); };
     bx.querySelectorAll('[data-t]').forEach(function (e) { e.onclick = function () { HA.tandaPick(e.getAttribute('data-t')); }; });
-    $('tdUn').onclick = function () { HA.tandaUndo(); };
-    $('tdRe').onclick = function () { HA.tandaRedo(); };
+    if ($('tdUn')) { $('tdUn').onclick = function () { HA.tandaUndo(); }; $('tdRe').onclick = function () { HA.tandaRedo(); }; }
     HA.tandaKatWire(bar);
     HA.tandaPalWire(function (cid, sid) { HA.tandaSetBrush(cid, sid); bar(); }, function (v, fin) { HA.tandaData().brush.op = v; if (fin) HA.tandaSave(); });
     $('tdCn').onclick = function () {
       if (!dirty()) { deselect(); return; }
       HA.askConfirm('Batalkan perubahan blok ' + cur.name + '?', 'Tanda yang baru ditambah atau diubah di blok ini dibuang.', 'Buang', function () { HA.tandaSetItems(SNAP); deselect(); });
     };
-    $('tdFin').onclick = function () { HA.tandaEdCancel(); TD.tool = null; TD.done = true; bar(); };
+    if ($('tdFin')) $('tdFin').onclick = function () { HA.tandaEdCancel(); TD.tool = null; HA.tandaSave(); SNAP = JSON.stringify(HA.tandaData().items); TD.done = true; toast('Blok ' + cur.name + ' tersimpan \u00B7 ' + itemsOf(cur).length + ' tanda'); bar(); };
     if (!TD.tool) HA.tandaHud('Pilih Bentuk, Warnai, atau Jalan'); else if (TD.tool === 'pt') HA.tandaHud('Ketuk di dalam blok untuk menaruh titik');
     fit0();
   }
@@ -349,12 +379,28 @@
   }
   // PDF dengan gambar satelit (asinkron). opts = {nama,nilai,fs,pos}, groups = [{title,items,blk}]
   BT.buildPdf = function (groups, opts) {
-    var buf = HA.tandaBufM();
-    return Promise.all(groups.map(function (g) {
+    opts = opts || {};
+    var buf = HA.tandaBufM(), ex = [], skipped = 0, cats = HA.tandaData().cats.map(function (c) { return c.id; });
+    groups.forEach(function (g) {
+      if (!g.blk || opts.catSplit === false) { ex.push(g); return; }
+      var by = {}, ord = [];
+      g.items.forEach(function (it) {
+        var valid = it.cat && HA.tandaCatInfo(it).name !== 'Tanpa kategori' && it.pts && it.pts.length >= (it.t === 'pg' ? 3 : (it.t === 'ln' ? 2 : 1));
+        if (!valid) { skipped++; return; }
+        if (!by[it.cat]) { by[it.cat] = { id: it.cat, cat: HA.tandaCatInfo(it).name, items: [] }; ord.push(by[it.cat]); }
+        by[it.cat].items.push(it);
+      });
+      if (!ord.length) { ex.push({ title: g.title, items: [], blk: g.blk, cat: '' }); return; }
+      ord.sort(function (x, y) { return cats.indexOf(x.id) - cats.indexOf(y.id); });
+      ord.forEach(function (o) { ex.push({ title: g.title, items: o.items, blk: g.blk, cat: o.cat }); });
+    });
+    if (opts.meta) opts.meta.pages = ex.map(function (g) { return { blk: g.blk, cat: g.cat || '' }; });
+    BT._skipped = skipped;
+    return Promise.all(ex.map(function (g) {
       if (!g.blk) return null;
       return satImage(g.blk, HA.tandaPageBox(g.items, g.blk, { buf: buf }), buf);
     })).then(function (imgs) {
-      var gs = groups.map(function (g, i) { return { title: g.title, items: g.items, blk: g.blk, img: imgs[i] }; });
+      var gs = ex.map(function (g, i) { return { title: g.title, items: g.items, blk: g.blk, img: imgs[i], cat: g.cat }; });
       BT._noImg = gs.filter(function (g) { return g.blk && !g.img; }).length;
       return HA.tandaBuildPdf([], Object.assign({ blk: true, pos: 'c' }, opts, { buf: buf, groups: gs }));
     });
@@ -366,7 +412,8 @@
   function share(list, pre) {
     var many = list.length > 1, n = 0, warned = false, seq = 0, tmr = null, miss = [], total = 0;
     SH.title = '';
-    list.forEach(function (b) { n += selItems(b, pre).length; });
+    var nNoCat = 0;
+    list.forEach(function (b) { n += selItems(b, pre).length; selItems(b, pre).forEach(function (it) { if (!it.cat || HA.tandaCatInfo(it).name === 'Tanpa kategori') nNoCat++; }); });
     var def = many ? 'Marking ' + list.length + ' blok' : 'Blok ' + list[0].name;
     // kategori pada blok-blok ini; default hanya kategori tanda yang terakhir diedit
     var cats = [], seenK = {}, lastK = {};
@@ -387,7 +434,7 @@
     }
     function noCat() { return n > 0 && !cats.some(function (c) { return SH.cats[c.k]; }); }
     openSheet('<div class="grab"></div><div class="st">BAGIKAN ' + (many ? list.length + ' BLOK' : 'BLOK ' + esc(String(list[0].name)).toUpperCase()) + '</div>' +
-      '<div class="muted" style="margin-bottom:8px">' + n + ' tanda' + (n ? '' : ' · blok akan dicetak tanpa tanda') + '</div>' +
+      '<div class="muted" style="margin-bottom:8px">' + n + ' tanda' + (n ? '' : ' · blok akan dicetak tanpa tanda') + (nNoCat ? ' · ' + nNoCat + ' tanpa kategori tidak ikut PDF' : '') + '</div><div class="muted" style="margin-bottom:8px">PDF: satu halaman per kategori di tiap blok</div>' +
       '<div id="shPvw"><canvas id="shCv"></canvas><div id="shPm" class="muted">Menyusun preview…</div></div><div class="muted" id="shHint" style="text-align:center;margin:4px 0 0">Ketuk gambar untuk mengubah tampilan</div>' +
       '<div id="shW" style="display:none"></div>' +
       '<div class="h" style="margin-top:10px">FORMAT (PILIH SATU)</div><div class="seg" id="shF"><button data-v="pdf"' + (SH.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-v="kml"' + (SH.fmt === 'kml' ? ' class="on"' : '') + '>KML</button></div>' +
@@ -398,7 +445,7 @@
       '<div class="plist" style="margin-top:8px"><label><input type="checkbox" id="shN"' + (SH.nama ? ' checked' : '') + '> Nama tanda</label><label><input type="checkbox" id="shV"' + (SH.nilai ? ' checked' : '') + '> Nilai (ha atau meter)</label></div>' +
       '<div class="h" style="margin-top:10px">UKURAN TEKS</div><div class="seg" id="shS">' + [['a', 'Otomatis'], ['s', 'Kecil'], ['m', 'Sedang'], ['l', 'Besar']].map(function (o) { return '<button data-v="' + o[0] + '"' + (SH.fs === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>'; }).join('') + '</div></div></div>' +
       '<div class="muted" id="shK" style="margin-top:10px;display:none">KML berisi batas blok dan tanda persis di dalam blok, tanpa tambahan sekeliling.</div>' +
-      '<button class="btn" id="shPv" style="width:100%;margin-top:12px">Lihat layar penuh</button><button class="btn pri" id="shGo" style="width:100%;margin-top:8px;height:52px">Bagikan</button><button class="btn" id="shX" style="width:100%;margin-top:8px">Tutup</button>');
+      '<button class="btn" id="shPv" style="width:100%;margin-top:12px">Preview layar penuh</button><button class="btn pri" id="shGo" style="width:100%;margin-top:8px;height:52px">Kirim</button><button class="btn" id="shX" style="width:100%;margin-top:8px">Tutup</button>');
     function seg(id, f) { $(id).onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-v]'); if (!b) return; f(b.getAttribute('data-v')); $(id).querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); }; }
     function grab() { SH.title = $('shT').value.trim(); SH.nama = $('shN').checked; SH.nilai = $('shV').checked; }
     function pitems(b) { return selItems(b, pre).filter(function (it) { return SH.cats[HA.tandaCatKey(it)]; }); }
@@ -460,8 +507,8 @@
       if (SH.fmt !== 'pdf') { HA.saveFile(fname('kml', true), HA.textB64(kmlText()), 'application/vnd.google-earth.kml+xml'); return; }
       if (miss.length && !warned) { warned = true; toast('Citra belum lengkap. Unduh dulu, atau ketuk Bagikan lagi untuk lanjut'); return; }
       var bt = $('shGo'); bt.disabled = true; bt.textContent = 'Menyusun PDF…';
-      pdfBytes().then(function (b) { bt.disabled = false; bt.textContent = 'Bagikan'; HA.saveFile(fname('pdf', true), btoa(b), 'application/pdf'); }).catch(function () { bt.disabled = false; bt.textContent = 'Bagikan'; toast('Gagal menyusun PDF'); });
+      pdfBytes().then(function (b) { bt.disabled = false; bt.textContent = 'Kirim'; HA.saveFile(fname('pdf', true), btoa(b), 'application/pdf'); }).catch(function () { bt.disabled = false; bt.textContent = 'Kirim'; toast('Gagal menyusun PDF'); });
     };
   }
-  BT.selItems = selItems; BT.fileName = fileName; BT.catNamesOf = catNamesOf; BT.blocks = blocksC; BT.SH = SH; BT.deselect = deselect; BT.curBlock = function () { return cur; };
+  BT.history = history; BT.byId = function (id) { return blocksC().filter(function (o) { return String(o.id) === String(id); })[0]; }; BT.selItems = selItems; BT.fileName = fileName; BT.catNamesOf = catNamesOf; BT.blocks = blocksC; BT.SH = SH; BT.deselect = deselect; BT.curBlock = function () { return cur; };
 })();

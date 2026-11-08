@@ -207,7 +207,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.14.8'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.14.9'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + HA.CHEV + '</button>'; }).join('');
@@ -258,7 +258,8 @@
       return next().then(function () { return out; });
     }).then(function (daysObj) {
       var st = JSON.parse(JSON.stringify(S.settings)); delete st.ovl; delete st.bkSnooze;
-      return toGz(JSON.stringify({ app: 'hztrip', v: 1, at: Date.now(), settings: st, overrides: S.ov, days: daysObj }));
+      var tn = null; try { tn = localStorage.getItem('hz_tanda'); } catch (e) {}
+      return toGz(JSON.stringify({ app: 'hztrip', v: 1, at: Date.now(), settings: st, overrides: S.ov, days: daysObj, tanda: tn }));
     }).then(blobB64);
   }
   var autoBusy = false;
@@ -295,7 +296,8 @@
       return next().then(function () { return out; });
     }).then(function (daysObj) {
       var st = JSON.parse(JSON.stringify(S.settings)); delete st.ovl; delete st.bkSnooze;
-      return toGz(JSON.stringify({ app: 'hztrip', v: 1, at: Date.now(), settings: st, overrides: S.ov, days: daysObj }));
+      var tn = null; try { tn = localStorage.getItem('hz_tanda'); } catch (e) {}
+      return toGz(JSON.stringify({ app: 'hztrip', v: 1, at: Date.now(), settings: st, overrides: S.ov, days: daysObj, tanda: tn }));
     }).then(blobB64).then(function (b64) {
       return saveFile('HZTrip-cadangan-' + T.ymd(Date.now()) + '.hztrip', b64, 'application/octet-stream');
     }).then(function () {
@@ -337,6 +339,7 @@
           var keep = S.settings.ovl, fs = S.settings.firstSeen;
           S.settings = Object.assign({}, S.settings, d.settings); S.settings.ovl = keep; S.settings.firstSeen = fs; S.settings.lastBackup = d.at || S.settings.lastBackup;
           S.ov = d.overrides && d.overrides.trips ? d.overrides : S.ov;
+          if (d.tanda) { try { localStorage.setItem('hz_tanda', d.tanda); } catch (e) {} }
           return saveSettings().then(saveOv);
         }
       }).then(function () {

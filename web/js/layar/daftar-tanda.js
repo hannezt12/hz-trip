@@ -99,12 +99,12 @@
     var groups = s.blks.map(function (b) { return { title: '', items: BT.selItems(b, s.pre), blk: b }; }), meta = {}, SH = BT.SH;
     var names = []; groups.forEach(function (g) { BT.catNamesOf(g.items).forEach(function (n) { if (names.indexOf(n) < 0) names.push(n); }); });
     BT.buildPdf(groups, { nama: SH.nama, nilai: SH.nilai, fs: SH.fs, summary: groups.length > 1, meta: meta }).then(function (bytes) {
-      var off = meta.sumPages || 0, labs = (off ? ['Ringkasan'] : []).concat(s.blks.map(function (b) { return String(b.name); }));
+      var off = meta.sumPages || 0, pg = meta.pages || [], labs = (off ? ['Ringkasan'] : []).concat(pg.map(function (p) { return String(p.blk.name) + (p.cat ? ' \u00B7 ' + p.cat : ''); }));
       HA.pdfPreview(bytes, function () { HA.saveFile(BT.fileName(groups.length, names, 'pdf', true), btoa(bytes), 'application/pdf'); }, {
         labels: labs, off: off, go: 'Cetak PDF', onBack: function () { open(); },
         actions: [
-          { label: 'Edit blok ini', fn: function (i) { LS.back = true; HA.closeSheet(); BT.pick(s.blks[i], true); } },
-          { label: 'Keluarkan', fn: function (i) { var id = s.blks[i].id; all.forEach(function (r) { if (r.b.id === id) LS.sel[r.key] = false; }); if (selData().blks.length) preview(); else open(); } }
+          { label: 'Edit blok ini', fn: function (i) { LS.back = true; HA.closeSheet(); BT.pick(pg[i].blk, true); } },
+          { label: 'Keluarkan', fn: function (i) { var id = pg[i].blk.id; all.forEach(function (r) { if (r.b.id === id) LS.sel[r.key] = false; }); if (selData().blks.length) preview(); else open(); } }
         ]
       });
     }).catch(function () { HA.toast('Gagal menyusun preview'); });

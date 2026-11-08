@@ -730,3 +730,11 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .leaflet-tooltip.bkl.bz19{font-size:max(1.25rem,calc(1.4375rem * var(--fs,1)))}
 .leaflet-tooltip.bkl.bz20{font-size:max(1.625rem,calc(1.875rem * var(--fs,1)))}
 .leaflet-tooltip.bkl.bz21{font-size:max(2rem,calc(2.375rem * var(--fs,1)))}
+/* v0.14.9 bilah ringkas, riwayat, toast atas */
+#toast{top:calc(env(safe-area-inset-top,0px) + 0.25rem);bottom:auto;left:0.5rem;right:0.5rem;text-align:center;font-weight:700;font-size:max(0.875rem,calc(1.125rem * var(--fs,1)));padding:0.875rem 1rem;z-index:3000;pointer-events:none;box-shadow:0 0.25rem 1rem rgba(0,0,0,.4)}
+#tdBar .tdr2{align-items:stretch}
+.tdbi{flex:0 0 3.5rem;min-height:3.25rem;border-radius:0.75rem;border:1px solid var(--line);background:var(--card);color:var(--tx);display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+.tdbi svg{stroke:currentColor;width:1.5rem;height:1.5rem}
+.tdbi.dn{color:#FF6B61}
+.rwR{display:flex;align-items:center;gap:0.5rem;width:100%;min-height:3.5rem;padding:0.25rem 0;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--tx);text-align:left;cursor:pointer}
+.rwH{flex:none;font-size:max(0.6875rem,calc(0.75rem * var(--fs,1)));font-weight:700;color:var(--bg);background:var(--tx);border-radius:0.625rem;padding:0.125rem 0.5rem}

@@ -65,6 +65,7 @@
     zoomInd(HA.SP.map);
     if (window.HzBatas) HA.SP.bat = HzBatas.attach(HA.SP.map, function () { var c = batCfg(); c.osm = false; return c; }, toast);
     HA.SP.lay = L.layerGroup().addTo(HA.SP.map);
+    HA.SP.map.on('moveend', function () { if (HA.TD && HA.TD.on) { var c = HA.SP.map.getCenter(); try { localStorage.setItem('hz_sview', JSON.stringify({ c: [c.lat, c.lng], z: HA.SP.map.getZoom(), t: Date.now() })); } catch (e) {} } });
     HA.SP.map.on('dragstart', function () { if (HA.SP.follow) { HA.SP.follow = false; spBtns(); } });
     HA.SP.map.on('zoomstart', function () { if (!HA.SP.zoomBusy && !HA.SP.autoPaused) { HA.SP.autoPaused = true; } });
     HA.SP.map.on('zoomend', function () { HA.SP.zoomBusy = false; });
@@ -136,7 +137,7 @@
       var f = Math.min(1, (ts - HA.SP.t0) / 1000);
       HA.SP.cur = [HA.SP.from[0] + (HA.SP.to[0] - HA.SP.from[0]) * f, HA.SP.from[1] + (HA.SP.to[1] - HA.SP.from[1]) * f];
       spArrow(HA.SP.cur);
-      if (rec && HA.SP.follow) {
+      if (rec && HA.SP.follow && !(HA.TD && HA.TD.on)) {
         var off = HA.SP.map.latLngToContainerPoint(HA.SP.cur).subtract(HA.SP.map.getSize().divideBy(2));
         if (Math.abs(off.x) > HA.SP.map.getSize().x || Math.abs(off.y) > HA.SP.map.getSize().y) HA.SP.map.setView(HA.SP.cur, HA.SP.map.getZoom(), { animate: false });
         else {
@@ -150,7 +151,7 @@
       var fresh = rec && S.live.t && (Date.now() - S.live.t) < 5000, v = fresh ? S.live.v : 0;
       $('spSpd').textContent = fresh ? String(Math.round(v)) : '–';
       $('spSpd').style.color = fresh ? zc(v) : '';
-      if (rec && HA.SP.follow && HA.SP.zoomAuto && !HA.SP.autoPaused && fresh) {
+      if (rec && HA.SP.follow && !(HA.TD && HA.TD.on) && HA.SP.zoomAuto && !HA.SP.autoPaused && fresh) {
         var band = v < 20 ? 18 : (v < 50 ? 17 : (v < 80 ? 16 : 15));
         if (band !== HA.SP.map.getZoom()) {
           if (band !== HA.SP.pendBand) { HA.SP.pendBand = band; HA.SP.pendT = ts; }
@@ -174,7 +175,13 @@
     if (on) {
       if (!spEnsureMap()) { $('spNote').style.display = 'block'; $('spNote').textContent = 'Peta tidak tersedia'; HA.SP.active = false; if ($('app')) $('app').classList.remove('spm'); return; }
       spBtns();
-      setTimeout(function () { if (!HA.SP.active) return; HA.SP.map.invalidateSize(); spRebuild(); if (HA.SP.cur) HA.SP.map.setView(HA.SP.cur, S.mode === 'rekam' ? 17 : 17, { animate: false }); }, 60);
+      setTimeout(function () { if (!HA.SP.active) return; HA.SP.map.invalidateSize(); spRebuild(); var keep = HA.SP.keepView || (HA.TD && HA.TD.on); HA.SP.keepView = false;
+        if (!keep) {
+          var sv = null; try { sv = JSON.parse(localStorage.getItem('hz_sview') || 'null'); } catch (e) {}
+          if (!HA.SP.svDone && sv && sv.c && Date.now() - sv.t < 900000) HA.SP.map.setView(sv.c, sv.z, { animate: false });
+          else if (HA.SP.cur) HA.SP.map.setView(HA.SP.cur, 17, { animate: false });
+        }
+        HA.SP.svDone = true; }, 60);
       HA.SP.lastTs = 0; HA.SP.raf = requestAnimationFrame(spLoop);
       spAwake(true); spCompassOn(true);
     } else {
@@ -229,7 +236,7 @@
     $('spAwake').onclick = function () { S.settings.spAwake = !S.settings.spAwake; saveSettings(); spBtns(); spAwake(true); };
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) { if (HA.SP.active) { HA.SP.active = false; cancelAnimationFrame(HA.SP.raf); spAwake(false); spCompassOn(false); HA.SP.resume = true; } }
-      else if (HA.SP.resume) { HA.SP.resume = false; spSetActive(S.view === 'spido' && spIdx() === 1); }
+      else if (HA.SP.resume) { HA.SP.resume = false; HA.SP.keepView = true; spSetActive(S.view === 'spido' && spIdx() === 1); }
     });
     window.addEventListener('resize', function () { if (S.view === 'spido' && !HA.SP.active) spResetMain(); });
     spResetMain();

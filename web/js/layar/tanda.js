@@ -59,7 +59,8 @@
     tag: ic('<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3"/>')
   };
   function tb(id, icon, label, on, extra) { return '<button class="tbtn' + (on ? ' on' : '') + '" ' + (id ? 'id="' + id + '" ' : '') + (extra || '') + '>' + icon + '<span>' + label + '</span></button>'; }
-  HA.IC = IC; HA.tb = tb;
+  function ti(id, icon, label, extra, cls) { return '<button type="button" class="tdbi' + (cls ? ' ' + cls : '') + '" ' + (id ? 'id="' + id + '" ' : '') + 'aria-label="' + label + '" title="' + label + '" ' + (extra || '') + '>' + icon + '</button>'; }
+  HA.IC = IC; HA.tb = tb; HA.ti = ti;
   var TD = { on: false, tool: null, D: null, lay: null, ed: null, wk: null, bound: false, prevFollow: null, hud: null, sel: null };
 
   // ---------- penyimpanan terpisah ----------
@@ -194,7 +195,7 @@
   function drawAll() {
     var m = map(); if (!m || !TD.on) return;
     ensureLay().clearLayers();
-    data().items.forEach(function (it) {
+    data().items.slice().sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); }).forEach(function (it) {
       if (TD.ed && TD.ed.item && TD.ed.item.id === it.id) return;
       var col = colOf(it), l, hc = null;
       if (TD.del && TD.del[it.id]) hc = '#FF2D55'; else if (TD.selIt && TD.selIt.id === it.id) hc = '#FFFFFF';
@@ -207,11 +208,18 @@
       else if (it.t === 'ln') l = L.polyline(it.pts, { color: col, weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' });
       else l = L.polygon(it.pts, { color: col, weight: 2.5, fillColor: col, fillOpacity: opOf(it) });
       if (it.name) l.bindTooltip(esc(it.name), { permanent: true, direction: 'center', className: 'mktip' });
-      l.on('click', function (ev) { if (TD.tool || TD.ed || TD.wk) { return; } L.DomEvent.stopPropagation(ev); selectItem(it); });
+      l.on('click', function (ev) {
+        if (TD.tool || TD.ed || TD.wk) { return; }
+        if (!TD.blk) return;
+        L.DomEvent.stopPropagation(ev);
+        if (TD.selIt && TD.selIt.id === it.id && HA.BT && HA.BT.history) { HA.BT.history([ev.latlng.lat, ev.latlng.lng]); return; }
+        selectItem(it);
+      });
       l.addTo(TD.lay);
     });
     if (HA.BT && TD.blk) HA.BT.refresh();
   }
+  HA.tandaSelect = function (it) { selectItem(it); };
   function selectItem(it) { TD.selIt = it; TD.palOpen = false; drawAll(); barMain(); }
   function fitItem(it) { var m = map(); if (!m) return; if (it.t === 'pt') m.setView(it.pts[0], Math.max(m.getZoom(), 18), { animate: false }); else m.fitBounds(L.latLngBounds(it.pts), { padding: [40, 40], maxZoom: 19, animate: false }); }
 
@@ -234,6 +242,7 @@
     $('spBar').style.display = 'none'; $('tdBar').style.display = 'flex'; $('spTanda').classList.add('on');
     if (HA.BT) HA.BT.enter();
     barMain(); if (!HA.BT) hud('');
+    setTimeout(draftOffer, 700);
     // jika ada draf walking yang belum disimpan
     var dr = null; try { dr = JSON.parse(localStorage.getItem(KEYW) || 'null'); } catch (e) {}
     if (dr && dr.pts && dr.pts.length > 1 && !TD.wk) {
@@ -311,6 +320,20 @@
     lockMap(!item);
     drawAll(); edRender(); edBar();
   }
+  var KEYD = 'hz_tanda_dr';
+  function draftSave() { var e = TD.ed; if (!e || e.item || !TD.blk || !e.pts.length) return; try { localStorage.setItem(KEYD, JSON.stringify({ bid: TD.blk.id, kind: e.kind, rect: !!e.rect, split: !!e.split, pts: e.pts, t: Date.now() })); } catch (x) {} }
+  function draftClear() { try { localStorage.removeItem(KEYD); } catch (x) {} }
+  function draftOffer() {
+    var d = null; try { d = JSON.parse(localStorage.getItem(KEYD) || 'null'); } catch (x) {}
+    if (!d || !TD.on || TD.ed || !HA.BT || !HA.BT.byId) return;
+    draftClear();
+    if (Date.now() - d.t > 86400000 || !d.pts || !d.pts.length) return;
+    var b = HA.BT.byId(d.bid); if (!b) return;
+    askConfirm('Lanjutkan gambar terakhir?', 'Ada ' + (d.kind === 'ln' ? 'garis' : 'area') + ' di blok ' + b.name + ' yang belum selesai saat aplikasi tertutup.', 'Lanjutkan', function () {
+      HA.BT.pick(b, true); TD.tool = d.split ? 'bl' : (d.rect ? 'rc' : (d.kind === 'ln' ? 'ln' : 'pg'));
+      edStart(d.kind, null); TD.ed.rect = !!d.rect; TD.ed.split = !!d.split; TD.ed.pts = d.pts; edRender(); edBar();
+    });
+  }
   function edPush() { var e = TD.ed; if (!e) return; e.h.push(clonePts(e.pts)); if (e.h.length > 60) e.h.shift(); e.red = []; }
   function edMin() { return TD.ed.kind === 'ln' ? 2 : 3; }
   function edStatus() {
@@ -356,7 +379,7 @@
       hm.on('dragend', function () { edRender(); });
       e.vm.push(hm);
     }
-    edStatus();
+    edStatus(); draftSave();
   }
   function edUndo() { var e = TD.ed; if (!e) return; if (!e.h.length) { toast('Tidak ada yang diurungkan'); return; } e.red.push(clonePts(e.pts)); e.pts = e.h.pop(); edRender(); }
   function edRedo() { var e = TD.ed; if (!e) return; if (!e.red.length) { toast('Tidak ada yang diulang'); return; } e.h.push(clonePts(e.pts)); e.pts = e.red.pop(); edRender(); }
@@ -476,8 +499,8 @@
 
   function edBar() {
     var e = TD.ed, bb = brush(), col = e.item ? colOf(e.item) : bb.color, op = e.item ? opOf(e.item) : bb.op, cur = e.item ? { cat: e.item.cat, sub: e.item.sub } : { cat: bb.cat, sub: bb.sub };
-    bar().innerHTML = palHtml(cur, op, e.kind === 'pg') + '<div class="tdr">' + tb('tdUr', IC.undo, 'Urung') + tb('tdRd', IC.redo, 'Ulang') + katBtn() + (e.rect ? '' : tb('tdTy', IC.tidy, 'Rapikan')) + (e.item || e.rect ? '' : tb('tdPn', IC.hand, 'Geser', e.pan)) + '</div>' +
-      '<div class="tdr">' + tb('tdBt', IC.close, 'Batal') + tb('tdOk', IC.check, e.split ? 'Belah' : 'Simpan', true) + '</div>';
+    bar().innerHTML = palHtml(cur, op, e.kind === 'pg') + '<div class="tdr">' + katBtn() + (e.rect ? '' : tb('tdTy', IC.tidy, 'Rapikan')) + (e.item || e.rect ? '' : tb('tdPn', IC.hand, 'Geser', e.pan)) + '</div>' +
+      '<div class="tdr tdr2">' + ti('tdUr', IC.undo, 'Urung') + ti('tdRd', IC.redo, 'Ulang') + tb('tdBt', IC.close, 'Batal') + tb('tdOk', IC.check, e.split ? 'Belah' : 'Selesai', true) + '</div>';
     $('tdUr').onclick = edUndo; $('tdRd').onclick = edRedo; if ($('tdTy')) $('tdTy').onclick = edTidy; katWire(edBar);
     if ($('tdPn')) $('tdPn').onclick = function () { e.pan = !e.pan; lockMap(!e.pan); edStatus(); edBar(); };
     $('tdBt').onclick = function () { edCancel(); TD.tool = null; barMain(); };
@@ -493,7 +516,7 @@
   function edCancel() {
     spClear(); var e = TD.ed, m = map(); if (!e) return;
     e.vm.forEach(function (x) { m.removeLayer(x); }); if (e.shape) m.removeLayer(e.shape);
-    TD.ed = null; lockMap(false); hud(''); drawAll();
+    TD.ed = null; lockMap(false); hud(''); draftClear(); drawAll();
   }
   function edDone() {
     var e = TD.ed; if (!e) return;
@@ -507,7 +530,7 @@
       addItem(it); e.item = it; msg = (e.kind === 'ln' ? 'Garis ' : 'Area ') + 'tersimpan';
     }
     var it2 = e.item, st = statOf(it2);
-    save(); TD.ed = null; lockMap(false); hud(''); edCleanup(e); drawAll();
+    save(); draftClear(); TD.ed = null; lockMap(false); hud(''); edCleanup(e); drawAll();
     toast(msg + ' · ' + statText(it2, st).replace('\n', ' · '));
     TD.tool = null;
     if (e.reopen) { itemSheet(it2); barMain(); return; }
@@ -518,7 +541,7 @@
   function splitGo() {
     var e = TD.ed, blk = TD.blk; if (!e || !blk || !HA.tandaSplit) return;
     var r = HA.tandaSplit(blk.pts, e.pts); if (r.err) { toast(r.err); return; }
-    var line = clonePts(e.pts); edCleanup(e); TD.ed = null; lockMap(false);
+    var line = clonePts(e.pts); edCleanup(e); TD.ed = null; draftClear(); lockMap(false);
     var m = map(), b = brush(), grp = L.layerGroup().addTo(m);
     r.parts.forEach(function (p, i) {
       var pg = L.polygon(p, { color: b.color, weight: 3, fillColor: b.color, fillOpacity: 0.3 }).addTo(grp);
@@ -580,8 +603,8 @@
     }
     if (TD.selIt) {
       var it = TD.selIt, col = colOf(it);
-      bx.innerHTML = palHtml({ cat: it.cat, sub: it.sub }, opOf(it), it.t === 'pg') + '<div class="tdr">' + (it.t === 'pt' ? '' : tb('siTy', IC.tidy, 'Rapikan')) + tb('siSh', IC.edit, it.t === 'pt' ? 'Geser' : 'Bentuk') + tb('siDt', IC.list, 'Detail') + tb('siDl', IC.trash, 'Hapus') + '</div>' +
-        '<div class="tdr">' + tb('tdUn', IC.undo, 'Urung') + tb('tdRe', IC.redo, 'Ulang') + katBtn() + tb('siOk', IC.check, 'Selesai', true) + '</div>';
+      bx.innerHTML = palHtml({ cat: it.cat, sub: it.sub }, opOf(it), it.t === 'pg') + '<div class="tdr">' + (it.t === 'pt' ? '' : tb('siTy', IC.tidy, 'Rapikan')) + tb('siSh', IC.edit, it.t === 'pt' ? 'Geser' : 'Bentuk') + tb('siDt', IC.list, 'Detail') + katBtn() + '</div>' +
+        '<div class="tdr tdr2">' + ti('tdUn', IC.undo, 'Urung') + ti('tdRe', IC.redo, 'Ulang') + ti('siDl', IC.trash, 'Hapus', '', 'dn') + tb('siOk', IC.check, 'Selesai', true) + '</div>';
       if ($('siTy')) $('siTy').onclick = function () { itemTidy(it); };
       $('siSh').onclick = function () { TD.selIt = null; TD.palOpen = false; if (it.t === 'pt') { TD.tool = null; pointMove(it); } else { TD.tool = null; edStart(it.t, it); fitItem(it); } };
       $('siDt').onclick = function () { itemSheet(it); };
@@ -1040,7 +1063,7 @@
     var res0 = '<< /Font << /F1 ' + f1 + ' 0 R /F2 ' + f2o + ' 0 R >>';
     var usedGs = {};
     var groups = o.groups || [{ title: o.title, items: itemsAll }];
-    function page(items, ttlText, blk, img) {
+    function page(items, ttlText, blk, img, catName) {
     var mb = pageBox(items, blk, o), hasImg = !!img;
     var latc = (mb[0] + mb[2]) / 2, kx = 111320 * Math.cos(latc * Math.PI / 180), ky = 111320;
     var mw = Math.max(50, (mb[3] - mb[1]) * kx), mh = Math.max(50, (mb[2] - mb[0]) * ky), PW = 595.28, PH = 841.89, M = 24;
@@ -1052,7 +1075,7 @@
       if (it.t === 'pt') { r0.pt++; anyPL = true; } else if (it.t === 'ln') { r0.m += st0.m; anyPL = true; } else { r0.ha += st0.ha; r0.lj += st0.n; r0.lm += st0.lm; }
     });
     tord.sort(function (a, b) { var p = trow[a], q = trow[b]; return (p.ord - q.ord) || (p.name < q.name ? -1 : (p.name > q.name ? 1 : 0)) || (p.date < q.date ? -1 : (p.date > q.date ? 1 : 0)); });
-    var custom = asc((ttlText || '').trim()), ttl = blk ? 'Blok ' + asc(blk.name) : (custom || 'Marking HZ Trip'), subT = blk ? custom : '';
+    var custom = asc((ttlText || '').trim()), ttl = blk ? 'Blok ' + asc(blk.name) : (custom || 'Marking HZ Trip'), subT = blk ? [asc(catName || ''), custom].filter(Boolean).join(' \u00B7 ') : '';
     var HH = subT ? 40 : 26, TRH = Math.max(14, Math.min(26, 330 / (tord.length + 1))), TH = TRH * (tord.length + 1) + 16;
     var ya = M + TH + 10, yb = PH - M - HH, fw = PW - 2 * M, fh = yb - ya, sc = Math.min(fw / (mw * 1.1), fh / (mh * 1.1)), offx = (fw - mw * sc) / 2, offy = (fh - mh * sc) / 2;
     var X = function (lng) { return M + offx + (lng - mb[1]) * kx * sc; }, Y = function (lat) { return ya + offy + (lat - mb[0]) * ky * sc; };
@@ -1170,7 +1193,8 @@
       for (pi = 0; pi < np; pi++) {
         var c = [], part = rows.slice(pi * per, (pi + 1) * per), yTop = PH - M - 56, nr = part.length + 1;
         c.push('0 g BT /F2 16 Tf ' + f2(M) + ' ' + f2(PH - M - 14) + ' Td (Ringkasan marking' + (np > 1 ? ' ' + (pi + 1) + '/' + np : '') + ') Tj ET');
-        c.push('0 g BT /F1 11 Tf ' + f2(M) + ' ' + f2(PH - M - 32) + ' Td (' + groups.length + ' blok) Tj ET');
+        var nbk = {}; groups.forEach(function (g) { if (g.blk) nbk[g.blk.id] = 1; });
+        c.push('0 g BT /F1 11 Tf ' + f2(M) + ' ' + f2(PH - M - 32) + ' Td (' + Object.keys(nbk).length + ' blok) Tj ET');
         c.push('0.9 g ' + f2(M) + ' ' + f2(yTop - RH) + ' ' + f2(W) + ' ' + f2(RH) + ' re f');
         c.push('0 G 0.7 w ' + f2(M) + ' ' + f2(yTop - RH * nr) + ' ' + f2(W) + ' ' + f2(RH * nr) + ' re S');
         var j;
@@ -1195,7 +1219,7 @@
       if (o.meta) o.meta.sumPages = np;
       return ids;
     }
-    var kids = (o.summary && groups.length > 1 ? sumPages() : []).concat(groups.map(function (g) { return page(g.items, g.title, g.blk, g.img); }));
+    var kids = (o.summary && groups.length > 1 ? sumPages() : []).concat(groups.map(function (g) { return page(g.items, g.title, g.blk, g.img, g.cat); }));
     objs[cat - 1] = '<< /Type /Catalog /Pages ' + pages + ' 0 R >>';
     objs[pages - 1] = '<< /Type /Pages /Count ' + kids.length + ' /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] >>';
     var out = '%PDF-1.7\n%\xE2\xE3\xCF\xD3\n', offs = [];
@@ -1267,6 +1291,6 @@
     if (!$('spTanda')) return;
     $('spTanda').onclick = function () { if (TD.on) modeOff(); else modeOn(); };
   }
-  HA.TD = TD; HA.tandaData = data; HA.tandaStat = statOf; HA.tandaU = { dateOf: dateOf, d8: fmtD8, ha: fmtHa, ribu: ribu, m: fmtM };
+  HA.TD = TD; HA.tandaData = data; HA.tandaStat = statOf; HA.tandaTabName = function (it) { return tabName(it); }; HA.tandaU = { dateOf: dateOf, d8: fmtD8, ha: fmtHa, ribu: ribu, m: fmtM };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
