@@ -738,3 +738,16 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .tdbi.dn{color:#FF6B61}
 .rwR{display:flex;align-items:center;gap:0.5rem;width:100%;min-height:3.5rem;padding:0.25rem 0;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--tx);text-align:left;cursor:pointer}
 .rwH{flex:none;font-size:max(0.6875rem,calc(0.75rem * var(--fs,1)));font-weight:700;color:var(--bg);background:var(--tx);border-radius:0.625rem;padding:0.125rem 0.5rem}
+
+/* v0.15.0 perjalanan lintas hari */
+.pjH{display:flex;align-items:center;justify-content:space-between;margin:10px 0 6px;font-size:max(0.6875rem,calc(0.75rem * var(--fs,1)));letter-spacing:.06em;color:var(--tx2)}
+.pjr{display:block;width:100%;text-align:left;background:var(--card);border:0;border-left:4px solid var(--ckt);border-radius:0.875rem;padding:0.625rem 0.75rem;margin-top:0.375rem;cursor:pointer;color:inherit}
+.pjn{display:flex;align-items:center;gap:0.5rem;justify-content:space-between}
+.pjs{color:var(--tx2);font-size:max(0.6875rem,calc(0.8125rem * var(--fs,1)));margin-top:2px}
+.pjD{margin:8px 0 2px;font-weight:600;font-size:max(0.6875rem,calc(0.875rem * var(--fs,1)))}
+.pjT{display:flex;gap:8px;align-items:center;padding:6px 2px;font-size:max(0.6875rem,calc(0.875rem * var(--fs,1)))}
+.pjT.off{opacity:.45}
+.pjT1{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:max(0.6875rem,calc(1.125rem * var(--fs,1)))}
+.pjDay{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}
+.pjDay small{display:block;color:var(--tx2)}
+.pjDay .chip{border:0;cursor:pointer}

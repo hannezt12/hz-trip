@@ -132,7 +132,8 @@
   function tripView(t) {
     var o = S.ov.trips[t.id] || {};
     var u = o.unit || unitAt(t.start);
-    return { t: t, unit: u, label: typeOf(u), check: T.classify(S.settings.schedule, t.start) !== T.classify(S.settings.schedule, t.end - 1000), hist: o.hist || [] };
+    var pj = HA.pjOf ? HA.pjOf(T.ymd(t.start), t) : null;
+    return { t: t, unit: u, label: pj ? pj.label : typeOf(u), pj: pj ? pj.g.name : '', check: pj ? false : T.classify(S.settings.schedule, t.start) !== T.classify(S.settings.schedule, t.end - 1000), hist: o.hist || [] };
   }
   // ---------- ringkasan 30 hari ----------
   // Hasil hitung hari yang sudah lewat disimpan di memori. Titik mentah tetap utuh di berkas; yang disimpan hanya ringkasan.
@@ -164,7 +165,7 @@
       if (S.view !== 'riwayat' || S.hMode !== 'list') return;
       var n = 0, km = 0, mx = 0, dd = 0;
       rows.forEach(function (r) { n += r.n; km += r.km; mx = Math.max(mx, r.max); if (r.n) dd++; });
-      var html = '<div class="card"><div class="sum"><div><b>' + n + '</b><small>trip</small></div><div><b>' + T.km1(km) + '</b><small>km</small></div><div><b style="color:' + zc(mx) + '">' + Math.round(mx) + '</b><small>maks km/j</small></div></div>' +
+      var html = (HA.pjHtml ? HA.pjHtml() : '') + '<div class="card"><div class="sum"><div><b>' + n + '</b><small>trip</small></div><div><b>' + T.km1(km) + '</b><small>km</small></div><div><b style="color:' + zc(mx) + '">' + Math.round(mx) + '</b><small>maks km/j</small></div></div>' +
         '<div class="muted" style="margin-top:8px;text-align:center">30 hari terakhir · ' + dd + ' hari ada perjalanan</div></div>';
       html += rows.map(function (r) {
         var d = r.ymd.split('-'), dt = new Date(+d[0], +d[1] - 1, +d[2]);
@@ -235,7 +236,7 @@
   }
   function labelChip(x) {
     var c = x.label === 'Kerja' ? 'k' : 'p';
-    return '<span class="chip ' + c + '">' + x.label + '</span>' + (x.check ? '<span class="chip f">melewati batas jam</span>' : '') + (x.t.parts ? '<span class="chip m">' + x.t.parts.length + ' bagian</span>' : '');
+    return '<span class="chip ' + c + '">' + x.label + '</span>' + (x.check ? '<span class="chip f">melewati batas jam</span>' : '') + (x.t.parts ? '<span class="chip m">' + x.t.parts.length + ' bagian</span>' : '') + (x.pj ? '<span class="chip m">' + esc(x.pj) + '</span>' : '');
   }
   function renderHistory() {
     refreshMini();

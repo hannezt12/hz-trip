@@ -179,6 +179,58 @@
     }
 
     if (opts.scope === 'bulan') { monthPage(); days = []; }
+    if (opts.group && days.length) { groupPage(); if (!opts.perDay) days = []; }
+    function groupPage() {
+      var g = opts.group, first = days[0].ymd, last = days[days.length - 1].ymd;
+      txt('HZ TRIP', M, 17, 9, true, '#4A5A63');
+      txt('Laporan Perjalanan', M, 25, 18, true);
+      txt(first === last ? T.dateLong(first) : T.dateLong(first) + ' - ' + T.dateLong(last), W - M, 25, 10, true, '#161C20', 'right');
+      doc.setDrawColor.apply(doc, hex('#161C20')); doc.setLineWidth(0.6); doc.line(M, 28, W - M, 28);
+      txt(g.name, M, 36, 14, true);
+      var us = [], lb = [], n = 0, km = 0, mx = 0, du = 0, w = 0, up = 0, gotUp = false;
+      days.forEach(function (d) { d.trips.forEach(function (x) {
+        if (us.indexOf(x.unit) < 0) us.push(x.unit); if (lb.indexOf(x.label) < 0) lb.push(x.label);
+        n++; km += x.t.km; mx = Math.max(mx, x.t.max); du += x.t.durSec; w += x.t.avg * x.t.durSec;
+        if (x.climb) { gotUp = true; up += x.climb.up; }
+      }); });
+      [['Pengemudi', driver || '-'], ['Unit', us.join(', ') || '-'], ['Label', lb.join(' dan ') || '-']].forEach(function (it, k) {
+        var x = M + k * ((W - 2 * M) / 3);
+        txt(it[0], x, 43, 8, false, '#4A5A63'); txt(it[1], x, 48, 10, true);
+      });
+      var boxes = [[String(days.length), 'hari'], [String(n), 'trip'], [T.km1(km), 'km'], [T.durText(du), 'waktu jalan'], [String(Math.round(mx)), 'maks km/j'], [String(Math.round(du ? w / du : 0)), 'rata2 km/j']];
+      if (gotUp) boxes.push([String(Math.round(up)), 'naik (m)']);
+      var bw = (W - 2 * M) / boxes.length;
+      boxes.forEach(function (b, k) { txt(b[0], M + k * bw, 60, 13, true); txt(b[1], M + k * bw, 65, 8, false, '#4A5A63'); });
+      var body = [], kind = [];
+      days.forEach(function (d) {
+        var k = 0, m2 = 0, dd = 0, ww = 0;
+        d.trips.forEach(function (x) { k += x.t.km; m2 = Math.max(m2, x.t.max); dd += x.t.durSec; ww += x.t.avg * x.t.durSec; });
+        body.push([T.dateLong(d.ymd) + ' (' + d.trips.length + ' trip)', '', '', String(Math.round(m2)), String(Math.round(dd ? ww / dd : 0)), T.km1(k)]); kind.push('d');
+        d.trips.forEach(function (x) { body.push(['', range(x.t) + (x.t.end - x.t.start > 0 && T.ymd(x.t.end) !== d.ymd ? ' (+1)' : ''), x.unit + ' · ' + x.label, String(Math.round(x.t.max)), String(Math.round(x.t.avg)), T.km1(x.t.km)]); kind.push('t'); });
+      });
+      body.push(['Total', '', '', String(Math.round(mx)), String(Math.round(du ? w / du : 0)), T.km1(km)]); kind.push('s');
+      doc.autoTable({
+        startY: 71, margin: { left: M, right: M }, theme: 'grid',
+        head: [['Tanggal', 'Jam', 'Unit / label', 'Maks km/j', 'Rata2 km/j', 'Km']], body: body,
+        styles: { font: 'helvetica', fontSize: 9, cellPadding: 1.8, lineColor: [221, 227, 230], lineWidth: 0.2, textColor: hex('#161C20') },
+        headStyles: { fillColor: hex('#E9EEF0'), textColor: hex('#2C3A41'), fontStyle: 'bold', fontSize: 9 },
+        columnStyles: { 0: { cellWidth: 62 }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+        didParseCell: function (d) {
+          if (d.section === 'head' && d.column.index >= 3) d.cell.styles.halign = 'right';
+          if (d.section !== 'body') return;
+          var kd = kind[d.row.index];
+          if (kd === 'd') { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = hex('#F3F6F7'); }
+          if (kd === 's') { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = hex('#E9EEF0'); }
+          if (kd === 't' && d.column.index === 3 && opts.color !== false) {
+            var v = +d.cell.raw;
+            if (v > 90) { d.cell.styles.fillColor = hex('#FFB9B2'); d.cell.styles.textColor = hex('#6E0F08'); }
+            else if (v > 60) { d.cell.styles.fillColor = hex('#FFE98A'); d.cell.styles.textColor = hex('#4A3A00'); }
+          }
+        }
+      });
+      doc.setDrawColor.apply(doc, hex('#C9D2D7')); doc.setLineWidth(0.3); doc.line(M, 280, W - M, 280);
+      txt('Perjalanan dikelompokkan manual. Jarak dan waktu dihitung dari trip anggota; (+1) = trip berakhir di hari berikutnya.', M, 284, 8, false, '#4A5A63');
+    }
     function monthPage() {
       var BLN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
       var mm = (opts.month || (days[0] && days[0].ymd.slice(0, 7)) || '').split('-');
@@ -237,7 +289,7 @@
       txt('Rata-rata harian dihitung dari seluruh waktu berjalan pada hari itu. Data direkam dari GPS ponsel dan bersifat pembanding.', M, 284, 8, false, '#4A5A63');
     }
     days.forEach(function (day, di) {
-      if (di > 0) doc.addPage();
+      if (di > 0 || opts.group) doc.addPage();
       anyCheck = false;
       var s = sumDay(day);
       txt('HZ TRIP', M, 17, 9, true, '#4A5A63');

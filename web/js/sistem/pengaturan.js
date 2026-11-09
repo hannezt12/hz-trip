@@ -35,6 +35,9 @@
   HA.saveFile = saveFile;
   HA.loadDay = loadDay;
   HA.openPrint = openPrint;
+  HA.loadDayView = function (y) { return loadDay(y); };
+  HA.groupDays = groupDays;
+  HA.groupExport = groupExport;
 
   // ---------- trip dihapus ----------
   function renderHidden() {
@@ -182,6 +185,40 @@
       var res = detectDay(ymd, r.text);
       return { ymd: ymd, pts: res.points, trips: edited(ymd, res).map(tripView) };
     });
+  }
+  // perjalanan lintas hari (v0.15.0): trip anggota per hari, label menurut perjalanan
+  function groupDays(g) {
+    var days = [];
+    g.m.forEach(function (m) { if (days.indexOf(m.d) < 0) days.push(m.d); });
+    days.sort();
+    return Promise.all(days.map(loadDay)).then(function (ds) {
+      return ds.map(function (d) {
+        d.trips = d.trips.filter(function (x) { return g.m.some(function (m) { return m.d === d.ymd && (m.id === x.t.id || (x.t.start <= m.e && x.t.end >= m.s)); }); }).map(function (x) {
+          return { t: x.t, unit: x.unit, label: (g.dl && g.dl[d.ymd]) || g.label, check: false, hist: x.hist };
+        });
+        return d;
+      }).filter(function (d) { return d.trips.length; });
+    });
+  }
+  function groupExport(g, kind) {
+    return groupDays(g).then(function (ds) {
+      if (!ds.length) { toast('Tidak ada trip pada perjalanan ini'); return; }
+      var nm = g.name.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'Perjalanan';
+      var base = 'HZTrip-' + nm + '-' + ds[0].ymd + (ds.length > 1 ? '_sd_' + ds[ds.length - 1].ymd : '');
+      if (kind === 'kml') {
+        return kmlPrep(ds, S.settings.kmlContour !== false).then(function (o) {
+          return saveFile(base + '.kml', textB64(E.buildKml(ds, o)), 'application/vnd.google-earth.kml+xml');
+        });
+      }
+      if (!window.jspdf) { toast('Library PDF belum siap'); return; }
+      var items = [];
+      ds.forEach(function (dd) { dd.trips.forEach(function (x) { items.push({ t: x.t, pts: dd.pts, x: x }); }); });
+      toast('Menghitung ketinggian…');
+      return climbSeq(items, function (it, c) { it.x.climb = c; }).then(function () {
+        var doc = E.buildPdf(ds, { driver: S.settings.driver, scope: 'grup', group: { name: g.name, label: g.label }, perDay: kind === 'pdf-hari', summary: true, color: true });
+        return saveFile(base + (kind === 'pdf-hari' ? '-rincian' : '') + '.pdf', doc.output('datauristring').split(',')[1], 'application/pdf');
+      });
+    }).catch(function (e) { showErr(e && e.message || e); });
   }
   function dayList(from, to) {
     var a = from.split('-'), b = to.split('-'), out = [], n = 0;
