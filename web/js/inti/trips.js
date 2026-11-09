@@ -30,7 +30,7 @@
       if (p.length < 5) continue;
       var t = +p[0], lat = +p[1], lng = +p[2], v = +p[3] * 3.6, acc = +p[4];
       if (!isFinite(t) || !isFinite(lat) || !isFinite(lng) || !isFinite(v)) continue;
-      out.push({ t: t, lat: lat, lng: lng, v: v, acc: isFinite(acc) ? acc : 99, m: p[5] === '1' ? 1 : 0 });
+      out.push({ t: t, lat: lat, lng: lng, v: v, acc: isFinite(acc) ? acc : 99, m: p[5] === '1' ? 1 : 0, g: p[5] === '2' ? 1 : 0 });
     }
     out.sort(function (a, b) { return a.t - b.t; });
     return out;
@@ -97,6 +97,8 @@
     s.open = !!open;
     s.manual = false;
     for (var j = i0; j <= i1; j++) { if (pts[j].m) { s.manual = true; break; } }
+    s.google = false;
+    for (var j2 = i0; j2 <= i1; j2++) { if (pts[j2].g) { s.google = true; break; } }
     return s;
   }
 
@@ -172,7 +174,7 @@
     m.end = b.end; m.endLat = b.endLat; m.endLng = b.endLng;
     m.i1 = b.i1; m.n = b.i1 - a.i0 + 1;
     m.durSec = (b.end - a.start) / 1000;
-    m.open = b.open; m.manual = a.manual || b.manual;
+    m.open = b.open; m.manual = a.manual || b.manual; m.google = a.google || b.google;
     m.parts = (a.parts || [seg(a)]).concat(b.parts || [seg(b)]);
     return m;
   }

@@ -37,6 +37,7 @@
   HA.doMerge = doMerge;
   HA.shiftDay = shiftDay;
   HA.openTrip = openTrip;
+  HA.sumReset = function () { SUMC = {}; };
 
   // ---------- riwayat ----------
   function typeOf(u) { return (S.settings.unitType && S.settings.unitType[u]) || 'Kerja'; }
@@ -236,7 +237,7 @@
   }
   function labelChip(x) {
     var c = x.label === 'Kerja' ? 'k' : 'p';
-    return '<span class="chip ' + c + '">' + x.label + '</span>' + (x.check ? '<span class="chip f">melewati batas jam</span>' : '') + (x.t.parts ? '<span class="chip m">' + x.t.parts.length + ' bagian</span>' : '') + (x.pj ? '<span class="chip m">' + esc(x.pj) + '</span>' : '');
+    return '<span class="chip ' + c + '">' + x.label + '</span>' + (x.check ? '<span class="chip f">melewati batas jam</span>' : '') + (x.t.parts ? '<span class="chip m">' + x.t.parts.length + ' bagian</span>' : '') + (x.t.google ? '<span class="chip m">dari Google</span>' : '') + (x.pj ? '<span class="chip m">' + esc(x.pj) + '</span>' : '');
   }
   function renderHistory() {
     refreshMini();

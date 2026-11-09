@@ -202,12 +202,13 @@
   function dtText(ts) { var d = new Date(ts); return d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + T.pad(d.getHours()) + '.' + T.pad(d.getMinutes()); }
   var SPAGES = [
     { k: 'jadwal', t: 'Jadwal dan rekam otomatis', s: function () { var n = 0; S.settings.schedule.days.forEach(function (x) { if (x['in'] && x.out) n++; }); return (S.settings.auto ? 'Otomatis aktif' : 'Otomatis mati') + ' · ' + n + ' hari terjadwal'; } },
+    { k: 'tempat', t: 'Tempat (pagar virtual)', s: function () { var n = (S.settings.places || []).length; return n ? n + ' tempat · app diam di dalamnya' : 'Belum ada tempat'; } },
     { k: 'unit', t: 'Unit dan pengemudi', s: function () { return 'Dipakai: ' + unitAt(Date.now()) + ' · ' + S.settings.units.length + ' unit'; } },
     { k: 'peta', t: 'Peta', s: function () { var n = ovList().length; return n + ' peta saya · cache peta'; } },
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.15.0'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.15.1'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + HA.CHEV + '</button>'; }).join('');
@@ -225,6 +226,7 @@
     if (key === 'peta') { renderOv(); renderCacheInfo(); renderBlkInfo(); }
     if (key === 'data') { renderHidden(); renderBackupInfo(); renderThinInfo(); }
     if (key === 'latar') { syncStatus(); renderDiag(); }
+    if (key === 'tempat' && HA.renderTempat) HA.renderTempat();
     if (key === 'tampil') { applyTheme(); applyFont(); }
     renderSettings();
   }

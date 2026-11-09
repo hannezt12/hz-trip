@@ -14,7 +14,9 @@ import com.google.android.gms.location.DetectedActivity;
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingRequest;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.Task;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +26,7 @@ import java.util.Locale;
 final class Trig {
     static final String ACT_VEH = "com.hz.hztrip.TRIG_VEH";
     static final String ACT_FENCE = "com.hz.hztrip.TRIG_FENCE";
+    static final String ACT_PLACE = "com.hz.hztrip.TRIG_PLACE";
     static final String ACT_ALERT2 = "com.hz.hztrip.ALERT2";
     static final String ACT_DISMISS = "com.hz.hztrip.ALERT_X";
     private static boolean vehOn = false;
@@ -108,6 +111,68 @@ final class Trig {
             TripService.diagTo(c, "Geofence dipasang (" + r + " m)");
         } catch (Throwable t) {
             TripService.diagTo(c, "Geofence tidak tersedia: " + t.getMessage());
+        }
+    }
+
+    /**
+     * Pasang pagar "Tempat" (rumah, kantor, dll). Format prefs "places": "lat,lng,radius;lat,lng,radius".
+     * Masuk = app diam total; keluar = rekam otomatis aktif lagi. Pagar ini tidak ikut dicabut oleh disarm().
+     */
+    static void armPlaces(Context ctx) {
+        final Context c = ctx.getApplicationContext();
+        try {
+            Sched.p(c).edit().putString("inPlaces", "").apply();
+            final PendingIntent pp = pi(c, ACT_PLACE, 73);
+            String s = Sched.p(c).getString("places", "");
+            final List<Geofence> gl = new ArrayList<Geofence>();
+            if (s != null && s.length() > 0) {
+                String[] items = s.split(";");
+                for (int i = 0; i < items.length && i < 90; i++) {
+                    String[] a = items[i].split(",");
+                    if (a.length < 3) {
+                        continue;
+                    }
+                    try {
+                        double la = Double.parseDouble(a[0]);
+                        double lo = Double.parseDouble(a[1]);
+                        float r = Math.max(100f, Float.parseFloat(a[2]));
+                        gl.add(new Geofence.Builder()
+                                .setRequestId("hzp" + i)
+                                .setCircularRegion(la, lo, r)
+                                .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT)
+                                .build());
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+            final int n = gl.size();
+            LocationServices.getGeofencingClient(c).removeGeofences(pp).addOnCompleteListener(new OnCompleteListener<Void>() {
+                @Override
+                public void onComplete(Task<Void> t) {
+                    if (n == 0) {
+                        TripService.diagTo(c, "Tempat: tidak ada pagar");
+                        return;
+                    }
+                    try {
+                        GeofencingRequest req = new GeofencingRequest.Builder()
+                                .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
+                                .addGeofences(gl).build();
+                        LocationServices.getGeofencingClient(c).addGeofences(req, pp)
+                                .addOnFailureListener(new OnFailureListener() {
+                                    @Override
+                                    public void onFailure(Exception e) {
+                                        TripService.diagTo(c, "Pagar Tempat gagal dipasang: " + e.getMessage());
+                                    }
+                                });
+                        TripService.diagTo(c, "Pagar Tempat dipasang (" + n + " tempat)");
+                    } catch (Throwable th) {
+                        TripService.diagTo(c, "Pagar Tempat tidak tersedia: " + th.getMessage());
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            TripService.diagTo(c, "Pagar Tempat gagal: " + t.getMessage());
         }
     }
 

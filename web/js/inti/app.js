@@ -169,11 +169,6 @@
     $('splitSel').onchange = function () { S.settings.splitSec = +this.value; saveSettings(); recomputeLive(); toast('Batas pisah trip disimpan'); };
     $('autoChk').onchange = function () { S.settings.auto = this.checked; saveSettings(); pushSchedule(); if (this.checked && native && !S.actPerm) askActivity(); };
     $('btnAct').onclick = askActivity;
-    $('popSel').onchange = function () { S.popSnd = this.value; Plug.setPopupSound({ mode: this.value }).catch(function () {}); };
-    $('btnPopPick').onclick = function () { Plug.pickPopupSound().then(function (r) { if (r && r.changed) { S.popName = r.name || 'Nada pilihan'; renderSpido(); toast('Nada popup disimpan'); } }).catch(function () { toast('Pemilih nada tidak bisa dibuka'); }); };
-    $('btnPopTest').onclick = function () { Plug.testPopupSound().catch(function () {}); };
-    $('btnPopDef').onclick = function () { Plug.clearPopupSound().then(function () { S.popName = ''; renderSpido(); toast('Kembali ke nada bawaan'); }).catch(function () {}); };
-    $('btnOver').onclick = function () { Plug.openOverlaySettings().catch(function () { toast('Tidak bisa membuka pengaturan'); }); };
     $('marginSel').onchange = function () { S.settings.margin = +this.value; saveSettings(); renderSched(); pushSchedule(); };
     $('schedBox').onchange = onSched;
     $('schedBox').onclick = function (e) {
@@ -264,7 +259,7 @@
     loadMeta().then(function () {
       renderSettings();
       return Promise.all([syncStatus(), refreshToday()]);
-    }).then(function () { pushSchedule(); renderSpido(); purgeExpired(); setTimeout(autoBackup, 6000); });
+    }).then(function () { pushSchedule(); if (HA.pushPlaces) HA.pushPlaces(); renderSpido(); purgeExpired(); setTimeout(autoBackup, 6000); });
     renderSpido();
   }
   init();

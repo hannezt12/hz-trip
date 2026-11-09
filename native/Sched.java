@@ -126,8 +126,15 @@ final class Sched {
         return best;
     }
 
+    /** Berada di dalam salah satu "Tempat" (pagar virtual rumah/kantor dll): app diam total. */
+    static boolean inPlace(Context c) {
+        String s = p(c).getString("inPlaces", "");
+        return s != null && s.length() > 0;
+    }
+
+    /** v0.15.1: merekam otomatis kapan saja (tanpa jadwal), kecuali sedang di dalam salah satu Tempat. */
     static boolean autoPossible(Context c, long now) {
-        return autoEnabled(c) && windowEnd(c, now) > 0L && now >= pausedUntil(c);
+        return autoEnabled(c) && now >= pausedUntil(c) && !inPlace(c);
     }
 
     static void arm(Context c) {

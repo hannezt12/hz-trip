@@ -9,6 +9,10 @@ public class ScheduleReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         try {
+            String a = intent == null ? null : intent.getAction();
+            if (Intent.ACTION_BOOT_COMPLETED.equals(a) || Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)) {
+                Trig.armPlaces(context);
+            }
             Sched.evaluate(context);
             if (Sched.p(context).getBoolean("notif", false) && TripService.mode == TripService.M_OFF) {
                 Trig.enterNotif(context);

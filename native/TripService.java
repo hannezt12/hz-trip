@@ -61,13 +61,15 @@ public class TripService extends Service {
     public static final String ACTION_TRIG = "com.hz.hztrip.TRIG";     // pemicu dari Android (kendaraan / geofence)
 
     static final String CHANNEL_ID = "hztrip_rec";
+    static final String IDLE_CHANNEL = "hztrip_idle"; // importance MIN: tanpa ikon di status bar saat tidak merekam
     static final int NOTIF_ID = 1001;
     static final int NOTIF_REMIND = 1002;
 
     public static final int M_OFF = 0, M_SIAGA = 1, M_CEK = 2, M_REKAM = 3;
 
     // Parameter (lihat Tahap 4 untuk penyetelan baterai)
-    static final double START_KMH = 5.0;
+    static final double START_KMH = 8.0;   // v0.15.1: mulai rekam dan tetap menyimpan titik di atas 8 km/j
+    static final long IDLE_MS = 30000L;    // diam selama ini: titik tidak disimpan (GPS tetap siaga) sampai kecepatan di atas 8 km/j lagi
     static final long START_HOLD_MS = 5000L;
     static final long NO_FAST_MS = 5L * 60000L;
     static final double MOVE_KMH = 3.0;
@@ -76,7 +78,7 @@ public class TripService extends Service {
     static final long SLOW_WAIT_MS = 10L * 60000L;
     static final long CEK_MOTION_MS = 180000L;
     static final long CEK_PROBE_MS = 30000L;
-    static final long PROBE_EVERY_MS = 60000L;
+    static final long PROBE_EVERY_MS = 120000L; // siaga: periksa berkala tiap 2 menit
     static final long REARM_DELAY_MS = 60000L;
     static final long REMIND_MS = 30L * 60000L;
     static final float MAX_ACC = 50f;
@@ -130,6 +132,9 @@ public class TripService extends Service {
     private boolean notifOnly = false;
     private boolean anchorFresh = false;
     private boolean recManual = false;
+    private long lastGoT = 0L;
+    private String skipLine = null;
+    private long skipT = 0L;
     private boolean pending = false;
     private long recFirstT = 0L;
     static final long PENDING_MS = 120000L;
@@ -215,48 +220,29 @@ public class TripService extends Service {
         } else if (ACTION_STOP.equals(action)) {
             if (manual) {
                 manual = false;
-                p.edit().putBoolean("manual", false).putBoolean("notif", true).apply();
+                p.edit().putBoolean("manual", false).putBoolean("notif", false).apply();
                 diag("Rekam manual diakhiri");
                 endRecording();
                 afterTrip();
-            } else {
-                long we = Sched.windowEnd(this, now);
-                if (we > 0L) {
-                    p.edit().putLong("pausedUntil", we).apply();
-                }
-                p.edit().putBoolean("notif", true).apply();
-                diag("Jeda otomatis: masuk Notifikasi aktif");
-                shutdown();
+            } else if (mode == M_REKAM) {
+                diag("Rekam otomatis diakhiri dari tombol");
+                endRecording();
+                afterTrip();
+            } else if (mode == M_OFF) {
+                anchorFresh = false;
+                afterTrip();
             }
         } else if (ACTION_NOTIF.equals(action) || ACTION_OFF.equals(action)) {
-            if (mode == M_REKAM) {
-                return;
+            // v0.15.1: mode Pengingat/Jeda dihapus; perintah lama hanya memastikan siaga.
+            if (mode == M_OFF) {
+                anchorFresh = false;
+                afterTrip();
             }
-            boolean on = ACTION_NOTIF.equals(action);
-            long we = Sched.windowEnd(this, now);
-            SharedPreferences.Editor e = p.edit().putBoolean("notif", on);
-            if (we > 0L) {
-                e.putLong("pausedUntil", we);
-            }
-            e.apply();
-            diag(on ? "Notifikasi aktif dinyalakan" : "Semua dimatikan");
-            shutdown();
         } else if (ACTION_TRIG.equals(action)) {
             if (manual || mode == M_REKAM || mode == M_CEK) {
                 return;
             }
             if (!Sched.autoPossible(this, now)) {
-                if (mode == M_OFF && p.getBoolean("notif", false)) {
-                    if (now < p.getLong("alertUntil", 0L)) {
-                        shutdown();
-                        return;
-                    }
-                    diag("Pemicu Android (notifikasi aktif): " + why);
-                    notifOnly = true;
-                    mode = M_SIAGA;
-                    toCek(CEK_MOTION_MS, "pemicu " + why);
-                    return;
-                }
                 if (mode == M_OFF) {
                     shutdown();
                 }
@@ -408,9 +394,6 @@ public class TripService extends Service {
                 boolean na = notifOnly, ca = cekAndroid;
                 notifOnly = false;
                 cekAndroid = false;
-                if (ca && !na) {
-                    Alert.fire(TripService.this);
-                }
                 if (!na && Sched.autoPossible(TripService.this, System.currentTimeMillis())) {
                     enterSiaga(REARM_DELAY_MS);
                 } else {
@@ -469,6 +452,8 @@ public class TripService extends Service {
         recFirstT = bufferT.isEmpty() ? now : bufferT.get(0);
         diag("Rekam mulai" + (manual ? " (manual)" : " (otomatis)"));
         everFast = false;
+        lastGoT = now;
+        skipLine = null;
         sessMax = 0;
         sessMeters = 0;
         prevKmh = 0;
@@ -784,7 +769,21 @@ public class TripService extends Service {
                 toRekam();
             }
         } else if (mode == M_REKAM) {
-            writeLine(line, t);
+            // v0.15.1: otomatis menyimpan titik hanya saat bergerak (> 8 km/j) dan 30 detik setelahnya; manual selalu menyimpan.
+            if (manual || kmh >= START_KMH) {
+                lastGoT = t;
+            }
+            if (manual || t - lastGoT < IDLE_MS) {
+                if (skipLine != null) {
+                    // satu titik diam terakhir sebelum bergerak lagi, supaya deteksi trip tetap memisahkan perhentian
+                    writeLine(skipLine, skipT);
+                    skipLine = null;
+                }
+                writeLine(line, t);
+            } else {
+                skipLine = line;
+                skipT = t;
+            }
             long now = System.currentTimeMillis();
             if (acc <= MAX_ACC) {
                 double cand = Math.min(kmh, prevKmh);
@@ -1000,6 +999,12 @@ public class TripService extends Service {
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null && nm.getNotificationChannel(IDLE_CHANNEL) == null) {
+                NotificationChannel ic = new NotificationChannel(IDLE_CHANNEL, "Siaga (tanpa ikon)", NotificationManager.IMPORTANCE_MIN);
+                ic.setDescription("Siaga menunggu gerakan; tidak ada ikon di bilah atas");
+                ic.setShowBadge(false);
+                nm.createNotificationChannel(ic);
+            }
             if (nm != null && nm.getNotificationChannel(CHANNEL_ID) == null) {
                 NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "Perekaman perjalanan", NotificationManager.IMPORTANCE_LOW);
                 ch.setDescription("Tampil selama HZ Trip siaga atau merekam");
@@ -1021,7 +1026,7 @@ public class TripService extends Service {
         PendingIntent openPi = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification.Builder b;
         if (Build.VERSION.SDK_INT >= 26) {
-            b = new Notification.Builder(this, CHANNEL_ID);
+            b = new Notification.Builder(this, mode == M_REKAM ? CHANNEL_ID : IDLE_CHANNEL);
         } else {
             b = new Notification.Builder(this);
         }
@@ -1042,14 +1047,7 @@ public class TripService extends Service {
             text = "GPS menyala sebentar.";
         } else {
             title = "HZ Trip siaga";
-            long we = Sched.windowEnd(this, System.currentTimeMillis());
-            if (we > 0L) {
-                Calendar c = Calendar.getInstance();
-                c.setTimeInMillis(we);
-                text = String.format(Locale.US, "Menunggu gerakan \u00B7 jadwal sampai %02d.%02d", c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE));
-            } else {
-                text = "Menunggu gerakan.";
-            }
+            text = "Merekam otomatis saat kendaraan jalan.";
         }
         b.setSmallIcon(android.R.drawable.ic_menu_mylocation)
                 .setContentTitle(title)
@@ -1064,7 +1062,6 @@ public class TripService extends Service {
             b.addAction(new Notification.Action.Builder(android.R.drawable.ic_menu_view, "Buka", openPi).build());
         } else {
             b.addAction(new Notification.Action.Builder(android.R.drawable.ic_media_play, "Mulai rekam", actionPi(ACTION_START, 3)).build());
-            b.addAction(new Notification.Action.Builder(android.R.drawable.ic_media_pause, "Jeda otomatis", actionPi(ACTION_STOP, 1)).build());
         }
         return b.build();
     }

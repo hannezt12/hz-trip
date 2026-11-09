@@ -47,20 +47,18 @@
     return HARI[d.getDay()] + ' ' + T.hm(ts);
   }
   function modeHtml() {
-    if (S.mode === 'rekam') return (S.manual ? '<b>Merekam manual</b>' : '<b>Merekam otomatis</b> · berhenti sendiri setelah 5 menit diam');
-    var onAuto = S.mode === 'siaga' || S.mode === 'cek', onNotif = !onAuto && S.notif;
-    if (S.mode === 'siaga') return '<b>Siaga otomatis</b> · menunggu kendaraan jalan' + (S.winEnd ? '<br>Sampai jam ' + T.hm(S.winEnd) : '');
+    if (S.mode === 'rekam') return (S.manual ? '<b>Merekam manual</b>' : '<b>Merekam otomatis</b> · titik tidak disimpan saat diam lebih dari 30 detik');
+    if (S.mode === 'siaga') return '<b>Siaga</b> · merekam otomatis begitu kecepatan di atas 8 km/j';
     if (S.mode === 'cek') return '<b>Memeriksa gerakan…</b> GPS menyala sebentar';
-    if (onNotif) return '<b>Pengingat aktif</b> · GPS mati, popup muncul bila Anda mulai bergerak. Perekaman tetap Anda mulai sendiri.';
+    var pl = HA.placeNow ? HA.placeNow() : null;
+    if (pl) return '<b>Di ' + HA.esc(pl.name) + '</b> · app diam, GPS mati. Siaga lagi setelah keluar ' + pl.r + ' m.';
     if (!S.auto) return 'Rekam otomatis dimatikan (Pengaturan).';
-    if (S.paused) return '<b>Otomatis dijeda</b> sampai jadwal berikutnya';
-    if (S.nextStart) return 'Tidur · di luar jadwal<br>otomatis aktif ' + whenText(S.nextStart);
-    return 'Jadwal mingguan belum diisi.<br><button class="btn sm" data-act="sched" style="margin-top:6px">Isi jadwal</button>';
+    return '<b>Menyiapkan siaga…</b><br>Rekam otomatis berjalan kapan saja di luar Tempat.';
   }
   function modeBtnsHtml() {
     if (S.mode === 'rekam') return '';
-    var onAuto = S.mode === 'siaga' || S.mode === 'cek', onNotif = !onAuto && S.notif;
-    return '<div class="mrow2"><button class="btn' + (onAuto ? ' on' : '') + '" data-act="auto">Aktifkan otomatis</button><button class="btn' + (onNotif ? ' on' : '') + '" data-act="notif">Pengingat aktif</button></div>';
+    if (!S.auto) return '<div class="mrow2"><button class="btn" data-act="auto">Aktifkan otomatis</button></div>';
+    return '';
   }
   // tulis ke DOM hanya bila isinya berubah: ketukan tidak hilang karena elemen diganti, dan lebih hemat
   var LASTH = {};
@@ -92,7 +90,6 @@
     var w = '';
     if (!S.perm) w += '<div class="warn">Izin lokasi belum diberikan. Tekan Mulai lalu pilih "Izinkan".</div>';
     else if (native && S.auto && !S.bg) w += '<div class="warn">Agar rekam otomatis jalan saat layar mati, izinkan lokasi "Selalu".<br><button class="btn sm" data-act="bg" style="margin-top:8px">Atur izin lokasi</button></div>';
-    if (native && S.auto && !S.overlay) w += '<div class="warn">Agar popup pengingat muncul di atas aplikasi lain, izinkan "Tampil di atas aplikasi lain". Di Xiaomi, Oppo, Vivo, dan Realme aktifkan juga "Tampilkan jendela pop-up saat berjalan di latar belakang" (Info aplikasi, Izin lainnya). Bila tetap diblokir, pengingat tampil sebagai notifikasi.<br><button class="btn sm" data-act="over" style="margin-top:8px">Atur izin popup</button></div>';
     if (native && !S.battFree) w += '<div class="warn">Penghematan baterai belum dimatikan untuk HZ Trip.<br><button class="btn sm" data-act="batt" style="margin-top:8px">Buka pengaturan baterai</button></div>';
     put('warnBox', w);
   }
@@ -121,7 +118,7 @@
 
   function toggleRec() {
     if (S.mode === 'rekam') {
-      Plug.stop().then(function () { setTimeout(syncStatus, 400); toast(S.manual ? 'Perekaman diakhiri. Pengingat aktif' : 'Otomatis dijeda. Pengingat aktif'); });
+      Plug.stop().then(function () { setTimeout(syncStatus, 400); toast(S.manual ? 'Perekaman manual diakhiri' : 'Rekaman diakhiri. Siaga kembali'); });
       return;
     }
     Plug.ensurePermissions().then(function (r) {
@@ -141,12 +138,10 @@
     var a = e.target.getAttribute && e.target.getAttribute('data-act');
     if (a === 'resume' || a === 'auto') {
       if (!S.auto) { toast('Rekam otomatis dimatikan di Pengaturan'); return; }
-      Plug.resumeAuto().then(function (st) { applyStatus(st); setTimeout(syncStatus, 500); if (S.mode !== 'siaga' && S.mode !== 'cek' && S.nextStart) toast('Di luar jadwal. Otomatis aktif ' + whenText(S.nextStart)); });
+      Plug.resumeAuto().then(function (st) { applyStatus(st); setTimeout(syncStatus, 500);  });
     }
-    else if (a === 'notif') Plug.setWatch({ mode: 'notif' }).then(function () { setTimeout(syncStatus, 500); toast('Pengingat aktif'); }).catch(function (x) { toast(String(x && x.message || x)); });
     else if (a === 'sched') go('set');
     else if (a === 'bg') askBackground();
     else if (a === 'batt') openBatt();
-    else if (a === 'over') Plug.openOverlaySettings().catch(function () {});
   }
 })();

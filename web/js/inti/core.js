@@ -37,6 +37,7 @@
   HA.askActivity = askActivity;
   HA.syncStatus = syncStatus;
   HA.pushSchedule = pushSchedule;
+  HA.applyStatus = applyStatus;
   HA.go = go;
   HA.openDrawer = openDrawer;
   HA.closeDrawer = closeDrawer;
@@ -90,6 +91,7 @@
       testPopupSound: function () { return Promise.resolve(); },
       setSchedule: function (o) { sched = o; return Promise.resolve(st()); },
       resumeAuto: function () { notif = false; return Promise.resolve(st()); },
+      setPlaces: function (o) { window.__places = o.places; return Promise.resolve(st()); },
       setWatch: function (o) { notif = o.mode === 'notif'; return Promise.resolve(); },
       start: function () {
         mode = 'rekam'; sec = 0;
@@ -171,7 +173,7 @@
     S.mode = s.mode || (s.recording ? 'rekam' : 'tidur');
     S.manual = !!s.manual; S.paused = !!s.paused; S.auto = s.auto !== false;
     S.winEnd = s.winEnd || 0; S.nextStart = s.nextStart || 0;
-    S.popSnd = s.popupSound || 'alarm'; S.popName = s.popupName || ''; S.notif = !!s.notif; S.overlay = s.overlay !== false; S.actPerm = s.actPerm !== false; S.gpsOn = !!s.gpsOn; S.sigSensor = s.sigSensor !== false; S.lastT = s.lastT || 0;
+    S.inPlaces = s.inPlaces || ''; S.popSnd = s.popupSound || 'alarm'; S.popName = s.popupName || ''; S.notif = !!s.notif; S.overlay = s.overlay !== false; S.actPerm = s.actPerm !== false; S.gpsOn = !!s.gpsOn; S.sigSensor = s.sigSensor !== false; S.lastT = s.lastT || 0;
     S.perm = s.permission !== false; S.bg = s.background !== false; S.battFree = !!s.batteryFree;
     if (S.mode !== 'rekam') S.live.t = 0;
     else if (s.lastT) S.live = { v: s.lastV * 3.6, acc: s.lastAcc, t: S.live.t, count: s.count };

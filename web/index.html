@@ -118,9 +118,9 @@
         <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Jadwal dan rekam otomatis</b></div>
       <div class="h">JADWAL MINGGUAN</div>
       <div class="card">
-        <label class="chk"><input type="checkbox" id="autoChk"> Rekam otomatis sesuai jadwal</label>
-        <div class="muted" style="margin:6px 0 10px">Di dalam jendela jadwal, HZ Trip siaga dan mulai merekam sendiri saat kendaraan jalan. Di luar jendela, HZ Trip tidur; rekam manual lewat tombol Mulai.</div>
-        <div class="muted" style="margin-bottom:4px">Jendela aktif dimulai sebelum masuk dan berakhir setelah pulang:</div>
+        <label class="chk"><input type="checkbox" id="autoChk"> Rekam otomatis (kapan saja)</label>
+        <div class="muted" style="margin:6px 0 10px">HZ Trip merekam sendiri kapan saja kendaraan melaju di atas 8 km/j, kecuali saat Anda berada di dalam salah satu Tempat (menu Tempat). Jadwal di bawah hanya dipakai untuk menandai trip sebagai Kerja atau Pribadi.</div>
+        <div class="muted" style="margin-bottom:4px">Jam kerja dihitung mulai sebelum masuk dan berakhir setelah pulang:</div>
         <select id="marginSel"><option value="0">tepat jam masuk / pulang</option><option value="15">15 menit sebelum / sesudah</option><option value="30">30 menit sebelum / sesudah</option><option value="45">45 menit sebelum / sesudah</option><option value="60">1 jam sebelum / sesudah</option></select>
       </div>
       <div id="schedBox"></div>
@@ -134,6 +134,13 @@
       <div class="h">LINGKARAN TITIK BERHENTI</div>
       <select id="radiusSel"><option value="150">150 meter</option><option value="200">200 meter</option></select>
       <div class="muted" style="margin-top:6px">Setelah berhenti, bila ponsel keluar dari lingkaran ini rekaman langsung dimulai tanpa menunggu kecepatan.</div>
+      </div>
+      <div class="spage" id="sp-tempat">
+        <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Tempat (pagar virtual)</b></div>
+      <div class="h">TEMPAT</div>
+      <div class="card"><div class="muted">Di dalam Tempat, HZ Trip diam total (GPS mati, tidak merekam). Begitu Anda keluar dari lingkarannya, rekam otomatis aktif lagi. Di luar Tempat, HZ Trip selalu siap merekam. Radius dalam meter (1000 = 1 km).</div>
+        <div id="tempatBox" style="margin-top:10px"></div>
+        <button class="btn pri" id="tpAdd" style="margin-top:10px;width:100%">+ Jadikan lokasi ini tempat</button></div>
       </div>
       <div class="spage" id="sp-unit">
         <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Unit dan pengemudi</b></div>
@@ -182,6 +189,11 @@
         <input type="file" id="bkFile" accept=".hztrip,application/gzip,application/octet-stream,application/json" style="display:none">
         <div class="muted" style="margin-top:8px">Satu berkas berisi semua trip, jadwal, unit, dan pengaturan. Kirim ke WhatsApp atau Drive supaya aman bila ponsel hilang. Peta saya (PDF) tidak ikut; impor ulang dari berkas PDF Anda.</div></div>
 
+      <div class="h">IMPOR DARI GOOGLE TIMELINE</div>
+      <div class="card"><div class="muted">Isi riwayat yang hilang dari ekspor Google Maps Timeline (berkas .json). Titik asli HZ Trip tidak diubah; hanya celah yang diisi dan trip ditandai "dari Google". Kecepatan hanya perkiraan.</div>
+        <button class="btn" id="gtBtn" style="margin-top:10px;width:100%">Pilih berkas Timeline (.json)</button>
+        <input type="file" id="gtFile" accept=".json,application/json,text/plain" style="display:none"></div>
+
       <div class="h">MERAMPINGKAN DATA LAMA</div>
       <div class="card"><div class="muted" id="thinInfo">Memeriksa…</div>
         <div class="row" style="margin-top:10px;gap:8px;align-items:center"><span class="muted">Data lebih lama dari</span>
@@ -199,12 +211,6 @@
         <button class="btn" id="btnBg" style="margin-top:10px;width:100%">Atur izin lokasi "Selalu"</button>
         <button class="btn" id="btnBatt" style="margin-top:8px;width:100%">Atur penghematan baterai</button>
         <button class="btn" id="btnAct" style="margin-top:8px;width:100%">Atur izin aktivitas fisik</button>
-        <div style="margin-top:12px"><label for="popSel" style="display:block;font-size:max(11px,calc(12px * var(--fs,1)));font-weight:600;letter-spacing:.1em;color:var(--tx2);margin-bottom:6px">SUARA POPUP</label>
-          <select id="popSel"><option value="alarm">Alarm (berbunyi walau ponsel senyap)</option><option value="notif">Notifikasi (ikut mode senyap)</option><option value="off">Tanpa suara (hanya getar)</option></select>
-          <div class="muted" id="popName" style="margin-top:8px"></div>
-          <div class="row" style="margin-top:6px;gap:6px"><button class="btn sm" id="btnPopPick" style="flex:1">Pilih nada</button><button class="btn sm" id="btnPopTest" style="flex:1">Coba bunyikan</button><button class="btn sm" id="btnPopDef" style="flex:1">Nada bawaan</button></div>
-          <div class="muted" style="margin-top:6px">Popup mulai merekam sendiri bila tidak ditutup dalam 2 menit sejak muncul. Tombol Tutup berarti tidak merekam.</div></div>
-        <button class="btn" id="btnOver" style="margin-top:8px;width:100%">Atur izin popup (tampil di atas aplikasi lain)</button>
         <div class="muted" style="margin-top:8px">Pilih HZ Trip lalu "Tanpa pembatasan" agar perekaman tidak dimatikan sistem.</div>
         <div class="muted" style="margin-top:8px">Tombol cepat: geser layar dari atas dua kali, ketuk ikon pensil, lalu seret "HZ Trip" ke deretan atas. Satu ketuk untuk Mulai / Akhiri.</div>
       </div>
@@ -243,7 +249,7 @@
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
   <a data-go="data">Data peta</a>
-  <div class="ver">by Yohanes div2<br>Versi 0.15.0</div>
+  <div class="ver">by Yohanes div2<br>Versi 0.15.1</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
@@ -255,6 +261,7 @@
 <script src="vendor/leaflet.js"></script>
 <script src="js/inti/lguard.js"></script>
 <script src="js/inti/trips.js"></script>
+<script src="js/inti/google.js"></script>
 <script src="js/sistem/ekspor.js"></script>
 <script src="js/peta/peta.js"></script>
 <script src="js/peta/dem.js"></script>
@@ -264,6 +271,7 @@
 <script src="js/layar/spido.js"></script>
 <script src="js/layar/riwayat.js"></script>
 <script src="js/layar/perjalanan.js"></script>
+<script src="js/sistem/tempat.js"></script>
 <script src="js/sistem/pengaturan.js"></script>
 <script src="js/sistem/sistem.js"></script>
 <script src="js/layar/lintasan.js"></script>

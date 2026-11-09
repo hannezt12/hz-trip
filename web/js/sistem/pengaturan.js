@@ -122,7 +122,6 @@
     if (native) {
       bits.push(S.bg ? 'Lokasi "Selalu": sudah.' : 'Lokasi "Selalu": belum (perlu untuk rekam otomatis).');
       bits.push(S.battFree ? 'Penghematan baterai: dimatikan (bagus).' : 'Penghematan baterai: belum dimatikan.');
-      bits.push(S.overlay ? 'Tampil di atas aplikasi lain (popup): sudah.' : 'Tampil di atas aplikasi lain: belum (popup tidak bisa muncul; pakai notifikasi biasa).');
       bits.push(S.actPerm ? 'Aktivitas fisik (deteksi naik kendaraan): sudah.' : 'Aktivitas fisik: belum (perlu untuk deteksi naik kendaraan).');
     }
     if (native) {

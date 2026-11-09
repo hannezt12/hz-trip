@@ -171,6 +171,7 @@ public class HzTripPlugin extends Plugin {
         o.put("winEnd", Sched.windowEnd(ctx, now));
         o.put("nextStart", Sched.nextStart(ctx, now));
         o.put("paused", now < Sched.pausedUntil(ctx));
+        o.put("inPlaces", Sched.p(ctx).getString("inPlaces", ""));
         PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
         o.put("batteryFree", pm != null && pm.isIgnoringBatteryOptimizations(ctx.getPackageName()));
         try {
@@ -225,6 +226,32 @@ public class HzTripPlugin extends Plugin {
             call.reject("Jadwal tidak valid: " + e.getMessage());
             return;
         }
+        Sched.evaluate(ctx);
+        call.resolve(statusObject());
+    }
+
+    /** v0.15.1: daftar Tempat (pagar virtual). places = [{lat, lng, r}]; urutannya dipakai JS untuk memetakan nama. */
+    @PluginMethod
+    public void setPlaces(PluginCall call) {
+        Context ctx = getContext();
+        try {
+            JSArray arr = call.getArray("places");
+            StringBuilder sb = new StringBuilder();
+            if (arr != null) {
+                for (int i = 0; i < arr.length() && i < 90; i++) {
+                    org.json.JSONObject d = arr.getJSONObject(i);
+                    if (i > 0) {
+                        sb.append(';');
+                    }
+                    sb.append(String.format(java.util.Locale.US, "%.6f,%.6f,%d", d.getDouble("lat"), d.getDouble("lng"), Math.max(100, d.optInt("r", 500))));
+                }
+            }
+            Sched.p(ctx).edit().putString("places", sb.toString()).apply();
+        } catch (Exception e) {
+            call.reject("Tempat tidak valid: " + e.getMessage());
+            return;
+        }
+        Trig.armPlaces(ctx);
         Sched.evaluate(ctx);
         call.resolve(statusObject());
     }

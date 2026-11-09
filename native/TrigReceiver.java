@@ -18,6 +18,10 @@ public class TrigReceiver extends BroadcastReceiver {
         try {
             String why = null;
             String a = i.getAction();
+            if (Trig.ACT_PLACE.equals(a)) {
+                onPlace(c, i);
+                return;
+            }
             if (Trig.ACT_ALERT2.equals(a)) {
                 Alert.second(c);
                 return;
@@ -46,7 +50,7 @@ public class TrigReceiver extends BroadcastReceiver {
                     why = "keluar pagar virtual (geofence)";
                 }
             }
-            if (why == null || !(Sched.autoPossible(c, System.currentTimeMillis()) || Sched.p(c).getBoolean("notif", false))) {
+            if (why == null || !Sched.autoPossible(c, System.currentTimeMillis())) {
                 return;
             }
             Intent s = new Intent(c, TripService.class).setAction(TripService.ACTION_TRIG).putExtra("why", why);
@@ -56,6 +60,56 @@ public class TrigReceiver extends BroadcastReceiver {
                 c.startService(s);
             }
         } catch (Throwable ignored) {
+        }
+    }
+
+    /** Masuk / keluar pagar Tempat: di dalam = diam total; keluar dari semua tempat = otomatis aktif lagi. */
+    private void onPlace(Context c, Intent i) {
+        GeofencingEvent ev = GeofencingEvent.fromIntent(i);
+        if (ev == null || ev.hasError()) {
+            return;
+        }
+        int tr = ev.getGeofenceTransition();
+        java.util.List<Geofence> gl = ev.getTriggeringGeofences();
+        java.util.HashSet<String> set = new java.util.HashSet<String>();
+        String cur = Sched.p(c).getString("inPlaces", "");
+        if (cur != null && cur.length() > 0) {
+            for (String x : cur.split(",")) {
+                set.add(x);
+            }
+        }
+        if (gl != null) {
+            for (Geofence g : gl) {
+                if (tr == Geofence.GEOFENCE_TRANSITION_ENTER) {
+                    set.add(g.getRequestId());
+                } else if (tr == Geofence.GEOFENCE_TRANSITION_EXIT) {
+                    set.remove(g.getRequestId());
+                }
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String x : set) {
+            if (sb.length() > 0) {
+                sb.append(',');
+            }
+            sb.append(x);
+        }
+        Sched.p(c).edit().putString("inPlaces", sb.toString()).apply();
+        TripService.diagTo(c, (tr == Geofence.GEOFENCE_TRANSITION_ENTER ? "Masuk tempat" : "Keluar tempat") + " (" + set.size() + " tempat sedang dimasuki)");
+        if (set.isEmpty()) {
+            if (Sched.autoPossible(c, System.currentTimeMillis())) {
+                Intent s = new Intent(c, TripService.class).setAction(TripService.ACTION_AUTO);
+                if (android.os.Build.VERSION.SDK_INT >= 26) {
+                    c.startForegroundService(s);
+                } else {
+                    c.startService(s);
+                }
+            }
+        } else {
+            TripService sv = TripService.instance;
+            if (sv != null) {
+                sv.evaluateAsync();
+            }
         }
     }
 }
