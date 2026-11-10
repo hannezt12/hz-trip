@@ -288,7 +288,7 @@
     } else HA.PB.mk.setLatLng(ll);
     var el = HA.PB.mk.getElement && HA.PB.mk.getElement();
     if (el && el.firstChild) el.firstChild.style.transform = 'rotate(' + (HA.PB.hd || 0) + 'deg)';
-    if (pan && HA.PB.follow) {
+    if (pan && HA.PB.follow && !HA.PB.flying) {
       var off = HA.map.latLngToContainerPoint(ll).subtract(HA.map.getSize().divideBy(2));
       if (HA.PB.snap || Math.abs(off.x) > HA.map.getSize().x || Math.abs(off.y) > HA.map.getSize().y) { HA.map.setView(ll, HA.map.getZoom(), { animate: false }); HA.PB.snap = false; }
       else {
@@ -314,6 +314,8 @@
     HA.PB.raf = requestAnimationFrame(pbTick);
   }
   function pbPlay(on) {
+    if (on && HA.PB.flying) { HA.PB.pendingPlay = true; $('pbPlay').innerHTML = '❚❚'; return; }
+    HA.PB.pendingPlay = false;
     HA.PB.playing = on; HA.PB.last = 0; cancelAnimationFrame(HA.PB.raf);
     if (!on && HA.map && HA.PB.open) HA.map.fire('moveend');
     $('pbPlay').innerHTML = on ? '❚❚' : '▶';
@@ -327,13 +329,24 @@
     HA.PB.open = true; $('pbBar').style.display = 'block'; $('pbHud').style.display = 'block';
     pbBuild();
     if (!HA.PB.seq.length) { toast('Belum ada lintasan untuk diputar'); pbClose(); return; }
-    var ll = HA.PB.seq.map(function (p) { return [p.lat, p.lng]; });
-    HA.PB.snap = true;
-    setTimeout(function () { HA.map.invalidateSize(); HA.map.fitBounds(ll, { padding: [40, 40], maxZoom: 17 }); pbDraw(false); }, 80);
+    var st0 = [HA.PB.seq[0].lat, HA.PB.seq[0].lng];
+    HA.PB.snap = true; HA.PB.flying = false; HA.PB.pendingPlay = false;
+    // zoom awal 15: bila peta masih lebih jauh, terbang halus ke titik awal; zoom 15 ke atas dibiarkan
+    setTimeout(function () {
+      if (!HA.PB.open) return;
+      HA.map.invalidateSize();
+      var z = HA.map.getZoom(), tz = z < 15 ? 15 : z;
+      if (z < 15 || !HA.map.getBounds().contains(st0)) {
+        HA.PB.flying = true;
+        HA.map.once('moveend', function () { HA.PB.flying = false; if (HA.PB.pendingPlay && HA.PB.open) { HA.PB.pendingPlay = false; pbPlay(true); } });
+        HA.map.flyTo(st0, tz, { duration: 1.5, easeLinearity: 0.2 });
+      }
+      pbDraw(false);
+    }, 80);
     pbSyncUi(); if (HA.DM && HA.DM.sync) HA.DM.sync();
   }
   function pbClose() {
-    HA.PB.open = false; pbPlay(false);
+    HA.PB.open = false; pbPlay(false); if (HA.PB.flying && HA.map) { HA.map.stop(); } HA.PB.flying = false;
     $('pbBar').style.display = 'none'; $('pbHud').style.display = 'none';
     if (HA.DM && HA.DM.sync) HA.DM.sync();
     if (HA.PB.mk && HA.map) HA.map.removeLayer(HA.PB.mk);

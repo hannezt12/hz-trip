@@ -231,6 +231,7 @@
   window.hzBack = function () {
     if ($('sheet').classList.contains('on')) { closeSheet(); return true; }
     if ($('drawer').classList.contains('on')) { $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); return true; }
+    if (HA.ukurBack && HA.ukurBack()) return true;
     if (HA.tandaBack && HA.tandaBack()) return true;
     if (S.sel) { exitSel(); renderHistory(); return true; }
     if (S.view === 'riwayat' && S.hMode === 'day') { S.hMode = 'list'; loadRiwayat(); return true; }

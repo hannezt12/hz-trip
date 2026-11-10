@@ -110,22 +110,47 @@
   function cachedLayerClass() {
     if (CachedLayer) return CachedLayer;
     CachedLayer = L.TileLayer.extend({
+      // tile belum ada: tampilkan potongan zoom lebih jauh dari cache, diperbesar dan diburamkan (bukan hitam)
+      _ghostUrl: function (coords, d) {
+        var z = coords.z - d; if (z < 0) return null;
+        var o = L.extend({ r: L.Browser.retina ? '@2x' : '' }, this.options, { x: coords.x >> d, y: coords.y >> d, z: z + (this.options.zoomOffset || 0) });
+        o.s = this._getSubdomain({ x: o.x, y: o.y });
+        return L.Util.template(this._url, o);
+      },
       createTile: function (coords, done) {
-        var img = document.createElement('img'), url = this.getTileUrl(coords);
-        img.alt = ''; img.setAttribute('role', 'presentation');
+        var self = this, wrap = document.createElement('div'), ph = document.createElement('div'), img = document.createElement('img'), url = this.getTileUrl(coords), gone = false, ghostObj = null;
+        wrap.className = 'cl-tile'; ph.className = 'cl-ph'; img.alt = ''; img.setAttribute('role', 'presentation'); img.style.opacity = '0';
+        wrap.appendChild(ph); wrap.appendChild(img);
+        function ghost(d) {
+          if (d > 3 || gone || coords.z - d < 0) return;
+          var gu = self._ghostUrl(coords, d); if (!gu) return;
+          HA.TC.get(gu).then(function (blob) {
+            if (gone) return;
+            if (!blob) { ghost(d + 1); return; }
+            ghostObj = URL.createObjectURL(blob);
+            var n = 1 << d, ix = coords.x & (n - 1), iy = coords.y & (n - 1);
+            ph.style.backgroundImage = 'url("' + ghostObj + '")';
+            ph.style.backgroundSize = (n * 100) + '% ' + (n * 100) + '%';
+            ph.style.backgroundPosition = (n > 1 ? ix / (n - 1) * 100 : 0) + '% ' + (n > 1 ? iy / (n - 1) * 100 : 0) + '%';
+            ph.classList.add('on');
+          }).catch(function () {});
+        }
+        function fin(ok) { gone = true; if (ghostObj) { var o = ghostObj; ghostObj = null; setTimeout(function () { URL.revokeObjectURL(o); }, 400); } if (ok) { img.style.opacity = '1'; wrap.classList.add('ok'); } }
         function show(src, revoke) {
-          img.onload = function () { if (revoke) URL.revokeObjectURL(src); done(null, img); };
-          img.onerror = function () { if (revoke) URL.revokeObjectURL(src); done(null, img); };
+          img.onload = function () { if (revoke) URL.revokeObjectURL(src); fin(true); };
+          img.onerror = function () { if (revoke) URL.revokeObjectURL(src); };
           img.src = src;
         }
         HA.TC.get(url).then(function (blob) {
           if (blob) { show(URL.createObjectURL(blob), true); return; }
+          wrap.classList.add('miss'); ghost(1);
           if (typeof fetch !== 'function') { show(url, false); return; }
           fetch(url, { mode: 'cors' }).then(function (r) { if (!r.ok) throw new Error('x'); return r.blob(); }).then(function (b) {
             HA.TC.put(url, b); show(URL.createObjectURL(b), true);
           }).catch(function () { show(url, false); });
         });
-        return img;
+        setTimeout(function () { done(null, wrap); }, 0);
+        return wrap;
       }
     });
     return CachedLayer;
@@ -208,7 +233,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.15.2'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.15.3'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + HA.CHEV + '</button>'; }).join('');

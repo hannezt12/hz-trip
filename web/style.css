@@ -761,4 +761,25 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .mzx i{position:absolute;background:#FFD84D;left:50%;top:50%}
 .mzx i:first-child{width:3px;height:1.125rem;margin:-0.5625rem 0 0 -1.5px}
 .mzx i:last-child{width:1.125rem;height:3px;margin:-1.5px 0 0 -0.5625rem}
-.mzAdd{position:absolute;z-index:1000;width:3.5rem;height:3.5rem;border-radius:50%;border:2px solid #06202B;background:#FFD84D;color:#06202B;font-size:2rem;font-weight:700;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.mzAdd{position:absolute;z-index:1000;width:3.5rem;height:3.5rem;border-radius:50%;border:2px solid #fff;background:#2F80FF;color:#fff;font-size:2rem;font-weight:700;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+
+/* v0.15.3 Ukur: hasil P/L/K kanan atas, Simpan, tip, urung */
+.mzR{position:absolute;top:0.6rem;right:0.6rem;z-index:1000;min-width:8.5rem;max-width:72%;padding:0.4rem 0.7rem;border-radius:0.75rem;background:var(--ov);border:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.mzRow{display:flex;align-items:baseline;gap:0.6rem;padding:0.1rem 0}
+.mzL{position:relative;font-size:1rem;font-weight:800;color:#FFD84D;width:1.6rem;flex:none}
+.mzI{position:absolute;top:-0.35rem;left:0.95rem;width:1rem;height:1rem;border:1.5px solid var(--tx2);border-radius:50%;font-style:normal;font-size:0.6875rem;line-height:0.85rem;text-align:center;color:var(--tx2);font-weight:700;cursor:pointer}
+.mzV{font-size:1.25rem;font-weight:800;color:var(--tx);white-space:nowrap;margin-left:auto;text-align:right;font-variant-numeric:tabular-nums}
+.mzRow[data-k="L"] .mzV{font-size:1.125rem}
+.mzR.shut{border-color:#FFD84D}
+.mzSave{position:absolute;right:0.6rem;z-index:1000;height:2.75rem;padding:0 1.4rem;border-radius:0.75rem;border:2px solid #fff;background:#2F80FF;color:#fff;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.mzTip{position:absolute;right:0.6rem;z-index:1001;width:min(17rem,calc(100% - 1.2rem));padding:0.6rem 0.75rem;border-radius:0.75rem;background:var(--card);border:1px solid #FFD84D;color:var(--tx);font-size:0.875rem;line-height:1.35;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+.mzUndo{position:absolute;left:0.6rem;top:0.6rem;z-index:1000;max-width:48%;display:flex;align-items:center;gap:0.6rem;padding:0.4rem 0.4rem 0.4rem 0.75rem;border-radius:0.75rem;background:var(--card);border:1px solid var(--line);color:var(--tx);font-size:0.875rem;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.mzUndo button{height:2.25rem;padding:0 0.8rem;border-radius:0.5rem;border:0;background:#2F80FF;color:#fff;font-weight:700;cursor:pointer}
+
+/* v0.15.3 tile belum terbuka: latar abu netral + potongan zoom jauh yang diburamkan */
+.leaflet-tile.cl-tile{overflow:hidden}
+.leaflet-tile.cl-tile.miss{background:#3a4348}
+.leaflet-tile.cl-tile.miss.ok{background:transparent}
+.cl-tile .cl-ph{position:absolute;inset:-6px;background-repeat:no-repeat;filter:blur(6px);opacity:0;transition:opacity .2s}
+.cl-tile .cl-ph.on{opacity:1}
+.cl-tile>img{position:absolute;left:0;top:0;width:100%;height:100%;transition:opacity .25s}
