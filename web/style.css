@@ -751,3 +751,14 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .pjDay{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}
 .pjDay small{display:block;color:var(--tx2)}
 .pjDay .chip{border:0;cursor:pointer}
+
+/* v0.15.2 Walking + Ukur bidik */
+.wkAcc{position:absolute;top:0.625rem;left:4rem;z-index:1100;background:rgba(6,32,43,.86);border:1px solid var(--line);border-radius:0.75rem;padding:0.375rem 0.75rem;pointer-events:none}
+.wkAcc b{display:block;font-size:calc(1.25rem*var(--fs,1));line-height:1.2}
+.wkAcc small{display:block;color:#fff;opacity:.85;font-size:calc(0.8125rem*var(--fs,1))}
+.lkbar button.on{background:#35D07F;border-color:#35D07F;color:#06121c;font-weight:600}
+.mzx{position:absolute;left:50%;top:50%;width:2.25rem;height:2.25rem;margin:-1.125rem 0 0 -1.125rem;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #06202B,inset 0 0 0 2px #06202B;z-index:900;pointer-events:none}
+.mzx i{position:absolute;background:#FFD84D;left:50%;top:50%}
+.mzx i:first-child{width:3px;height:1.125rem;margin:-0.5625rem 0 0 -1.5px}
+.mzx i:last-child{width:1.125rem;height:3px;margin:-1.5px 0 0 -0.5625rem}
+.mzAdd{position:absolute;z-index:1000;width:3.5rem;height:3.5rem;border-radius:50%;border:2px solid #06202B;background:#FFD84D;color:#06202B;font-size:2rem;font-weight:700;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 2px 8px rgba(0,0,0,.4)}

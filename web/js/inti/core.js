@@ -92,6 +92,9 @@
       setSchedule: function (o) { sched = o; return Promise.resolve(st()); },
       resumeAuto: function () { notif = false; return Promise.resolve(st()); },
       setPlaces: function (o) { window.__places = o.places; return Promise.resolve(st()); },
+      walkStart: function () { window.__walk = []; window.__walkPush = function (la, lo, ac) { window.__walk.push(Date.now() + ',' + la + ',' + lo + ',' + ac); }; return Promise.resolve(); },
+      walkStop: function () { return Promise.resolve(); },
+      walkRead: function (o) { var a = window.__walk || [], f = o.from || 0; return Promise.resolve({ text: a.slice(f).join('\n') + (a.length > f ? '\n' : ''), n: a.length }); },
       setWatch: function (o) { notif = o.mode === 'notif'; return Promise.resolve(); },
       start: function () {
         mode = 'rekam'; sec = 0;

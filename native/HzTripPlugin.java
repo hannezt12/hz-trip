@@ -256,6 +256,64 @@ public class HzTripPlugin extends Plugin {
         call.resolve(statusObject());
     }
 
+    // ---- Walking (v0.15.2): perekam jalur blok terpisah, layar boleh mati ----
+    @PluginMethod
+    public void walkStart(PluginCall call) {
+        Context ctx = getContext();
+        try {
+            WalkService.file(ctx).delete();
+            Intent i = new Intent(ctx, WalkService.class).setAction(WalkService.ACTION_START);
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                ctx.startForegroundService(i);
+            } else {
+                ctx.startService(i);
+            }
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Walking tidak bisa dimulai: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void walkStop(PluginCall call) {
+        Context ctx = getContext();
+        try {
+            ctx.startService(new Intent(ctx, WalkService.class).setAction(WalkService.ACTION_STOP));
+        } catch (Exception ignored) {
+        }
+        call.resolve();
+    }
+
+    /** Baca titik Walking mulai dari baris ke-from (0). Hasil: text (baris CSV) dan n (jumlah baris sampai sekarang). */
+    @PluginMethod
+    public void walkRead(PluginCall call) {
+        int from = call.getInt("from", 0);
+        StringBuilder sb = new StringBuilder();
+        int n = 0;
+        try {
+            java.io.File f = WalkService.file(getContext());
+            if (f.exists()) {
+                java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f));
+                String ln;
+                while ((ln = r.readLine()) != null) {
+                    if (ln.length() == 0) {
+                        continue;
+                    }
+                    if (n >= from) {
+                        sb.append(ln).append('\n');
+                    }
+                    n++;
+                }
+                r.close();
+            }
+        } catch (Exception ignored) {
+        }
+        JSObject o = new JSObject();
+        o.put("text", sb.toString());
+        o.put("n", n);
+        call.resolve(o);
+    }
+
     @PluginMethod
     public void resumeAuto(PluginCall call) {
         Context ctx = getContext();

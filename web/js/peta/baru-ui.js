@@ -59,8 +59,9 @@
   }
   function drawFlow(type) {
     var poly = type === 'blok' || type === 'danau' || type === 'master', pts = [], redo = [], g = L.layerGroup().addTo(HA.map), pl = null, pl0 = null, mk = [], busy = false;
-    var bar = mkBar('<button type="button" id="nbU">Urungkan</button><button type="button" id="nbR">Ulangi</button><button type="button" id="nbC">Batal</button><button type="button" class="pri" id="nbOk">Simpan</button>');
-    var pa = null, pb = null;
+    function normalBar() { return '<button type="button" id="nbU">Urungkan</button><button type="button" id="nbR">Ulangi</button><button type="button" id="nbC">Batal</button>' + (type === 'blok' && window.HzWalk ? '<button type="button" id="nbW">Walking</button>' : '') + '<button type="button" class="pri" id="nbOk">Simpan</button>'; }
+    var bar = mkBar(normalBar());
+    var pa = null, pb = null, WK = null;
     function pathOf() { return poly && pts.length > 2 ? pts.concat([pts[0]]) : pts; }
     function upd() {
       g.clearLayers(); mk = []; pa = pb = null;
@@ -87,15 +88,101 @@
         t.textContent = pts.length < 2 ? NAMES[type] + ' · ketuk ' + (pts.length ? 'titik kedua' : 'titik pertama') : NAMES[type] + ' · ' + fmtLen(flat(pts, false).len) + ' · geser titik bila perlu';
       }
     }
-    function end() { HA.map._lakeDraw = null; HA.map.removeLayer(g); bar.remove(); }
-    HA.map._lakeDraw = { tap: function (ll) {
+    function end() { if (WK) walkCleanup(); HA.map._lakeDraw = null; HA.map.removeLayer(g); bar.remove(); }
+    var drawTap = function (ll) {
+      if (WK) return;
       if (!poly && pts.length >= 2) { toast('Garis cukup 2 titik. Geser titiknya bila perlu'); return; }
       pts.push([+ll.lat.toFixed(6), +ll.lng.toFixed(6)]); redo = []; upd();
-    } };
-    $('nbU').onclick = function () { if (pts.length) { redo.push(pts.pop()); upd(); } };
-    $('nbR').onclick = function () { if (redo.length) { pts.push(redo.pop()); upd(); } };
-    $('nbC').onclick = end;
-    $('nbOk').onclick = function () {
+    };
+    HA.map._lakeDraw = { tap: function (ll) { drawTap(ll); } };
+    function bindBar() {
+      $('nbU').onclick = function () { if (pts.length) { redo.push(pts.pop()); upd(); } };
+      $('nbR').onclick = function () { if (redo.length) { pts.push(redo.pop()); upd(); } };
+      $('nbC').onclick = end;
+      if ($('nbW')) $('nbW').onclick = walkStart;
+      $('nbOk').onclick = save;
+    }
+    // ---------- mode Walking (hanya blok): jalan kaki mengelilingi batas, titik dibuat tiap 2 m ----------
+    var RING = { g: '#35D07F', y: '#FFD84D', r: '#FF5A4D' };
+    function walkStart() {
+      WK = { w: HzWalk.create({}), n: 0, timer: null, g: L.layerGroup().addTo(HA.map), acc: null, cur: null, screen: false, vis: null };
+      WK.w.seed(pts);
+      g.clearLayers();
+      var a = document.createElement('div'); a.className = 'wkAcc'; a.innerHTML = '<b id="wkA">Akurasi …</b><small id="wkI"></small>';
+      HA.map.getContainer().appendChild(a); WK.acc = a;
+      bar.innerHTML = barHtml('<button type="button" id="wkP">Jeda</button><button type="button" id="wkF">+ Titik</button><button type="button" id="wkU">Urung 10 m</button><button type="button" id="wkS">Layar</button><button type="button" class="pri" id="wkOk">Selesai</button>');
+      $('wkP').onclick = function () { if (WK.w.isPaused()) { WK.w.resume(); this.textContent = 'Jeda'; } else { WK.w.pause(); this.textContent = 'Lanjut'; } wkDraw(); };
+      $('wkF').onclick = function () { if (WK.w.addHere()) { wkDraw(); toast('Titik ditandai di posisi Anda'); } else toast('Posisi belum didapat'); };
+      $('wkU').onclick = function () { WK.w.undo(10); wkDraw(); };
+      $('wkS').onclick = function () { WK.screen = !WK.screen; this.classList.toggle('on', WK.screen); HA.Plug.keepScreen({ on: WK.screen }).catch(function () {}); toast(WK.screen ? 'Layar tetap menyala' : 'Layar boleh mati (hemat baterai)'); };
+      $('wkOk').onclick = walkFinish;
+      HA.Plug.walkStart().then(function () {
+        WK.timer = setInterval(walkPoll, 1000);
+        WK.vis = function () { if (!document.hidden) walkPoll(); };
+        document.addEventListener('visibilitychange', WK.vis);
+        toast('Walking mulai. Berjalan di sepanjang batas blok');
+      }).catch(function (e) { toast('Walking gagal: ' + (e && e.message || e)); walkCleanup(true); });
+      wkDraw();
+    }
+    function walkPoll() {
+      if (!WK || WK.busy) return;
+      WK.busy = true;
+      HA.Plug.walkRead({ from: WK.n }).then(function (r) {
+        if (!WK) return;
+        WK.busy = false; WK.n = r.n;
+        (r.text || '').split('\n').forEach(function (ln) {
+          if (!ln) return;
+          var q = ln.split(','), f = { t: +q[0], lat: +q[1], lng: +q[2], acc: +q[3] };
+          if (isFinite(f.lat) && isFinite(f.lng)) { WK.cur = f; WK.w.fix(f); }
+        });
+        wkDraw();
+        if (WK.cur && HA.map && !HA.map.getBounds().pad(-0.3).contains([WK.cur.lat, WK.cur.lng])) HA.map.panTo([WK.cur.lat, WK.cur.lng], { animate: true });
+      }).catch(function () { if (WK) WK.busy = false; });
+    }
+    function wkDraw() {
+      if (!WK) return;
+      WK.g.clearLayers();
+      var P = WK.w.points(), i;
+      for (i = 1; i < P.length; i++) {
+        var seg = [[P[i - 1].lat, P[i - 1].lng], [P[i].lat, P[i].lng]];
+        if (P[i].g) L.polyline(seg, { color: '#FF8A00', weight: 3, dashArray: '6 6', interactive: false }).addTo(WK.g);
+        else { L.polyline(seg, { color: '#06202B', weight: 6, opacity: .55, interactive: false }).addTo(WK.g); L.polyline(seg, { color: HA.NEON, weight: 3, interactive: false }).addTo(WK.g); }
+      }
+      if (P.length > 2) L.polyline([[P[P.length - 1].lat, P[P.length - 1].lng], [P[0].lat, P[0].lng]], { color: HA.NEON, weight: 2, opacity: .6, dashArray: '3 7', interactive: false }).addTo(WK.g);
+      P.forEach(function (p) {
+        L.circleMarker([p.lat, p.lng], { radius: p.f ? 8 : 6, color: RING[HzWalk.accClass(p.acc)], weight: 4, fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(WK.g);
+      });
+      var c = WK.cur;
+      if (c) {
+        L.circle([c.lat, c.lng], { radius: Math.max(c.acc, 1), color: '#4DA3FF', weight: 1, fillColor: '#4DA3FF', fillOpacity: 0.12, interactive: false }).addTo(WK.g);
+        L.circleMarker([c.lat, c.lng], { radius: 7, color: '#fff', weight: 3, fillColor: '#2F80FF', fillOpacity: 1, interactive: false }).addTo(WK.g);
+        var cl = HzWalk.accClass(c.acc), el = $('wkA');
+        if (el) { el.textContent = 'Akurasi ±' + Math.round(c.acc) + ' m'; el.style.color = RING[cl]; }
+      }
+      var t = $('nbT'); if (t) t.textContent = 'Walking' + (WK.w.isPaused() ? ' dijeda' : '') + ' · ' + fmtLen(WK.w.length()) + ' · ' + P.length + ' titik';
+      var inf = $('wkI'); if (inf) inf.textContent = (c ? (Date.now() - c.t < 5000 ? '' : 'posisi terakhir ' + Math.round((Date.now() - c.t) / 1000) + ' dtk lalu') : 'menunggu GPS…');
+    }
+    function walkCleanup(keepBar) {
+      if (!WK) return;
+      clearInterval(WK.timer); if (WK.vis) document.removeEventListener('visibilitychange', WK.vis);
+      try { HA.Plug.walkStop().catch(function () {}); HA.Plug.keepScreen({ on: false }).catch(function () {}); } catch (e) {}
+      if (WK.acc) WK.acc.remove();
+      HA.map.removeLayer(WK.g);
+      WK = null;
+      if (keepBar) { bar.innerHTML = barHtml(normalBar()); bindBar(); upd(); }
+    }
+    function walkFinish() {
+      var P = WK.w.points(), L0 = HzWalk.dist;
+      function done() {
+        pts = P.map(function (p) { return [+p.lat.toFixed(6), +p.lng.toFixed(6)]; }); redo = [];
+        walkCleanup(true);
+        toast(pts.length >= 3 ? 'Walking selesai. Rapikan titik bila perlu lalu Simpan' : 'Jalur masih kurang dari 3 titik. Tambah titik manual');
+      }
+      if (P.length >= 3 && L0(P[P.length - 1], P[0]) > 30) {
+        askConfirm('Tutup dari ujung ke awal?', 'Titik terakhir masih ' + Math.round(L0(P[P.length - 1], P[0])) + ' m dari titik awal. Bagian ini akan disambung garis lurus.', 'Tutup', done);
+      } else done();
+    }
+    function save() {
       if (busy) return;
       if (poly && pts.length < 3) { toast('Minimal 3 titik'); return; }
       if (!poly && (pts.length < 2 || flat(pts, false).len < 5)) { toast('Titik masih terlalu dekat, geser salah satu'); return; }
@@ -120,6 +207,7 @@
         end(); if (type === 'drain') S.settings.lakesOn = true; else S.settings.linesOn = true; HA.lineChanged(); toast(NAMES[type] + ' tersimpan. Ketuk garis untuk ubah lebar atau hapus');
       }
     };
+    bindBar();
     upd();
   }
   // panel nama setelah simpan (danau); blok memakai panel Edit Blok
@@ -137,28 +225,41 @@
     if (S.view !== 'lintasan') { HA.mapKeep = true; go('lintasan'); setTimeout(measureStart, 800); return; }
     HA.pbStopForEdit(); closeAll();
     if (HA.map._lakeDraw) { toast('Selesaikan dulu yang sedang digambar'); return; }
-    var pts = [], g = L.layerGroup().addTo(HA.map);
+    // gaya Google Maps: bidik + di tengah layar, geser peta lalu ketuk tombol + (di kiri tombol Posisi saya)
+    var pts = [], g = L.layerGroup().addTo(HA.map), box = HA.map.getContainer();
     var bar = mkBar('<button type="button" id="mU">Urungkan</button><button type="button" id="mC">Hapus semua</button><button type="button" class="pri" id="mX">Tutup</button>');
+    bar.style.bottom = '5.25rem';
+    var cross = document.createElement('div'); cross.className = 'mzx'; cross.innerHTML = '<i></i><i></i>'; box.appendChild(cross);
+    var add = document.createElement('button'); add.type = 'button'; add.className = 'mzAdd'; add.setAttribute('aria-label', 'Tambah titik'); add.textContent = '+'; box.appendChild(add);
+    L.DomEvent.disableClickPropagation(add); add.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    function place() {
+      var lb = HA.map._loc && HA.map._loc.btn, cr = box.getBoundingClientRect();
+      if (lb) { var r = lb.getBoundingClientRect(); if (r.width) { add.style.left = Math.round(r.left - cr.left - add.offsetWidth - 10) + 'px'; add.style.top = Math.round(r.top - cr.top - (add.offsetHeight - r.height) / 2) + 'px'; add.style.right = 'auto'; add.style.bottom = 'auto'; return; } }
+      add.style.right = '4.5rem'; add.style.bottom = '5rem'; add.style.left = 'auto'; add.style.top = 'auto';
+    }
     function upd() {
       g.clearLayers();
-      if (pts.length > 1) {
-        var path = pts.length > 2 ? pts.concat([pts[0]]) : pts;
+      var c = HA.map.getCenter(), all = pts.concat([[c.lat, c.lng]]);
+      if (pts.length) {
+        var path = all.length > 2 ? all.concat([all[0]]) : all;
         L.polyline(path, { color: '#06202B', weight: 6, opacity: .55, interactive: false }).addTo(g);
-        L.polyline(pts.length > 2 ? pts.concat([pts[0]]) : pts, { color: '#FFD84D', weight: 3, interactive: false }).addTo(g);
+        L.polyline(path, { color: '#FFD84D', weight: 3, interactive: false }).addTo(g);
       }
       pts.forEach(function (p) { L.circleMarker(p, { radius: 5, color: '#06202B', weight: 2, fillColor: '#FFD84D', fillOpacity: 1, interactive: false }).addTo(g); });
       var t = $('nbT'); if (!t) return;
-      if (pts.length < 2) { t.textContent = 'Ukur · ketuk titik di peta'; return; }
-      var f = flat(pts, false), s = 'Jarak ' + fmtLen(f.len);
-      if (pts.length > 2) s += ' · keliling ' + fmtLen(flat(pts, true).len) + ' · luas ' + fmtArea(flat(pts, true).area);
+      if (!pts.length) { t.textContent = 'Ukur · geser peta, ketuk + untuk titik pertama'; return; }
+      var f = flat(all, false), s = 'Jarak ' + fmtLen(f.len);
+      if (all.length > 2) s += ' · keliling ' + fmtLen(flat(all, true).len) + ' · luas ' + fmtArea(flat(all, true).area);
       t.textContent = s;
     }
-    function end() { HA.map._lakeDraw = null; HA.map.removeLayer(g); bar.remove(); }
-    HA.map._lakeDraw = { tap: function (ll) { pts.push([ll.lat, ll.lng]); upd(); } };
+    function end() { HA.map.off('move', upd); window.removeEventListener('resize', place); HA.map._lakeDraw = null; HA.map.removeLayer(g); bar.remove(); cross.remove(); add.remove(); }
+    HA.map._lakeDraw = { tap: function () {} };
+    HA.map.on('move', upd); window.addEventListener('resize', place);
+    add.onclick = function () { var c = HA.map.getCenter(); pts.push([c.lat, c.lng]); upd(); };
     $('mU').onclick = function () { pts.pop(); upd(); };
     $('mC').onclick = function () { pts = []; upd(); };
     $('mX').onclick = end;
-    upd();
+    place(); upd();
   }
 
   // ---------- daftar biasa: ketuk = lihat, tekan lama = Edit / Hapus / Pilih banyak ----------
