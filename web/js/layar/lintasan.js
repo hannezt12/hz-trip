@@ -46,7 +46,7 @@
   function ensureMap() {
     if (HA.map) return true;
     if (!window.L) return false;
-    HA.map = L.map('map', { zoomControl: true, preferCanvas: true }).setView([-4.95, 105.2], 14);
+    HA.map = L.map('map', { zoomControl: true, preferCanvas: true, fadeAnimation: false }).setView([-4.95, 105.2], 14);
     HA.trackLayer = L.layerGroup().addTo(HA.map);
     bindPins(HA.map, function () { return [HA.trackLayer]; });
     setTiles();

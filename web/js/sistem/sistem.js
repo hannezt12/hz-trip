@@ -46,13 +46,18 @@
 
   // ---------- cache peta (IndexedDB) ----------
   HA.TC = (function () {
-    var dbp = null, CAP = 300 * 1024 * 1024, puts = 0;
+    // batas bawaan 1 GB (bisa diatur); dibuang menurut TERAKHIR DIPAKAI; total berjalan agar tidak memindai semuanya tiap kali
+    var dbp = null, capMB = 1024, total = -1, hits = {}, hitT = 0, pruning = false;
     function open() {
       if (dbp) return dbp;
       dbp = new Promise(function (res, rej) {
         try {
-          var rq = indexedDB.open('hztiles', 1);
-          rq.onupgradeneeded = function () { rq.result.createObjectStore('tiles', { keyPath: 'k' }); };
+          var rq = indexedDB.open('hztiles', 2);
+          rq.onupgradeneeded = function () {
+            var db = rq.result;
+            if (!db.objectStoreNames.contains('tiles')) db.createObjectStore('tiles', { keyPath: 'k' });
+            if (!db.objectStoreNames.contains('use')) db.createObjectStore('use', { keyPath: 'k' });
+          };
           rq.onsuccess = function () { res(rq.result); };
           rq.onerror = function () { rej(rq.error); };
         } catch (e) { rej(e); }
@@ -69,40 +74,64 @@
         });
       });
     }
-    function get(k) { return tx('readonly', function (st) { return st.get(k); }).then(function (r) { return r ? r.blob : null; }).catch(function () { return null; }); }
+    function flushHits() {
+      hitT = 0; var ks = Object.keys(hits); if (!ks.length) return;
+      var h = hits; hits = {};
+      open().then(function (db) {
+        var t = db.transaction('use', 'readwrite'), st = t.objectStore('use');
+        ks.forEach(function (k) { st.put({ k: k, t: h[k] }); });
+      }).catch(function () {});
+    }
+    function get(k) {
+      return tx('readonly', function (st) { return st.get(k); }).then(function (r) {
+        if (r) { hits[k] = Date.now(); if (!hitT) hitT = setTimeout(flushHits, 15000); }
+        return r ? r.blob : null;
+      }).catch(function () { return null; });
+    }
     function stats() {
       return open().then(function (db) {
         return new Promise(function (res) {
           var n = 0, bytes = 0, rq = db.transaction('tiles', 'readonly').objectStore('tiles').openCursor();
-          rq.onsuccess = function () { var c = rq.result; if (c) { n++; bytes += c.value.size || 0; c.continue(); } else res({ n: n, bytes: bytes }); };
+          rq.onsuccess = function () { var c = rq.result; if (c) { n++; bytes += c.value.size || 0; c.continue(); } else { total = bytes; res({ n: n, bytes: bytes }); } };
           rq.onerror = function () { res({ n: n, bytes: bytes }); };
         });
       }).catch(function () { return { n: 0, bytes: 0 }; });
     }
     function prune() {
+      if (pruning) return Promise.resolve(); pruning = true; flushHits();
+      var CAP = capMB * 1048576;
       return open().then(function (db) {
         return new Promise(function (res) {
-          var all = [], total = 0, rq = db.transaction('tiles', 'readonly').objectStore('tiles').openCursor();
-          rq.onsuccess = function () {
-            var c = rq.result;
-            if (c) { all.push({ k: c.value.k, t: c.value.t, s: c.value.size || 0 }); total += c.value.size || 0; c.continue(); return; }
-            if (total <= CAP) { res(); return; }
-            all.sort(function (x, y) { return x.t - y.t; });
-            var st = db.transaction('tiles', 'readwrite').objectStore('tiles');
-            for (var i = 0; i < all.length && total > CAP * 0.85; i++) { st.delete(all[i].k); total -= all[i].s; }
-            res();
+          var use = {}, ur = db.transaction('use', 'readonly').objectStore('use').openCursor();
+          ur.onsuccess = function () {
+            var c = ur.result; if (c) { use[c.value.k] = c.value.t; c.continue(); return; }
+            var all = [], sum = 0, rq = db.transaction('tiles', 'readonly').objectStore('tiles').openCursor();
+            rq.onsuccess = function () {
+              var d = rq.result;
+              if (d) { var v = d.value; all.push({ k: v.k, t: Math.max(v.t || 0, use[v.k] || 0), s: v.size || 0 }); sum += v.size || 0; d.continue(); return; }
+              total = sum;
+              if (sum <= CAP) { res(); return; }
+              all.sort(function (x, y) { return x.t - y.t; });
+              var t2 = db.transaction(['tiles', 'use'], 'readwrite'), st = t2.objectStore('tiles'), su = t2.objectStore('use');
+              for (var i = 0; i < all.length && sum > CAP * 0.85; i++) { st.delete(all[i].k); su.delete(all[i].k); sum -= all[i].s; }
+              total = sum; t2.oncomplete = function () { res(); }; t2.onerror = function () { res(); };
+            };
+            rq.onerror = function () { res(); };
           };
-          rq.onerror = function () { res(); };
+          ur.onerror = function () { res(); };
         });
-      }).catch(function () {});
+      }).catch(function () {}).then(function () { pruning = false; });
     }
     function put(k, blob) {
       tx('readwrite', function (st) { return st.put({ k: k, blob: blob, size: blob.size, t: Date.now() }); }).catch(function () {});
-      if (++puts % 60 === 0) prune();
+      if (total >= 0) { total += blob.size; if (total > capMB * 1048576) prune(); }
     }
-    function clear() { return tx('readwrite', function (st) { return st.clear(); }).catch(function () {}); }
+    function clear() { total = 0; return tx('readwrite', function (st) { return st.clear(); }).then(function () { return open().then(function (db) { db.transaction('use', 'readwrite').objectStore('use').clear(); }); }).catch(function () {}); }
+    function setCap(mb) { capMB = mb > 0 ? mb : 1024; if (total >= 0 && total > capMB * 1048576) prune(); }
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
-    return { get: get, put: put, stats: stats, clear: clear };
+    document.addEventListener('visibilitychange', function () { if (document.hidden) flushHits(); });
+    setTimeout(function () { stats().then(function () { if (total > capMB * 1048576) prune(); }); }, 4000);
+    return { get: get, put: put, stats: stats, clear: clear, setCap: setCap, cap: function () { return capMB; } };
   })();
 
   if (window.HzDem) HzDem.setStore(HA.TC);
@@ -110,7 +139,8 @@
   function cachedLayerClass() {
     if (CachedLayer) return CachedLayer;
     CachedLayer = L.TileLayer.extend({
-      // tile belum ada: tampilkan potongan zoom lebih jauh dari cache, diperbesar dan diburamkan (bukan hitam)
+      // tile dianggap siap hanya setelah gambarnya termuat (tile lama tertahan, tidak hitam).
+      // bila tertunda >180 ms: potongan zoom lebih jauh dari cache, diperbesar (otomatis lembut), tanpa filter blur.
       _ghostUrl: function (coords, d) {
         var z = coords.z - d; if (z < 0) return null;
         var o = L.extend({ r: L.Browser.retina ? '@2x' : '' }, this.options, { x: coords.x >> d, y: coords.y >> d, z: z + (this.options.zoomOffset || 0) });
@@ -118,39 +148,55 @@
         return L.Util.template(this._url, o);
       },
       createTile: function (coords, done) {
-        var self = this, wrap = document.createElement('div'), ph = document.createElement('div'), img = document.createElement('img'), url = this.getTileUrl(coords), gone = false, ghostObj = null;
-        wrap.className = 'cl-tile'; ph.className = 'cl-ph'; img.alt = ''; img.setAttribute('role', 'presentation'); img.style.opacity = '0';
-        wrap.appendChild(ph); wrap.appendChild(img);
+        var self = this, img = document.createElement('img'), url = this.getTileUrl(coords), fin = false, gObj = null, gT = 0;
+        img.alt = ''; img.setAttribute('role', 'presentation');
+        function clean(keep) { fin = true; clearTimeout(gT); if (gObj && !keep) { var o = gObj; gObj = null; setTimeout(function () { URL.revokeObjectURL(o); }, 300); } }
         function ghost(d) {
-          if (d > 3 || gone || coords.z - d < 0) return;
+          if (fin || d > 2 || coords.z - d < 0) return;
           var gu = self._ghostUrl(coords, d); if (!gu) return;
           HA.TC.get(gu).then(function (blob) {
-            if (gone) return;
+            if (fin) return;
             if (!blob) { ghost(d + 1); return; }
-            ghostObj = URL.createObjectURL(blob);
+            gObj = URL.createObjectURL(blob);
             var n = 1 << d, ix = coords.x & (n - 1), iy = coords.y & (n - 1);
-            ph.style.backgroundImage = 'url("' + ghostObj + '")';
-            ph.style.backgroundSize = (n * 100) + '% ' + (n * 100) + '%';
-            ph.style.backgroundPosition = (n > 1 ? ix / (n - 1) * 100 : 0) + '% ' + (n > 1 ? iy / (n - 1) * 100 : 0) + '%';
-            ph.classList.add('on');
+            img.style.backgroundImage = 'url("' + gObj + '")'; img.style.backgroundRepeat = 'no-repeat';
+            img.style.backgroundSize = (n * 100) + '% ' + (n * 100) + '%';
+            img.style.backgroundPosition = (n > 1 ? ix / (n - 1) * 100 : 0) + '% ' + (n > 1 ? iy / (n - 1) * 100 : 0) + '%';
+            img.classList.add('gh');
           }).catch(function () {});
         }
-        function fin(ok) { gone = true; if (ghostObj) { var o = ghostObj; ghostObj = null; setTimeout(function () { URL.revokeObjectURL(o); }, 400); } if (ok) { img.style.opacity = '1'; wrap.classList.add('ok'); } }
         function show(src, revoke) {
-          img.onload = function () { if (revoke) URL.revokeObjectURL(src); fin(true); };
-          img.onerror = function () { if (revoke) URL.revokeObjectURL(src); };
+          img.onload = function () { if (revoke) URL.revokeObjectURL(src); clean(); img.style.backgroundImage = 'none'; img.classList.remove('gh'); done(null, img); };
+          img.onerror = function () {
+            // gagal (offline / belum tersimpan): bersihkan ikon rusak, tampilkan potongan zoom jauh bila ada
+            if (revoke) URL.revokeObjectURL(src); img.onerror = null; img.onload = null; img.src = L.Util.emptyImageUrl;
+            if (fin) { done(null, img); return; }
+            clearTimeout(gT); fin = true;
+            (function g(d) {
+              if (d > 2 || coords.z - d < 0) { img.style.backgroundColor = '#364046'; img.classList.add('gh'); return; }
+              var gu = self._ghostUrl(coords, d); if (!gu) return;
+              HA.TC.get(gu).then(function (blob) {
+                if (!blob) { g(d + 1); return; }
+                var o = URL.createObjectURL(blob), n = 1 << d, ix = coords.x & (n - 1), iy = coords.y & (n - 1);
+                img.style.backgroundImage = 'url("' + o + '")'; img.style.backgroundRepeat = 'no-repeat';
+                img.style.backgroundSize = (n * 100) + '% ' + (n * 100) + '%';
+                img.style.backgroundPosition = (n > 1 ? ix / (n - 1) * 100 : 0) + '% ' + (n > 1 ? iy / (n - 1) * 100 : 0) + '%';
+                img.classList.add('gh');
+              }).catch(function () {});
+            })(1);
+            done(null, img);
+          };
           img.src = src;
         }
+        gT = setTimeout(function () { ghost(1); }, 180);
         HA.TC.get(url).then(function (blob) {
           if (blob) { show(URL.createObjectURL(blob), true); return; }
-          wrap.classList.add('miss'); ghost(1);
           if (typeof fetch !== 'function') { show(url, false); return; }
           fetch(url, { mode: 'cors' }).then(function (r) { if (!r.ok) throw new Error('x'); return r.blob(); }).then(function (b) {
             HA.TC.put(url, b); show(URL.createObjectURL(b), true);
           }).catch(function () { show(url, false); });
         });
-        setTimeout(function () { done(null, wrap); }, 0);
-        return wrap;
+        return img;
       }
     });
     return CachedLayer;
@@ -201,6 +247,7 @@
     renderDemInfo(); renderSatNat();
     if (!$('tcInfo')) return;
     HA.TC.stats().then(function (s) { $('tcInfo').textContent = 'Cache peta: ' + (s.bytes / 1048576).toFixed(1).replace('.', ',') + ' MB · ' + s.n + ' kotak peta'; });
+    var sg = $('tcCap'); if (sg) { var cur = S.settings.tileCapMB || 1024; Array.prototype.forEach.call(sg.children, function (b) { b.classList.toggle('on', +b.getAttribute('data-mb') === cur); }); }
   }
 
 
@@ -233,7 +280,7 @@
     { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.15.3'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.15.4'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + HA.CHEV + '</button>'; }).join('');

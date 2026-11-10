@@ -176,7 +176,9 @@
 
       <div class="h">CACHE PETA</div>
       <div class="card"><div class="muted" id="tcInfo">Menghitung…</div>
-        <div class="muted" style="margin-top:6px">Peta satelit dan peta jalan yang pernah Anda lihat tersimpan di ponsel, jadi bisa dibuka lagi tanpa internet. Batas 300 MB; yang paling lama dibuang lebih dulu.</div>
+        <div class="muted" style="margin-top:6px">Peta satelit dan peta jalan yang pernah Anda lihat tersimpan di ponsel, jadi bisa dibuka lagi tanpa internet. Bila penuh, yang paling lama tidak dipakai dibuang lebih dulu. Batas lebih besar = peta lebih jarang diunduh ulang.</div>
+        <div class="muted" style="margin-top:8px">Batas cache</div>
+        <div class="seg" id="tcCap" style="margin-top:4px"><button data-mb="500">500 MB</button><button data-mb="1024">1 GB</button><button data-mb="2048">2 GB</button><button data-mb="4096">4 GB</button></div>
         <button class="btn" id="tcClear" style="margin-top:10px;width:100%">Bersihkan cache peta</button></div>
       </div>
       <div class="spage" id="sp-data">
@@ -249,7 +251,7 @@
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
   <a data-go="data">Data peta</a>
-  <div class="ver">by Yohanes div2<br>Versi 0.15.3</div>
+  <div class="ver">by Yohanes div2<br>Versi 0.15.4</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
@@ -259,6 +261,7 @@
 <script src="vendor/jspdf.umd.min.js"></script>
 <script src="vendor/jspdf.plugin.autotable.min.js"></script>
 <script src="vendor/leaflet.js"></script>
+<script src="vendor/polygon-clipping.umd.min.js"></script>
 <script src="js/inti/lguard.js"></script>
 <script src="js/inti/trips.js"></script>
 <script src="js/inti/google.js"></script>

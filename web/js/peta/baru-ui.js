@@ -312,7 +312,7 @@
       else { $('mzL').textContent = '–'; $('mzK').textContent = '–'; }
       sv.style.display = closed ? '' : 'none';
       card.classList.toggle('shut', !!closed);
-      sv.style.top = (card.offsetTop + card.offsetHeight + 8) + 'px';
+      sv.style.top = (card.offsetTop + card.offsetHeight + 8) + 'px'; undo.style.top = (card.offsetTop + card.offsetHeight + 8) + 'px';
     }
     function setClosed(c) { var was = !!closed; closed = c; if (c && !was) toast('Simpan blok baru'); }
     function addPt() {
@@ -369,30 +369,66 @@
       var b = { id: Date.now(), src: 'manual', name: 'Blok ' + HA.nextBlockNo(), pts: P, ovId: null, dir: null, sp: null, margin: 0, conf: false, note: '' };
       HA.blocksList().push(b); S.settings.blkOn = true; saveSettings(); HA.drawBlocks(); HA.openBlockPop(b); HA.openBlockEdit(b);
     }
+    // poligon -> meter lokal (untuk pemotongan) dan kembali
+    function ukProj(ref) {
+      var kx = 111320 * Math.cos(ref[0] * Math.PI / 180), ky = 110540;
+      return { xy: function (p) { return [(p[1] - ref[1]) * kx, (p[0] - ref[0]) * ky]; }, ll: function (q) { return [ref[0] + q[1] / ky, ref[1] + q[0] / kx]; } };
+    }
+    function ukArea(r) { var a = 0, i, j; for (i = 0, j = r.length - 1; i < r.length; j = i++) a += (r[j][0] + r[i][0]) * (r[j][1] - r[i][1]); return Math.abs(a / 2); }
+    // potong poligon Ukur mengikuti batas tiap blok: kembali daftar potongan {b, ring(lat,lng), area m2}
+    function ukPieces(P) {
+      var pr = ukProj(P[0]), sub = [P.map(pr.xy)], out = [], tot = ukArea(sub[0]);
+      HA.blocksList().forEach(function (b) {
+        if (!b.pts || b.pts.length < 3) return;
+        var bb = [b.pts.map(pr.xy)], mp;
+        try { mp = polygonClipping.intersection(sub, bb); } catch (e) { return; }
+        (mp || []).forEach(function (poly) {
+          var r = poly[0]; if (!r || r.length < 4) return;
+          var ar = ukArea(r); if (ar < 1 || ar < tot * 0.01) return;
+          var ring = r.slice(0, r.length - 1).map(pr.ll).map(function (q) { return [+q[0].toFixed(7), +q[1].toFixed(7)]; });
+          out.push({ b: b, ring: ring, area: ar });
+        });
+      });
+      return { pieces: out, total: tot };
+    }
     function doSave() {
       var pl = poly(); if (!pl || pl.length < 3) return;
       var P = pl.map(function (p) { return [+(+p[0]).toFixed(6), +(+p[1]).toFixed(6)]; });
       if (flat(P, true).area < 1) { toast('Area terlalu kecil'); return; }
-      var inside = null, inUn = null, touch = [];
-      HA.blocksList().forEach(function (b) {
-        if (!b.pts || b.pts.length < 3) return;
-        var all = P.every(function (p) { return ukPip(p, b.pts); }) && !ukCross(P, b.pts);
-        if (all) { if (b.conf) { if (!inside) inside = b; } else if (!inUn) inUn = b; return; }
-        if (ukCross(P, b.pts) || P.some(function (p) { return ukPip(p, b.pts); }) || b.pts.some(function (q) { return ukPip(q, P); })) touch.push(b);
-      });
-      if (inside) {
-        var br = HA.tandaBrush ? HA.tandaBrush() : { cat: null, col: '#FF8A00', op: 0.35 };
-        end();
-        HA.tandaAdd({ id: HA.tandaNewId(), t: 'pg', pts: P, cat: br.cat, col: br.col, op: br.op, name: '', note: '', ts: Date.now() });
-        toast('Tanda area tersimpan di ' + inside.name + '. Lihat di Marking (SpidoMap)');
-        return;
+      var r = ukPieces(P), conf = r.pieces.filter(function (x) { return x.b.conf; }), skip = r.pieces.filter(function (x) { return !x.b.conf; });
+      var inBlocks = r.pieces.reduce(function (a, x) { return a + x.area; }, 0);
+      if (!r.pieces.length) { newBlock(P); return; }   // tidak menyentuh blok mana pun = blok baru
+      var d = HA.tandaData(), br = HA.tandaBrush(), cat = br.cat, sb = br.sub;
+      var fh = HA.tandaU.ha, ha = function (m2) { return fh(m2 / 10000); };
+      function rows() {
+        var h = conf.map(function (x) { return '<div class="ukRw"><span>' + esc(x.b.name) + '</span><b>' + ha(x.area) + ' ha</b></div>'; }).join('');
+        h += skip.map(function (x) { return '<div class="ukRw mut"><span>' + esc(x.b.name) + ' · belum terkonfirmasi, dilewati</span><b>' + ha(x.area) + ' ha</b></div>'; }).join('');
+        var out = Math.max(0, r.total - inBlocks);
+        if (out >= 1) h += '<div class="ukRw mut"><span>Di luar blok · tidak dihitung</span><b>' + ha(out) + ' ha</b></div>';
+        return h;
       }
-      if (inUn) { ask2('Di dalam ' + inUn.name, 'Blok ini belum terkonfirmasi, jadi tidak bisa diberi tanda kategori. Buat blok baru dari area ini?', 'Blok baru', function () { newBlock(P); }); return; }
-      if (touch.length) {
-        var nm = touch.slice(0, 3).map(function (b) { return b.name; }).join(', ') + (touch.length > 3 ? ' +' + (touch.length - 3) : '');
-        ask2('Menimpa blok ' + nm, 'Area ini bertumpuk dengan blok yang sudah ada. Tetap simpan sebagai blok baru?', 'Tetap simpan', function () { newBlock(P); }); return;
+      function ink(hex) { var h = String(hex).replace('#', ''); if (h.length !== 6) return '#fff'; var rr = parseInt(h.slice(0, 2), 16), gg = parseInt(h.slice(2, 4), 16), bb = parseInt(h.slice(4, 6), 16); return (0.299 * rr + 0.587 * gg + 0.114 * bb) > 150 ? '#111' : '#fff'; }
+      var nb = {}; conf.forEach(function (x) { nb[x.b.id] = 1; });
+      var nB = Object.keys(nb).length;
+      var catRow = d.cats.map(function (c) { return '<button type="button" class="tdk' + (c.id === cat ? ' on' : '') + '" data-cat="' + c.id + '" style="background:' + c.col + ';color:' + ink(c.col) + '">' + esc(c.name) + '</button>'; }).join('');
+      if (!conf.length) {
+        openSheet('<div class="grab"></div><div class="st">Tidak bisa ditandai</div><div class="muted" style="margin:6px 0 10px">Area ini menimpa blok yang belum terkonfirmasi. Tanda kategori hanya untuk blok terkonfirmasi. Konfirmasi blok dulu di Edit Blok.</div><div id="ukRows">' + rows() + '</div><div class="row" style="margin-top:12px"><button class="btn pri" id="ukNo" style="flex:1;height:50px">Mengerti</button></div>');
+        $('ukNo').onclick = closeSheet; return;
       }
-      newBlock(P);
+      openSheet('<div class="grab"></div><div class="st">Simpan sebagai tanda kategori</div><div class="muted" style="margin:4px 0 8px">Area dipotong mengikuti batas tiap blok. Pilih kategori:</div><div class="tdKs" id="ukCats">' + catRow + '</div><div id="ukRows" style="margin-top:10px">' + rows() + '</div>' +
+        '<div class="row" style="margin-top:12px"><button class="btn" id="ukNo" style="flex:1;height:50px">Batal</button><button class="btn pri" id="ukYes" style="flex:1;height:50px">Simpan ' + conf.length + ' tanda</button></div>');
+      $('ukCats').onclick = function (e) {
+        var bt = e.target.closest && e.target.closest('button[data-cat]'); if (!bt) return;
+        cat = bt.getAttribute('data-cat'); sb = (cat === br.cat) ? br.sub : null;
+        Array.prototype.forEach.call($('ukCats').children, function (x) { x.classList.toggle('on', x === bt); });
+      };
+      $('ukNo').onclick = closeSheet;
+      $('ukYes').onclick = function () {
+        closeSheet(); end();
+        conf.forEach(function (x) { HA.tandaAdd({ id: HA.tandaNewId(), t: 'pg', pts: x.ring, cat: cat, sub: sb, col: null, op: br.op, name: '', note: '', ts: Date.now() }); });
+        var cn = ''; d.cats.forEach(function (c) { if (c.id === cat) cn = c.name; });
+        toast(conf.length + ' tanda ' + cn + ' tersimpan di ' + nB + ' blok. Lihat di Marking (SpidoMap)');
+      };
     }
     map._lakeDraw = { tap: function () {} };
     map.on('move', upd); window.addEventListener('resize', place);

@@ -24,7 +24,17 @@
   function rep(it) {
     if (it.t === 'pt') return it.pts[0];
     if (it.t === 'ln') return it.pts[Math.floor(it.pts.length / 2)];
-    var a = 0, b = 0; it.pts.forEach(function (p) { a += p[0]; b += p[1]; }); return [a / it.pts.length, b / it.pts.length];
+    var a = 0, b = 0; it.pts.forEach(function (p) { a += p[0]; b += p[1]; });
+    var m = [a / it.pts.length, b / it.pts.length];
+    if (it.pts.length < 4 || pipPts(m, it.pts)) return m;
+    // bentuk cekung: titik rata-rata bisa di luar bentuk; ambil tengah garis terlebar di lintang itu (pasti di dalam)
+    var xs = [], P = it.pts, i, j;
+    for (i = 0, j = P.length - 1; i < P.length; j = i++) {
+      var yi = P[i][0], yj = P[j][0]; if ((yi > m[0]) !== (yj > m[0])) xs.push(P[i][1] + (m[0] - yi) / (yj - yi) * (P[j][1] - P[i][1]));
+    }
+    xs.sort(function (x, y) { return x - y; });
+    var best = -1, mid = null; for (i = 0; i + 1 < xs.length; i += 2) if (xs[i + 1] - xs[i] > best) { best = xs[i + 1] - xs[i]; mid = (xs[i] + xs[i + 1]) / 2; }
+    return mid === null ? P[0] : [m[0], mid];
   }
   function itemsOf(b) {
     var bb = bbox(b.pts), out = [];

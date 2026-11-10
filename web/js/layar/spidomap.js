@@ -60,7 +60,7 @@
   function spEnsureMap() {
     if (HA.SP.map) return true;
     if (!window.L) return false;
-    HA.SP.map = L.map('spMap', { zoomControl: false, preferCanvas: true, attributionControl: true }).setView([-4.95, 105.2], 17);
+    HA.SP.map = L.map('spMap', { zoomControl: false, preferCanvas: true, attributionControl: true, fadeAnimation: false }).setView([-4.95, 105.2], 17);
     setBase(HA.SP.map, 'sat');
     zoomInd(HA.SP.map);
     if (window.HzBatas) HA.SP.bat = HzBatas.attach(HA.SP.map, function () { var c = batCfg(); c.osm = false; return c; }, toast);
@@ -313,8 +313,28 @@
     pbDraw(true, dt);
     HA.PB.raf = requestAnimationFrame(pbTick);
   }
+  // saat Play pertama: bila zoom < 15, zoom + geser ke titik awal dengan halus (satu gerakan kontinu).
+  // tile baru dimuat hanya setelah selesai (tanpa muat per frame); zoom >= 15 dibiarkan.
+  function pbIntro() {
+    var m = HA.map, f0 = HA.PB.seq[0]; if (!m || !f0) return false;
+    var st = [f0.lat, f0.lng], z = m.getZoom();
+    if (z >= 15 && m.getBounds().contains(st)) return false;
+    var tz = z < 15 ? 15 : z, layers = [];
+    m.eachLayer(function (l) { if (l instanceof L.GridLayer) { layers.push([l, l.options.updateWhenZooming]); l.options.updateWhenZooming = false; } });
+    HA.PB.flying = true;
+    function fin() {
+      m.off('zoomend', fin); layers.forEach(function (x) { x[0].options.updateWhenZooming = x[1]; }); HA.PB.restore = null;
+      HA.PB.flying = false;
+      if (HA.PB.pendingPlay && HA.PB.open) { HA.PB.pendingPlay = false; pbPlay(true); }
+    }
+    HA.PB.restore = function () { m.off('zoomend', fin); layers.forEach(function (x) { x[0].options.updateWhenZooming = x[1]; }); HA.PB.restore = null; };
+    m.on('zoomend', fin);
+    m.flyTo(st, tz, { duration: Math.min(2.6, 0.5 + 0.45 * Math.max(0, tz - z)), easeLinearity: 0.25 });
+    return true;
+  }
   function pbPlay(on) {
     if (on && HA.PB.flying) { HA.PB.pendingPlay = true; $('pbPlay').innerHTML = '❚❚'; return; }
+    if (on && !HA.PB.intro) { HA.PB.intro = true; if (pbIntro()) { HA.PB.pendingPlay = true; $('pbPlay').innerHTML = '❚❚'; return; } }
     HA.PB.pendingPlay = false;
     HA.PB.playing = on; HA.PB.last = 0; cancelAnimationFrame(HA.PB.raf);
     if (!on && HA.map && HA.PB.open) HA.map.fire('moveend');
@@ -329,24 +349,12 @@
     HA.PB.open = true; $('pbBar').style.display = 'block'; $('pbHud').style.display = 'block';
     pbBuild();
     if (!HA.PB.seq.length) { toast('Belum ada lintasan untuk diputar'); pbClose(); return; }
-    var st0 = [HA.PB.seq[0].lat, HA.PB.seq[0].lng];
-    HA.PB.snap = true; HA.PB.flying = false; HA.PB.pendingPlay = false;
-    // zoom awal 15: bila peta masih lebih jauh, terbang halus ke titik awal; zoom 15 ke atas dibiarkan
-    setTimeout(function () {
-      if (!HA.PB.open) return;
-      HA.map.invalidateSize();
-      var z = HA.map.getZoom(), tz = z < 15 ? 15 : z;
-      if (z < 15 || !HA.map.getBounds().contains(st0)) {
-        HA.PB.flying = true;
-        HA.map.once('moveend', function () { HA.PB.flying = false; if (HA.PB.pendingPlay && HA.PB.open) { HA.PB.pendingPlay = false; pbPlay(true); } });
-        HA.map.flyTo(st0, tz, { duration: 1.5, easeLinearity: 0.2 });
-      }
-      pbDraw(false);
-    }, 80);
+    HA.PB.snap = true; HA.PB.flying = false; HA.PB.pendingPlay = false; HA.PB.intro = false;
+    setTimeout(function () { if (!HA.PB.open) return; HA.map.invalidateSize(); pbDraw(false); }, 80);
     pbSyncUi(); if (HA.DM && HA.DM.sync) HA.DM.sync();
   }
   function pbClose() {
-    HA.PB.open = false; pbPlay(false); if (HA.PB.flying && HA.map) { HA.map.stop(); } HA.PB.flying = false;
+    HA.PB.open = false; pbPlay(false); if (HA.PB.flying && HA.map) { HA.map.stop(); } if (HA.PB.restore) HA.PB.restore(); HA.PB.flying = false;
     $('pbBar').style.display = 'none'; $('pbHud').style.display = 'none';
     if (HA.DM && HA.DM.sync) HA.DM.sync();
     if (HA.PB.mk && HA.map) HA.map.removeLayer(HA.PB.mk);
