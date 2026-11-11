@@ -48,7 +48,12 @@
   };
   function placesBounds() {
     var b = null;
-    places().forEach(function (p) { var c = L.circle([p.lat, p.lng], { radius: p.r }).getBounds(); b = b ? b.extend(c) : c; });
+    places().forEach(function (p) {
+      // Dihitung manual: L.circle().getBounds() butuh lingkaran sudah ada di peta, kalau tidak galat.
+      var dLat = p.r / 111320, dLng = p.r / (111320 * Math.max(0.2, Math.cos(p.lat * Math.PI / 180)));
+      var c = L.latLngBounds([p.lat - dLat, p.lng - dLng], [p.lat + dLat, p.lng + dLng]);
+      b = b ? b.extend(c) : c;
+    });
     return b;
   }
   HA.placeBtn = function (m) {
