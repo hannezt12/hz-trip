@@ -143,6 +143,7 @@ public class TripService extends Service {
     private boolean cekGood = false;
     private long cekStart = 0;
     private long cekFirstFix = 0;
+    private long cekDeadline = 0;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -239,7 +240,21 @@ public class TripService extends Service {
                 afterTrip();
             }
         } else if (ACTION_TRIG.equals(action)) {
-            if (manual || mode == M_REKAM || mode == M_CEK) {
+            if (manual || mode == M_REKAM) {
+                diag("Pemicu Android diabaikan (" + why + "): sudah " + (manual ? "merekam manual" : "merekam"));
+                return;
+            }
+            if (mode == M_CEK) {
+                // Pemicu datang saat Cek singkat (mis. periksa berkala 30 dtk) sedang berjalan. Pemicu Android hanya
+                // datang sekali per perjalanan, jadi beri waktu Cek penuh agar awal perjalanan tidak hilang.
+                if (!pending && now + CEK_MOTION_MS > cekDeadline + 5000L) {
+                    h.removeCallbacks(cekTimeout);
+                    cekDeadline = now + CEK_MOTION_MS;
+                    cekExt = 0;
+                    acquireWl(CEK_MOTION_MS + CEK_EXTEND_MS * CEK_EXTEND_MAX + 30000L);
+                    h.postDelayed(cekTimeout, CEK_MOTION_MS);
+                    diag("Pemicu Android (" + why + ") saat Cek berjalan: Cek diperpanjang " + (CEK_MOTION_MS / 1000L) + " dtk");
+                }
                 return;
             }
             if (!Sched.autoPossible(this, now)) {
@@ -349,6 +364,8 @@ public class TripService extends Service {
         @Override
         public void run() {
             if (mode == M_SIAGA) {
+                // Murah (tidak melakukan apa-apa bila masih segar): daftar ulang pagar/pemicu yang mungkin dibuang sistem.
+                Trig.arm(TripService.this, anchor, Sched.p(TripService.this).getInt("radius", 150));
                 toCek(CEK_PROBE_MS, "periksa berkala");
             }
         }
@@ -370,6 +387,7 @@ public class TripService extends Service {
         cekGood = false;
         cekFirstFix = 0;
         cekStart = System.currentTimeMillis();
+        cekDeadline = cekStart + maxMs;
         diag("Cek mulai (" + why + "), GPS dinyalakan " + (maxMs / 1000L) + " dtk");
         acquireWl(maxMs + CEK_EXTEND_MS * CEK_EXTEND_MAX + 30000L);
         startGps();

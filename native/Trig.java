@@ -29,8 +29,12 @@ final class Trig {
     static final String ACT_PLACE = "com.hz.hztrip.TRIG_PLACE";
     static final String ACT_ALERT2 = "com.hz.hztrip.ALERT2";
     static final String ACT_DISMISS = "com.hz.hztrip.ALERT_X";
+    /** Daftar ulang pemicu paling lambat tiap 6 jam: Google Play services kadang membuang pendaftaran tanpa kabar. */
+    static final long REFRESH_MS = 6L * 60L * 60L * 1000L;
     private static boolean vehOn = false;
+    private static long vehAt = 0L;
     private static String fenceKey = "";
+    private static long fenceAt = 0L;
 
     private Trig() {
     }
@@ -52,7 +56,8 @@ final class Trig {
     /** Pasang (atau perbarui) pemicu. Aman dipanggil berulang. */
     static void arm(Context ctx, Location anchor, int radius) {
         final Context c = ctx.getApplicationContext();
-        if (!vehOn) {
+        final long nowMs = System.currentTimeMillis();
+        if (!vehOn || nowMs - vehAt >= REFRESH_MS) {
             if (actGranted(c)) {
                 try {
                     List<ActivityTransition> l = new ArrayList<ActivityTransition>();
@@ -74,6 +79,7 @@ final class Trig {
                                 }
                             });
                     vehOn = true;
+                    vehAt = nowMs;
                     TripService.diagTo(c, "Pemicu kendaraan dipasang");
                 } catch (Throwable t) {
                     TripService.diagTo(c, "Pemicu kendaraan tidak tersedia: " + t.getMessage());
@@ -87,7 +93,7 @@ final class Trig {
         }
         int r = Math.max(radius, 100);
         String key = String.format(Locale.US, "%.5f,%.5f,%d", anchor.getLatitude(), anchor.getLongitude(), r);
-        if (key.equals(fenceKey)) {
+        if (key.equals(fenceKey) && nowMs - fenceAt < REFRESH_MS) {
             return;
         }
         try {
@@ -108,6 +114,7 @@ final class Trig {
                         }
                     });
             fenceKey = key;
+            fenceAt = nowMs;
             TripService.diagTo(c, "Geofence dipasang (" + r + " m)");
         } catch (Throwable t) {
             TripService.diagTo(c, "Geofence tidak tersedia: " + t.getMessage());
@@ -188,6 +195,17 @@ final class Trig {
         }
         vehOn = false;
         fenceKey = "";
+    }
+
+    /** Paksa pasang ulang semua pemicu (pagar acuan, kendaraan, Tempat), mis. setelah Android membuang pagar. */
+    static void rearm(Context ctx) {
+        Context c = ctx.getApplicationContext();
+        vehOn = false;
+        fenceKey = "";
+        if (Sched.autoPossible(c, System.currentTimeMillis())) {
+            arm(c, anchorOf(c), Sched.p(c).getInt("radius", 150));
+        }
+        armPlaces(c);
     }
 
     static Location anchorOf(Context c) {
