@@ -5,9 +5,11 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
 import android.hardware.Sensor;
@@ -78,6 +80,9 @@ public class TripService extends Service {
     static final long SLOW_WAIT_MS = 10L * 60000L;
     static final long CEK_MOTION_MS = 180000L;
     static final long CEK_PROBE_MS = 30000L;
+    static final long CEK_PLACE_MS = 90000L;      // v0.15.9: Cek singkat saat ada gerakan di dalam Tempat
+    static final long PLACE_COOL_MIN = 60000L;    // jeda sebelum sensor gerak dipasang lagi di dalam Tempat (naik bertahap bila sia-sia)
+    static final long PLACE_COOL_MAX = 180000L;
     static final long PROBE_EVERY_MS = 120000L; // siaga: periksa berkala tiap 2 menit
     static final long REARM_DELAY_MS = 60000L;
     static final long REMIND_MS = 30L * 60000L;
@@ -144,6 +149,10 @@ public class TripService extends Service {
     private long cekStart = 0;
     private long cekFirstFix = 0;
     private long cekDeadline = 0;
+    private boolean cekPlace = false;   // Cek yang dimulai saat tercatat di dalam Tempat
+    private boolean watching = false;   // mode menjaga di dalam Tempat (GPS mati, sensor gerak + kendaraan aktif)
+    private long placeCool = PLACE_COOL_MIN;
+    private long lastPowerT = 0L;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -165,6 +174,47 @@ public class TripService extends Service {
         }
         createChannel();
         loadAnchor();
+        try {
+            IntentFilter pf = new IntentFilter(Intent.ACTION_POWER_CONNECTED);
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(powerRx, pf, 4); // 4 = RECEIVER_NOT_EXPORTED
+            } else {
+                registerReceiver(powerRx, pf);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** Pengisi daya terpasang (mis. adaptor 12 V truk saat mesin hidup): salah satu tanda mau berangkat, tanpa menunggu Android. */
+    private final BroadcastReceiver powerRx = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context c, Intent i) {
+            if (h == null) {
+                return;
+            }
+            h.post(new Runnable() {
+                @Override
+                public void run() {
+                    onPowerConnected();
+                }
+            });
+        }
+    };
+
+    private void onPowerConnected() {
+        long now = System.currentTimeMillis();
+        if (!Sched.p(this).getBoolean("chargeTrig", true)) {
+            return;
+        }
+        if (manual || mode == M_REKAM || mode == M_OFF || now - lastPowerT < 60000L) {
+            return;
+        }
+        if (!Sched.autoPossible(this, now) && !Sched.placeWatch(this, now)) {
+            return;
+        }
+        lastPowerT = now;
+        diag("Pengisi daya terpasang");
+        handleCommand(ACTION_TRIG, "pengisi daya terpasang");
     }
 
     @Override
@@ -186,6 +236,10 @@ public class TripService extends Service {
 
     @Override
     public void onDestroy() {
+        try {
+            unregisterReceiver(powerRx);
+        } catch (Exception ignored) {
+        }
         try {
             stopGps();
             stopPassive();
@@ -245,19 +299,23 @@ public class TripService extends Service {
                 return;
             }
             if (mode == M_CEK) {
-                // Pemicu datang saat Cek singkat (mis. periksa berkala 30 dtk) sedang berjalan. Pemicu Android hanya
-                // datang sekali per perjalanan, jadi beri waktu Cek penuh agar awal perjalanan tidak hilang.
-                if (!pending && now + CEK_MOTION_MS > cekDeadline + 5000L) {
+                // Pemicu datang saat Cek (mis. periksa berkala 30 dtk) sedang berjalan. Pemicu Android hanya datang sekali
+                // per perjalanan, jadi beri waktu Cek penuh agar awal perjalanan tidak hilang.
+                if (cekPlace && !Sched.inPlace(this)) {
+                    cekPlace = false; // sudah keluar dari Tempat: Cek ini menjadi Cek biasa
+                }
+                long dur = cekPlace ? CEK_PLACE_MS : CEK_MOTION_MS;
+                if (!pending && now + dur > cekDeadline + 5000L) {
                     h.removeCallbacks(cekTimeout);
-                    cekDeadline = now + CEK_MOTION_MS;
+                    cekDeadline = now + dur;
                     cekExt = 0;
-                    acquireWl(CEK_MOTION_MS + CEK_EXTEND_MS * CEK_EXTEND_MAX + 30000L);
-                    h.postDelayed(cekTimeout, CEK_MOTION_MS);
-                    diag("Pemicu Android (" + why + ") saat Cek berjalan: Cek diperpanjang " + (CEK_MOTION_MS / 1000L) + " dtk");
+                    acquireWl(dur + CEK_EXTEND_MS * CEK_EXTEND_MAX + 30000L);
+                    h.postDelayed(cekTimeout, dur);
+                    diag("Pemicu Android (" + why + ") saat Cek berjalan: Cek diperpanjang " + (dur / 1000L) + " dtk");
                 }
                 return;
             }
-            if (!Sched.autoPossible(this, now)) {
+            if (!Sched.autoPossible(this, now) && !Sched.placeWatch(this, now)) {
                 if (mode == M_OFF) {
                     shutdown();
                 }
@@ -270,12 +328,18 @@ public class TripService extends Service {
             if (mode == M_SIAGA) {
                 diag("Pemicu Android: " + why);
                 cekAndroid = true;
-                toCek(CEK_MOTION_MS, "pemicu " + why);
+                if (Sched.inPlace(this)) {
+                    cekPlace = true;
+                    toCek(CEK_PLACE_MS, "pemicu " + why + " di Tempat");
+                } else {
+                    cekPlace = false;
+                    toCek(CEK_MOTION_MS, "pemicu " + why);
+                }
             }
         } else if (ACTION_AUTO.equals(action) || ACTION_RESUME.equals(action)) {
             if (ACTION_RESUME.equals(action)) {
                 p.edit().putLong("pausedUntil", 0L).apply();
-                if (!Sched.autoPossible(this, now) && mode == M_OFF) {
+                if (!Sched.autoPossible(this, now) && !Sched.placeWatch(this, now) && mode == M_OFF) {
                     shutdown();
                     return;
                 }
@@ -283,6 +347,8 @@ public class TripService extends Service {
             if (mode == M_OFF) {
                 anchorFresh = false;
                 afterTrip();
+            } else if (watching && mode == M_SIAGA && Sched.autoPossible(this, now)) {
+                enterSiaga(0L); // sudah tidak di Tempat: siaga penuh
             } else {
                 updateNotif();
             }
@@ -309,8 +375,20 @@ public class TripService extends Service {
             @Override
             public void run() {
                 long now = System.currentTimeMillis();
-                if ((mode == M_SIAGA || mode == M_CEK) && !Sched.autoPossible(TripService.this, now)) {
-                    shutdown();
+                if (mode == M_SIAGA || mode == M_CEK) {
+                    if (!Sched.autoPossible(TripService.this, now)) {
+                        if (Sched.placeWatch(TripService.this, now)) {
+                            // Masuk Tempat: GPS mati, hanya menjaga gerak. Cek yang sudah dimulai di Tempat dibiarkan selesai.
+                            if (!watching && !cekPlace) {
+                                placeCool = PLACE_COOL_MIN;
+                                enterTempat(0L);
+                            }
+                        } else {
+                            shutdown();
+                        }
+                    } else if (watching && mode == M_SIAGA) {
+                        enterSiaga(0L);
+                    }
                 }
             }
         });
@@ -323,6 +401,9 @@ public class TripService extends Service {
         long now = System.currentTimeMillis();
         if (!manual && Sched.autoPossible(this, now)) {
             enterSiaga(0L);
+        } else if (!manual && Sched.placeWatch(this, now)) {
+            placeCool = PLACE_COOL_MIN;
+            enterTempat(0L);
         } else if (manual) {
             toRekam();
         } else {
@@ -332,6 +413,9 @@ public class TripService extends Service {
 
     private void enterSiaga(long sigDelayMs) {
         h.removeCallbacksAndMessages(null);
+        watching = false;
+        cekPlace = false;
+        placeCool = PLACE_COOL_MIN;
         stopGps();
         closeWriter();
         releaseWl();
@@ -356,6 +440,44 @@ public class TripService extends Service {
             }, sigDelayMs);
         }
         h.postDelayed(probeRun, PROBE_EVERY_MS);
+        updateNotif();
+        notifyState();
+    }
+
+    /**
+     * v0.15.9: di dalam Tempat. GPS mati dan tidak merekam, tetapi sensor gerak (perangkat keras, bisa membangunkan ponsel dari Doze)
+     * dan deteksi kendaraan tetap aktif. Begitu ada gerakan, GPS menyala singkat (CEK_PLACE_MS); rekaman mulai saat GPS menunjukkan
+     * kendaraan sudah keluar dari lingkaran Tempat. Dengan begitu awal perjalanan tidak lagi menunggu laporan pagar Android yang bisa telat.
+     */
+    private void enterTempat(long sigDelayMs) {
+        h.removeCallbacksAndMessages(null);
+        stopGps();
+        stopPassive();
+        cancelSig();
+        closeWriter();
+        releaseWl();
+        buffer.clear();
+        bufferT.clear();
+        runStart = 0;
+        cekPlace = false;
+        cekAndroid = false;
+        watching = true;
+        mode = M_SIAGA;
+        Sched.p(this).edit().putBoolean("notif", false).apply();
+        diag("Di dalam Tempat: menjaga (GPS mati, sensor gerak dan kendaraan aktif)");
+        Trig.arm(this, null, 0); // hanya pemicu kendaraan
+        if (sigDelayMs <= 0L) {
+            armSig();
+        } else {
+            h.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    if (mode == M_SIAGA && watching) {
+                        armSig();
+                    }
+                }
+            }, sigDelayMs);
+        }
         updateNotif();
         notifyState();
     }
@@ -400,7 +522,7 @@ public class TripService extends Service {
         @Override
         public void run() {
             if (mode == M_CEK) {
-                if (!cekGood && cekExt < CEK_EXTEND_MAX) {
+                if (!cekGood && cekExt < CEK_EXTEND_MAX && !cekPlace) {
                     cekExt++;
                     diag("Belum ada posisi akurat, Cek diperpanjang " + cekExt + "/" + CEK_EXTEND_MAX + " (+" + (CEK_EXTEND_MS / 1000L) + " dtk)");
                     h.postDelayed(this, CEK_EXTEND_MS);
@@ -409,11 +531,18 @@ public class TripService extends Service {
                 diag("Cek selesai tanpa pemicu (" + (cekGood ? "posisi didapat, tidak bergerak" : "tidak ada posisi akurat") + ")");
                 stopGps();
                 releaseWl();
-                boolean na = notifOnly, ca = cekAndroid;
+                boolean na = notifOnly, cp = cekPlace;
                 notifOnly = false;
                 cekAndroid = false;
-                if (!na && Sched.autoPossible(TripService.this, System.currentTimeMillis())) {
+                cekPlace = false;
+                long nt = System.currentTimeMillis();
+                if (!na && Sched.autoPossible(TripService.this, nt)) {
                     enterSiaga(REARM_DELAY_MS);
+                } else if (!na && Sched.placeWatch(TripService.this, nt)) {
+                    if (cp) {
+                        placeCool = Math.min(placeCool * 2L, PLACE_COOL_MAX); // gerak di kantor yang sia-sia: jeda makin panjang
+                    }
+                    enterTempat(placeCool);
                 } else {
                     shutdown();
                 }
@@ -460,6 +589,8 @@ public class TripService extends Service {
         Alert.cancel(this, false);
         notifOnly = false;
         cekAndroid = false;
+        cekPlace = false;
+        watching = false;
         h.removeCallbacks(cekTimeout);
         h.removeCallbacks(probeRun);
         stopPassive();
@@ -559,6 +690,8 @@ public class TripService extends Service {
         cancelRemind();
         notifOnly = false;
         cekAndroid = false;
+        cekPlace = false;
+        watching = false;
         pending = false;
         if (Sched.p(this).getBoolean("notif", false)) {
             Trig.enterNotif(this);
@@ -637,7 +770,13 @@ public class TripService extends Service {
                 @Override
                 public void run() {
                     if (mode == M_SIAGA) {
-                        toCek(CEK_MOTION_MS, "sensor gerak");
+                        if (Sched.inPlace(TripService.this)) {
+                            cekPlace = true;
+                            toCek(CEK_PLACE_MS, "sensor gerak di Tempat");
+                        } else {
+                            cekPlace = false;
+                            toCek(CEK_MOTION_MS, "sensor gerak");
+                        }
                     }
                 }
             });
@@ -755,6 +894,33 @@ public class TripService extends Service {
             if (acc <= ACC_START) {
                 cekGood = true;
             }
+            // Koreksi mandiri status Tempat dari GPS (laporan pagar Android bisa telat atau hilang).
+            boolean placeGate = false;
+            if (cekPlace) {
+                if (Sched.dropOutside(this, loc) > 0) {
+                    diag("GPS menunjukkan sudah di luar Tempat");
+                }
+                placeGate = Sched.inPlace(this);
+            } else if (acc <= 30f && kmh < START_KMH && !Sched.inPlace(this)) {
+                String ids = Sched.insideIds(this, loc);
+                if (ids.length() > 0) {
+                    Sched.p(this).edit().putString("inPlaces", ids).apply();
+                    diag("GPS menunjukkan sedang di dalam Tempat: masuk mode menjaga");
+                    h.removeCallbacks(cekTimeout);
+                    stopGps();
+                    releaseWl();
+                    buffer.clear();
+                    bufferT.clear();
+                    cekAndroid = false;
+                    if (Sched.placeWatch(this, System.currentTimeMillis())) {
+                        placeCool = PLACE_COOL_MIN;
+                        enterTempat(0L);
+                    } else {
+                        shutdown();
+                    }
+                    return;
+                }
+            }
             if (acc <= ACC_START && kmh >= START_KMH) {
                 if (runStart == 0) {
                     runStart = t;
@@ -766,7 +932,21 @@ public class TripService extends Service {
             } else {
                 runStart = 0;
             }
-            if (!go && fenceHit(loc)) {
+            if (placeGate) {
+                go = false; // masih di dalam lingkaran Tempat: tunggu sampai keluar (titik tetap ditampung)
+                if (acc <= ACC_START && kmh >= START_KMH) {
+                    // kendaraan bergerak di dalam Tempat: beri waktu sampai keluar lingkaran
+                    long ntm = System.currentTimeMillis();
+                    if (ntm + 60000L > cekDeadline + 5000L) {
+                        h.removeCallbacks(cekTimeout);
+                        cekDeadline = ntm + 60000L;
+                        cekExt = 0;
+                        acquireWl(60000L + 30000L + CEK_EXTEND_MS * CEK_EXTEND_MAX);
+                        h.postDelayed(cekTimeout, 60000L);
+                    }
+                }
+            }
+            if (!go && !placeGate && fenceHit(loc)) {
                 go = true;
                 why = "keluar pagar " + Math.round(loc.distanceTo(anchor)) + " m, akurasi " + Math.round(acc) + " m";
             }
@@ -1063,6 +1243,9 @@ public class TripService extends Service {
         } else if (mode == M_CEK) {
             title = "HZ Trip memeriksa gerakan";
             text = "GPS menyala sebentar.";
+        } else if (watching) {
+            title = "HZ Trip menjaga di Tempat";
+            text = "GPS mati. Merekam otomatis saat kendaraan keluar dari Tempat.";
         } else {
             title = "HZ Trip siaga";
             text = "Merekam otomatis saat kendaraan jalan.";

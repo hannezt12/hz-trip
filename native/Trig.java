@@ -123,14 +123,32 @@ final class Trig {
 
     /**
      * Pasang pagar "Tempat" (rumah, kantor, dll). Format prefs "places": "lat,lng,radius;lat,lng,radius".
-     * Masuk = app diam total; keluar = rekam otomatis aktif lagi. Pagar ini tidak ikut dicabut oleh disarm().
+     * Masuk = tidak merekam (app hanya menjaga gerak); keluar = rekam otomatis aktif lagi. Pagar ini tidak ikut dicabut oleh disarm().
      */
     static void armPlaces(Context ctx) {
+        armPlaces(ctx, false);
+    }
+
+    /**
+     * force = true (boot, app diperbarui, galat pagar): daftar ulang dan anggap belum ada di Tempat mana pun.
+     * force = false: lewati bila daftar Tempat tidak berubah dan pendaftaran masih baru (kurang dari 6 jam), supaya membuka app
+     * tidak mengosongkan status "sedang di Tempat" dan tidak membuat selang palsu "tidak di Tempat".
+     */
+    static void armPlaces(Context ctx, boolean force) {
         final Context c = ctx.getApplicationContext();
         try {
-            Sched.p(c).edit().putString("inPlaces", "").apply();
             final PendingIntent pp = pi(c, ACT_PLACE, 73);
-            String s = Sched.p(c).getString("places", "");
+            final String s0 = Sched.p(c).getString("places", "");
+            final String s = s0 == null ? "" : s0;
+            final long nowMs = System.currentTimeMillis();
+            String sig = Sched.p(c).getString("placesSig", null);
+            boolean changed = sig == null || !s.equals(sig);
+            if (!force && !changed && nowMs - Sched.p(c).getLong("placesAt", 0L) < REFRESH_MS) {
+                return;
+            }
+            if (force || changed) {
+                Sched.p(c).edit().putString("inPlaces", "").apply();
+            }
             final List<Geofence> gl = new ArrayList<Geofence>();
             if (s != null && s.length() > 0) {
                 String[] items = s.split(";");
@@ -157,6 +175,7 @@ final class Trig {
             LocationServices.getGeofencingClient(c).removeGeofences(pp).addOnCompleteListener(new OnCompleteListener<Void>() {
                 @Override
                 public void onComplete(Task<Void> t) {
+                    Sched.p(c).edit().putString("placesSig", s).putLong("placesAt", nowMs).apply();
                     if (n == 0) {
                         TripService.diagTo(c, "Tempat: tidak ada pagar");
                         return;
@@ -205,7 +224,7 @@ final class Trig {
         if (Sched.autoPossible(c, System.currentTimeMillis())) {
             arm(c, anchorOf(c), Sched.p(c).getInt("radius", 150));
         }
-        armPlaces(c);
+        armPlaces(c, true);
     }
 
     static Location anchorOf(Context c) {

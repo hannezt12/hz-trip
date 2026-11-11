@@ -11,7 +11,7 @@ public class ScheduleReceiver extends BroadcastReceiver {
         try {
             String a = intent == null ? null : intent.getAction();
             if (Intent.ACTION_BOOT_COMPLETED.equals(a) || Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)) {
-                Trig.armPlaces(context);
+                Trig.armPlaces(context, true);
             }
             Sched.evaluate(context);
             if (Sched.p(context).getBoolean("notif", false) && TripService.mode == TripService.M_OFF) {

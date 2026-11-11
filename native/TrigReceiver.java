@@ -65,7 +65,8 @@ public class TrigReceiver extends BroadcastReceiver {
             if (why == null) {
                 return;
             }
-            if (!Sched.autoPossible(c, System.currentTimeMillis())) {
+            long tn = System.currentTimeMillis();
+            if (!Sched.autoPossible(c, tn) && !Sched.placeWatch(c, tn)) {
                 TripService.diagTo(c, "Pemicu diabaikan (" + why + "): " + skipReason(c));
                 return;
             }
@@ -168,6 +169,8 @@ public class TrigReceiver extends BroadcastReceiver {
             TripService sv = TripService.instance;
             if (sv != null) {
                 sv.evaluateAsync();
+            } else if (Sched.placeWatch(c, System.currentTimeMillis())) {
+                wake(c, TripService.ACTION_AUTO, "tempat");
             }
         }
     }

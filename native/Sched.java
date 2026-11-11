@@ -8,6 +8,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.location.Location;
 import android.os.Build;
 
 import java.util.Calendar;
@@ -126,15 +127,118 @@ final class Sched {
         return best;
     }
 
-    /** Berada di dalam salah satu "Tempat" (pagar virtual rumah/kantor dll): app diam total. */
+    /** Berada di dalam salah satu "Tempat" (pagar virtual rumah/kantor dll): tidak merekam, GPS mati. */
     static boolean inPlace(Context c) {
         String s = p(c).getString("inPlaces", "");
         return s != null && s.length() > 0;
     }
 
-    /** v0.15.1: merekam otomatis kapan saja (tanpa jadwal), kecuali sedang di dalam salah satu Tempat. */
+    /** v0.15.1: merekam otomatis kapan saja (tanpa jadwal), kecuali sedang di dalam salah satu Tempat (di sana app hanya menjaga, lihat placeWatch). */
     static boolean autoPossible(Context c, long now) {
         return autoEnabled(c) && now >= pausedUntil(c) && !inPlace(c);
+    }
+
+    /** v0.15.9: boleh merekam otomatis tetapi sedang di dalam Tempat: app "menjaga" (sensor gerak + kendaraan), GPS mati. */
+    static boolean placeWatch(Context c, long now) {
+        return autoEnabled(c) && now >= pausedUntil(c) && inPlace(c);
+    }
+
+    /** Satu Tempat: id "hzp<indeks>" sama dengan requestId pagar di Trig.armPlaces. */
+    static final class Pl {
+        String id;
+        double lat;
+        double lng;
+        float r;
+    }
+
+    static java.util.ArrayList<Pl> places(Context c) {
+        java.util.ArrayList<Pl> out = new java.util.ArrayList<Pl>();
+        String s = p(c).getString("places", "");
+        if (s == null || s.length() == 0) {
+            return out;
+        }
+        String[] items = s.split(";");
+        for (int i = 0; i < items.length && i < 90; i++) {
+            String[] a = items[i].split(",");
+            if (a.length < 3) {
+                continue;
+            }
+            try {
+                Pl x = new Pl();
+                x.id = "hzp" + i;
+                x.lat = Double.parseDouble(a[0]);
+                x.lng = Double.parseDouble(a[1]);
+                x.r = Math.max(100f, Float.parseFloat(a[2]));
+                out.add(x);
+            } catch (Exception ignored) {
+            }
+        }
+        return out;
+    }
+
+    private static float distTo(Location loc, Pl x) {
+        float[] d = new float[1];
+        Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), x.lat, x.lng, d);
+        return d[0];
+    }
+
+    /** Buang dari "inPlaces" Tempat yang menurut GPS pasti sudah dilewati (di luar lingkaran). Mengembalikan jumlah yang dibuang. */
+    static int dropOutside(Context c, Location loc) {
+        if (!loc.hasAccuracy() || loc.getAccuracy() > 150f) {
+            return 0;
+        }
+        String cur = p(c).getString("inPlaces", "");
+        if (cur == null || cur.length() == 0) {
+            return 0;
+        }
+        float acc = loc.getAccuracy();
+        java.util.ArrayList<Pl> all = places(c);
+        StringBuilder keep = new StringBuilder();
+        int dropped = 0;
+        for (String id : cur.split(",")) {
+            Pl x = null;
+            for (Pl q : all) {
+                if (q.id.equals(id)) {
+                    x = q;
+                    break;
+                }
+            }
+            boolean out = x == null;
+            if (x != null) {
+                float d = distTo(loc, x);
+                out = acc <= 50f ? d >= x.r : d - acc >= x.r;
+            }
+            if (out) {
+                dropped++;
+            } else {
+                if (keep.length() > 0) {
+                    keep.append(',');
+                }
+                keep.append(id);
+            }
+        }
+        if (dropped > 0) {
+            p(c).edit().putString("inPlaces", keep.toString()).apply();
+        }
+        return dropped;
+    }
+
+    /** Id Tempat yang pasti melingkupi posisi ini (akurasi baik dan seluruh lingkaran akurasi di dalam). Kosong bila tidak ada. */
+    static String insideIds(Context c, Location loc) {
+        if (!loc.hasAccuracy() || loc.getAccuracy() > 30f) {
+            return "";
+        }
+        float acc = loc.getAccuracy();
+        StringBuilder sb = new StringBuilder();
+        for (Pl x : places(c)) {
+            if (distTo(loc, x) + acc <= x.r) {
+                if (sb.length() > 0) {
+                    sb.append(',');
+                }
+                sb.append(x.id);
+            }
+        }
+        return sb.toString();
     }
 
     static void arm(Context c) {
@@ -167,7 +271,7 @@ final class Sched {
     /** Dipanggil saat alarm batas jendela, setelah boot, ganti jam, atau saat jadwal diubah. */
     static void evaluate(Context c) {
         long now = System.currentTimeMillis();
-        if (autoPossible(c, now)) {
+        if (autoPossible(c, now) || placeWatch(c, now)) {
             try {
                 Intent i = new Intent(c, TripService.class).setAction(TripService.ACTION_AUTO);
                 if (Build.VERSION.SDK_INT >= 26) {
