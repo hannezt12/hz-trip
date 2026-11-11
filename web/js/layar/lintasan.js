@@ -52,6 +52,7 @@
     setTiles();
     makeLocate(HA.map);
     demButtons(HA.map);
+    if (HA.placeBtn) { HA.placeBtn(HA.map); HA.drawPlaces(); }
     return true;
   }
   // foto satelit hanya ada sampai zoom tertentu: di atasnya gambar diperbesar (maxNativeZoom), peta tetap bisa di-zoom sampai 22

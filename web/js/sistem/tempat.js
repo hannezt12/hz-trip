@@ -18,7 +18,7 @@
     for (var i = 0; i < ids.length; i++) { var p = places()[+ids[i].replace('hzp', '')]; if (p) return p; }
     return null;
   };
-  function save() { HA.saveSettings(); HA.pushPlaces(); HA.renderTempat(); if (HA.renderSetMenu && !S.setPage) HA.renderSetMenu(); }
+  function save() { HA.saveSettings(); HA.pushPlaces(); HA.renderTempat(); if (HA.drawPlaces) HA.drawPlaces(); if (HA.renderSetMenu && !S.setPage) HA.renderSetMenu(); }
   HA.renderTempat = function () {
     var box = $('tempatBox');
     if (!box) return;
@@ -29,6 +29,56 @@
         '<button class="btn sm" data-tp="' + i + '">Ubah</button></div>';
     }).join('') : '<div class="muted">Belum ada tempat. Berdiri di rumah atau kantor, lalu ketuk tombol di bawah.</div>';
   };
+  // ---------- cincin Tempat di peta utama ----------
+  function fmtR(r) { return r >= 1000 ? (Math.round(r / 100) / 10) + ' km' : r + ' m'; }
+  var plLay = null;
+  HA.drawPlaces = function () {
+    var m = HA.map;
+    if (!m || !window.L) return;
+    if (plLay && plLay._tpMap !== m) plLay = null;
+    if (!plLay) { plLay = L.layerGroup(); plLay._tpMap = m; }
+    plLay.clearLayers();
+    if (!S.settings.showPlaces) { if (m.hasLayer(plLay)) m.removeLayer(plLay); return; }
+    if (!m.hasLayer(plLay)) plLay.addTo(m);
+    places().forEach(function (p) {
+      L.circle([p.lat, p.lng], { radius: p.r, color: '#FFB020', weight: 3, opacity: 0.95, dashArray: '10 7', fillColor: '#FFB020', fillOpacity: 0.1, interactive: false }).addTo(plLay);
+      L.circleMarker([p.lat, p.lng], { radius: 5, color: '#fff', weight: 2, fillColor: '#FFB020', fillOpacity: 1, interactive: false })
+        .bindTooltip(esc(p.name) + ' · ' + fmtR(p.r), { permanent: true, direction: 'top', offset: [0, -6], className: 'tp-tip' }).addTo(plLay);
+    });
+  };
+  function placesBounds() {
+    var b = null;
+    places().forEach(function (p) { var c = L.circle([p.lat, p.lng], { radius: p.r }).getBounds(); b = b ? b.extend(c) : c; });
+    return b;
+  }
+  HA.placeBtn = function (m) {
+    if (!m || !window.L || m._tpBtn) return;
+    var Ctl = L.Control.extend({
+      options: { position: 'bottomright' },
+      onAdd: function () {
+        var b = L.DomUtil.create('button', 'locbtn tpbtn leaflet-control');
+        b.type = 'button'; b.setAttribute('aria-label', 'Tampilkan Tempat (pagar virtual)');
+        b.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5" stroke-dasharray="3.2 3"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg><span>Tempat</span>';
+        L.DomEvent.disableClickPropagation(b);
+        b.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+        function sync() { b.classList.toggle('on', !!S.settings.showPlaces); }
+        b.onclick = function () {
+          S.settings.showPlaces = !S.settings.showPlaces;
+          HA.saveSettings(); sync(); HA.drawPlaces();
+          if (!S.settings.showPlaces) { HA.toast('Cincin Tempat disembunyikan'); return; }
+          var ps = places();
+          if (!ps.length) { HA.toast('Belum ada Tempat. Buat di Pengaturan > Tempat'); return; }
+          var bb = placesBounds();
+          if (bb && !m.getBounds().intersects(bb)) m.fitBounds(bb, { padding: [30, 30], maxZoom: 17 });
+          HA.toast(ps.length + ' Tempat ditampilkan');
+        };
+        m._tpBtn = b; sync();
+        return b;
+      }
+    });
+    new Ctl().addTo(m);
+  };
+
   function here() {
     return new Promise(function (res, rej) {
       if (!navigator.geolocation) { rej(new Error('Lokasi tidak tersedia')); return; }
@@ -44,11 +94,46 @@
     HA.openSheet('<div class="grab"></div><div class="st">' + (p ? 'UBAH TEMPAT' : 'TEMPAT BARU') + '</div>' +
       '<div class="muted" style="margin:6px 0 4px">Nama</div><input type="text" id="tpName" maxlength="30" value="' + esc(def) + '">' +
       '<div class="muted" style="margin:10px 0 4px">Radius (meter, minimal 100; 1000 = 1 km)</div><input type="number" id="tpR" inputmode="numeric" min="100" step="50" value="' + (p ? p.r : 500) + '">' +
+      '<div id="tpMap"></div><div class="muted" style="margin-top:4px;font-size:.8em">Lingkaran oranye = batas Tempat. Ketuk peta untuk memindahkan pusat.</div>' +
       '<div class="muted" id="tpPos" style="margin-top:10px">' + (p ? 'Pusat: ' + p.lat.toFixed(5) + ', ' + p.lng.toFixed(5) : 'Mengambil lokasi…') + '</div>' +
       (p ? '<button class="btn" id="tpHere" style="width:100%;margin-top:8px">Pindahkan pusat ke lokasi saya sekarang</button>' : '') +
       '<div class="row" style="margin-top:12px"><button class="btn" id="tpCancel" style="flex:1">Batal</button><button class="btn pri" id="tpSave" style="flex:1.4"' + (p ? '' : ' disabled') + '>Simpan</button></div>' +
       (p ? '<button class="btn danger" id="tpDel" style="width:100%;margin-top:8px">Hapus tempat</button>' : ''));
-    function setPos(q) { cur = q; $('tpPos').textContent = 'Pusat: ' + q.lat.toFixed(5) + ', ' + q.lng.toFixed(5) + (q.acc ? ' (±' + Math.round(q.acc) + ' m)' : ''); $('tpSave').disabled = false; }
+    var pm = null, ring = null, ctr = null;
+    function ringR() { var r = +$('tpR').value; return isFinite(r) && r > 0 ? r : 100; }
+    function pvDraw(fit) {
+      if (!pm) return;
+      if (ring) { pm.removeLayer(ring); ring = null; }
+      if (ctr) { pm.removeLayer(ctr); ctr = null; }
+      if (!cur) return;
+      var bad = ringR() < 100, col = bad ? '#FF5B50' : '#FFB020';
+      ring = L.circle([cur.lat, cur.lng], { radius: ringR(), color: col, weight: 3, dashArray: '10 7', fillColor: col, fillOpacity: 0.14, interactive: false }).addTo(pm);
+      ctr = L.circleMarker([cur.lat, cur.lng], { radius: 6, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1, interactive: false }).addTo(pm);
+      if (fit) pm.fitBounds(ring.getBounds(), { padding: [14, 14], animate: false });
+    }
+    function setPos(q, byTap) {
+      cur = q;
+      $('tpPos').textContent = 'Pusat: ' + q.lat.toFixed(5) + ', ' + q.lng.toFixed(5) + (q.acc ? ' (±' + Math.round(q.acc) + ' m)' : '') + (byTap ? ' (dipilih di peta)' : '');
+      $('tpSave').disabled = false;
+      pvDraw(!byTap);
+    }
+    if (window.L && HA.setBase) {
+      setTimeout(function () {
+        if (!$('tpMap') || pm) return;
+        var c0 = cur ? [cur.lat, cur.lng] : (HA.map ? [HA.map.getCenter().lat, HA.map.getCenter().lng] : [-4.95, 105.2]);
+        pm = L.map('tpMap', { zoomControl: true, attributionControl: false, preferCanvas: true, maxZoom: 22 }).setView(c0, 16);
+        HA.setBase(pm);
+        places().forEach(function (o, k) {
+          if (k === idx) return;
+          L.circle([o.lat, o.lng], { radius: o.r, color: '#8FB4FF', weight: 2, dashArray: '4 6', fillOpacity: 0.05, interactive: false }).addTo(pm);
+        });
+        pm.on('click', function (e) { setPos({ lat: e.latlng.lat, lng: e.latlng.lng }, true); });
+        pvDraw(true);
+        setTimeout(function () { if (pm) { pm.invalidateSize(); pvDraw(true); } }, 320);
+      }, 60);
+      HA.onSheetClose = function () { if (pm) { try { pm.remove(); } catch (e) {} pm = null; } };
+      $('tpR').oninput = function () { pvDraw(true); };
+    }
     if (!p) here().then(setPos).catch(function (e) { if ($('tpPos')) $('tpPos').textContent = e.message; });
     if (p) $('tpHere').onclick = function () { $('tpPos').textContent = 'Mengambil lokasi…'; here().then(setPos).catch(function (e) { $('tpPos').textContent = e.message; }); };
     $('tpCancel').onclick = HA.closeSheet;

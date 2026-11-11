@@ -264,7 +264,7 @@
       '<div class="pgrid" style="margin-top:4px"><div><div class="muted">Dari / tanggal</div><input type="date" id="pFrom" value="' + P.day + '" max="' + today + '"></div>' +
       '<div><div class="muted">Sampai</div><input type="date" id="pTo" value="' + P.day + '" max="' + today + '"></div></div>' +
       '<div id="pFilters"><div class="h">UNIT</div><div class="pgrid" id="pUnits">' + S.settings.units.map(function (u, i) { return '<label><input type="checkbox" data-u="' + i + '" checked> ' + esc(u) + '</label>'; }).join('') + '</div>' +
-      '<div class="h">LABEL</div><div class="pgrid"><label><input type="checkbox" data-l="Kerja" checked> Kerja</label><label><input type="checkbox" data-l="Pribadi" checked> Pribadi</label></div></div>' +
+      '<div class="h">LABEL</div><div class="pgrid"><label><input type="checkbox" data-l="Kerja" checked> Kerja</label><label><input type="checkbox" data-l="Pribadi" checked> Pribadi</label></div><div class="muted" style="margin-top:4px">Dua-duanya dicentang: laporan dipisah per label (halaman dan kecepatan maksimal sendiri-sendiri), plus ringkasan akhir.</div></div>' +
       '<div class="h">ISI TAMBAHAN</div>' +
       '<label><input type="checkbox" id="pSum" checked> Ringkasan di bawah tabel</label>' +
       '<label><input type="checkbox" id="pCol" checked> Warnai kecepatan maks (kuning dan merah)</label>' +

@@ -162,10 +162,34 @@
   }
 
   // ================= PDF =================
+  // Ringkasan satu label (dipakai halaman ringkasan Kerja dan Pribadi)
+  function labelStat(label, ds) {
+    var r = { label: label, days: ds.length, n: 0, km: 0, max: 0, du: 0, w: 0, avg: 0 };
+    ds.forEach(function (d) { d.trips.forEach(function (x) { r.n++; r.km += x.t.km; r.max = Math.max(r.max, x.t.max); r.du += x.t.durSec; r.w += x.t.avg * x.t.durSec; }); });
+    r.avg = r.du ? r.w / r.du : 0;
+    return r;
+  }
+  // Kerja dan Pribadi tidak pernah dicampur: satu label = laporan khusus label itu; dua label = bagian terpisah + ringkasan akhir.
   function buildPdf(days, opts, jsPDFCtor) {
     opts = opts || {};
+    if (!opts._part && !opts.group && opts.scope !== 'trip') {
+      var labs = ['Kerja', 'Pribadi'].filter(function (l) { return days.some(function (d) { return d.trips.some(function (x) { return x.label === l; }); }); });
+      if (labs.length === 1) return buildPdf(days, Object.assign({}, opts, { _part: true, labelTag: labs[0] }), jsPDFCtor);
+      if (labs.length === 2) {
+        var JS0 = jsPDFCtor || (typeof window !== 'undefined' && window.jspdf && window.jspdf.jsPDF);
+        var shared = new JS0({ unit: 'mm', format: 'a4' }), sums = [];
+        labs.forEach(function (l, i) {
+          var ds = days.map(function (d) { var c = Object.assign({}, d); c.trips = d.trips.filter(function (x) { return x.label === l; }); return c; }).filter(function (d) { return d.trips.length; });
+          sums.push(labelStat(l, ds));
+          buildPdf(ds, Object.assign({}, opts, { _part: true, labelTag: l, _doc: shared, _cont: i > 0, _noFooter: i < labs.length - 1, _sumPage: i === labs.length - 1 ? sums : null }), jsPDFCtor);
+        });
+        return shared;
+      }
+    }
     var JS = jsPDFCtor || (typeof window !== 'undefined' && window.jspdf && window.jspdf.jsPDF);
-    var doc = new JS({ unit: 'mm', format: 'a4' });
+    var doc = opts._doc || new JS({ unit: 'mm', format: 'a4' });
+    if (opts._cont) doc.addPage();
+    var hdr = 'HZ TRIP' + (opts.labelTag ? ' | LAPORAN ' + opts.labelTag.toUpperCase() : '');
     var W = 210, M = 14, anyCheck = false;
     var printed = (function () { var d = new Date(); return d.getDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'][d.getMonth()] + ' ' + d.getFullYear() + ', ' + T.pad(d.getHours()) + '.' + T.pad(d.getMinutes()); })();
     var driver = opts.driver || '';
@@ -182,7 +206,7 @@
     if (opts.group && days.length) { groupPage(); if (!opts.perDay) days = []; }
     function groupPage() {
       var g = opts.group, first = days[0].ymd, last = days[days.length - 1].ymd;
-      txt('HZ TRIP', M, 17, 9, true, '#4A5A63');
+      txt(hdr, M, 17, 9, true, '#4A5A63');
       txt('Laporan Perjalanan', M, 25, 18, true);
       txt(first === last ? T.dateLong(first) : T.dateLong(first) + ' - ' + T.dateLong(last), W - M, 25, 10, true, '#161C20', 'right');
       doc.setDrawColor.apply(doc, hex('#161C20')); doc.setLineWidth(0.6); doc.line(M, 28, W - M, 28);
@@ -235,7 +259,7 @@
       var BLN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
       var mm = (opts.month || (days[0] && days[0].ymd.slice(0, 7)) || '').split('-');
       var title = mm.length === 2 ? BLN[+mm[1] - 1] + ' ' + mm[0] : '';
-      txt('HZ TRIP', M, 17, 9, true, '#4A5A63');
+      txt(hdr, M, 17, 9, true, '#4A5A63');
       txt('Rekap Bulanan Perjalanan', M, 25, 18, true);
       txt(title, W - M, 25, 13, true, '#161C20', 'right');
       doc.setDrawColor.apply(doc, hex('#161C20')); doc.setLineWidth(0.6); doc.line(M, 28, W - M, 28);
@@ -292,7 +316,7 @@
       if (di > 0 || opts.group) doc.addPage();
       anyCheck = false;
       var s = sumDay(day);
-      txt('HZ TRIP', M, 17, 9, true, '#4A5A63');
+      txt(hdr, M, 17, 9, true, '#4A5A63');
       txt(single ? 'Laporan Perjalanan' : (opts.scope === 'range' ? 'Laporan Perjalanan' : 'Laporan Harian Perjalanan'), M, 25, 18, true);
       txt(T.dateLong(day.ymd), W - M, 25, 13, true, '#161C20', 'right');
       doc.setDrawColor.apply(doc, hex('#161C20')); doc.setLineWidth(0.6); doc.line(M, 28, W - M, 28);
@@ -350,7 +374,7 @@
       } else if (opts.summary !== false) {
         txt('RINGKASAN', M, y, 8, true, '#4A5A63'); y += 3;
         var bw = (W - 2 * M - 8) / 3;
-        var cards = [
+        var cards = opts.labelTag ? [[opts.labelTag, s.n, s.km, s.max]] : [
           ['Semua unit', s.n, s.km, s.max],
           ['Kerja', s.nK, s.kerja, s.mK],
           ['Pribadi', s.nP, s.pribadi, s.mP]
@@ -374,18 +398,18 @@
 
     if (days.length > 1 && opts.scope !== 'bulan') {
       doc.addPage();
-      txt('HZ TRIP', M, 17, 9, true, '#4A5A63');
+      txt(hdr, M, 17, 9, true, '#4A5A63');
       txt('Rekap Rentang Tanggal', M, 25, 18, true);
       doc.setDrawColor.apply(doc, hex('#161C20')); doc.setLineWidth(0.6); doc.line(M, 28, W - M, 28);
-      var tot = { n: 0, km: 0, max: 0, k: 0, p: 0 };
+      var tot = { n: 0, km: 0, max: 0, k: 0, p: 0 }, one = !!opts.labelTag;
       var rows = days.map(function (d) {
         var s = sumDay(d); tot.n += s.n; tot.km += s.km; tot.max = Math.max(tot.max, s.max); tot.k += s.kerja; tot.p += s.pribadi;
-        return [T.dateLong(d.ymd), String(s.n), T.km1(s.kerja), T.km1(s.pribadi), T.km1(s.km), String(Math.round(s.max))];
+        return one ? [T.dateLong(d.ymd), String(s.n), T.km1(s.km), String(Math.round(s.max))] : [T.dateLong(d.ymd), String(s.n), T.km1(s.kerja), T.km1(s.pribadi), T.km1(s.km), String(Math.round(s.max))];
       });
-      rows.push(['Total', String(tot.n), T.km1(tot.k), T.km1(tot.p), T.km1(tot.km), String(Math.round(tot.max))]);
+      rows.push(one ? ['Total', String(tot.n), T.km1(tot.km), String(Math.round(tot.max))] : ['Total', String(tot.n), T.km1(tot.k), T.km1(tot.p), T.km1(tot.km), String(Math.round(tot.max))]);
       doc.autoTable({
         startY: 33, margin: { left: M, right: M }, theme: 'grid',
-        head: [['Tanggal', 'Trip', 'Kerja km', 'Pribadi km', 'Total km', 'Maks km/j']], body: rows,
+        head: [one ? ['Tanggal', 'Trip', 'Total km', 'Maks km/j'] : ['Tanggal', 'Trip', 'Kerja km', 'Pribadi km', 'Total km', 'Maks km/j']], body: rows,
         styles: { font: 'helvetica', fontSize: 10, cellPadding: 2, lineColor: [221, 227, 230], lineWidth: 0.2, textColor: hex('#161C20') },
         headStyles: { fillColor: hex('#E9EEF0'), textColor: hex('#2C3A41'), fontStyle: 'bold', fontSize: 9 },
         columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
@@ -393,6 +417,32 @@
       });
     }
 
+    if (opts._sumPage) {
+      doc.addPage();
+      txt('HZ TRIP', M, 17, 9, true, '#4A5A63');
+      txt('Ringkasan Kerja dan Pribadi', M, 25, 18, true);
+      doc.setDrawColor.apply(doc, hex('#161C20')); doc.setLineWidth(0.6); doc.line(M, 28, W - M, 28);
+      var srows = opts._sumPage.map(function (r) { return [r.label, String(r.days), String(r.n), T.km1(r.km), String(Math.round(r.max)), String(Math.round(r.avg))]; });
+      doc.autoTable({
+        startY: 33, margin: { left: M, right: M }, theme: 'grid',
+        head: [['Label', 'Hari', 'Trip', 'Total km', 'Maks km/j', 'Rata2 km/j']], body: srows,
+        styles: { font: 'helvetica', fontSize: 10, cellPadding: 2, lineColor: [221, 227, 230], lineWidth: 0.2, textColor: hex('#161C20') },
+        headStyles: { fillColor: hex('#E9EEF0'), textColor: hex('#2C3A41'), fontStyle: 'bold', fontSize: 9 },
+        columnStyles: { 0: { fontStyle: 'bold' }, 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+        didParseCell: function (d) {
+          if (d.section === 'head' && d.column.index >= 1) d.cell.styles.halign = 'right';
+          if (d.section === 'body' && d.column.index === 4 && opts.color !== false) {
+            var v = opts._sumPage[d.row.index].max;
+            d.cell.styles.fontStyle = 'bold';
+            if (v > 90) { d.cell.styles.fillColor = hex('#FFB9B2'); d.cell.styles.textColor = hex('#6E0F08'); }
+            else if (v > 60) { d.cell.styles.fillColor = hex('#FFE98A'); d.cell.styles.textColor = hex('#4A3A00'); }
+          }
+        }
+      });
+      txt('Kecepatan maksimal dan rata-rata dihitung terpisah untuk setiap label.', M, doc.lastAutoTable.finalY + 6, 8, false, '#4A5A63');
+    }
+
+    if (opts._noFooter) return doc;
     var pages = doc.getNumberOfPages();
     for (var p = 1; p <= pages; p++) {
       doc.setPage(p);
