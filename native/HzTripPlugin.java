@@ -167,7 +167,9 @@ public class HzTripPlugin extends Plugin {
         o.put("overlay", Alert.canPopup(ctx));
         o.put("popupSound", Sched.p(ctx).getString("popupSound", "alarm"));
         o.put("popupName", Sched.p(ctx).getString("popupUriName", ""));
-        o.put("auto", Sched.autoEnabled(ctx));
+        o.put("auto", Sched.autoPref(ctx));
+        o.put("masterOff", Sched.masterOff(ctx));
+        o.put("chargeTrig", Sched.p(ctx).getBoolean("chargeTrig", true));
         o.put("winEnd", Sched.windowEnd(ctx, now));
         o.put("nextStart", Sched.nextStart(ctx, now));
         o.put("paused", now < Sched.pausedUntil(ctx));
@@ -312,6 +314,39 @@ public class HzTripPlugin extends Plugin {
         o.put("text", sb.toString());
         o.put("n", n);
         call.resolve(o);
+    }
+
+    /** v0.15.10: off=true matikan total (hentikan layanan, sensor, semua pagar); off=false nyalakan lagi. */
+    @PluginMethod
+    public void masterOff(PluginCall call) {
+        Context ctx = getContext();
+        boolean off = Boolean.TRUE.equals(call.getBoolean("off", true));
+        try {
+            if (off) {
+                Sched.p(ctx).edit().putBoolean("masterOff", true).apply();
+                if (TripService.instance != null) {
+                    ctx.startService(new Intent(ctx, TripService.class).setAction(TripService.ACTION_MASTER_OFF));
+                } else {
+                    Sched.p(ctx).edit().putBoolean("manual", false).putBoolean("notif", false).apply();
+                    Trig.disarmAll(ctx);
+                    Sched.arm(ctx);
+                }
+            } else {
+                Sched.p(ctx).edit().putBoolean("masterOff", false).putLong("pausedUntil", 0L).apply();
+                Trig.armPlaces(ctx, true);
+                Sched.evaluate(ctx);
+            }
+        } catch (Exception e) {
+            call.reject(String.valueOf(e.getMessage()));
+            return;
+        }
+        call.resolve(statusObject());
+    }
+
+    @PluginMethod
+    public void setCharge(PluginCall call) {
+        Sched.p(getContext()).edit().putBoolean("chargeTrig", !Boolean.FALSE.equals(call.getBoolean("on", true))).apply();
+        call.resolve(statusObject());
     }
 
     @PluginMethod

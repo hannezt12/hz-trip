@@ -60,6 +60,7 @@ public class TripService extends Service {
     public static final String ACTION_RESUME = "com.hz.hztrip.RESUME"; // lanjutkan otomatis
     public static final String ACTION_NOTIF = "com.hz.hztrip.NOTIF";   // masuk mode Notifikasi aktif
     public static final String ACTION_OFF = "com.hz.hztrip.OFF";       // matikan semua
+    public static final String ACTION_MASTER_OFF = "com.hz.hztrip.MASTEROFF"; // v0.15.10: matikan total
     public static final String ACTION_TRIG = "com.hz.hztrip.TRIG";     // pemicu dari Android (kendaraan / geofence)
 
     static final String CHANNEL_ID = "hztrip_rec";
@@ -221,7 +222,7 @@ public class TripService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         final String action = intent == null ? null : intent.getAction();
         final String why = intent == null ? null : intent.getStringExtra("why");
-        if (!ACTION_STOP.equals(action)) {
+        if (!ACTION_STOP.equals(action) && !ACTION_MASTER_OFF.equals(action)) {
             // Wajib tampil sebagai foreground segera setelah startForegroundService.
             goForeground();
         }
@@ -287,6 +288,17 @@ public class TripService extends Service {
                 anchorFresh = false;
                 afterTrip();
             }
+        } else if (ACTION_MASTER_OFF.equals(action)) {
+            // Matikan total: simpan rekaman yang sedang jalan, lalu hentikan semuanya dan lepas semua pemicu.
+            p.edit().putBoolean("masterOff", true).putBoolean("manual", false).putBoolean("notif", false).putLong("pausedUntil", 0L).apply();
+            diag("Dimatikan total oleh pengguna");
+            if (mode == M_REKAM) {
+                manual = false;
+                endRecording();
+            }
+            shutdown();
+            Trig.disarmAll(this);
+            Sched.arm(this);
         } else if (ACTION_NOTIF.equals(action) || ACTION_OFF.equals(action)) {
             // v0.15.1: mode Pengingat/Jeda dihapus; perintah lama hanya memastikan siaga.
             if (mode == M_OFF) {
@@ -1263,6 +1275,7 @@ public class TripService extends Service {
             b.addAction(new Notification.Action.Builder(android.R.drawable.ic_menu_view, "Buka", openPi).build());
         } else {
             b.addAction(new Notification.Action.Builder(android.R.drawable.ic_media_play, "Mulai rekam", actionPi(ACTION_START, 3)).build());
+            b.addAction(new Notification.Action.Builder(android.R.drawable.ic_lock_power_off, "Matikan total", actionPi(ACTION_MASTER_OFF, 4)).build());
         }
         return b.build();
     }

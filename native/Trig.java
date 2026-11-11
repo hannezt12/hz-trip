@@ -56,6 +56,9 @@ final class Trig {
     /** Pasang (atau perbarui) pemicu. Aman dipanggil berulang. */
     static void arm(Context ctx, Location anchor, int radius) {
         final Context c = ctx.getApplicationContext();
+        if (Sched.masterOff(c)) {
+            return;
+        }
         final long nowMs = System.currentTimeMillis();
         if (!vehOn || nowMs - vehAt >= REFRESH_MS) {
             if (actGranted(c)) {
@@ -136,6 +139,9 @@ final class Trig {
      */
     static void armPlaces(Context ctx, boolean force) {
         final Context c = ctx.getApplicationContext();
+        if (Sched.masterOff(c)) {
+            return;
+        }
         try {
             final PendingIntent pp = pi(c, ACT_PLACE, 73);
             final String s0 = Sched.p(c).getString("places", "");
@@ -200,6 +206,17 @@ final class Trig {
         } catch (Throwable t) {
             TripService.diagTo(c, "Pagar Tempat gagal: " + t.getMessage());
         }
+    }
+
+    /** v0.15.10: lepas semua pemicu Android (kendaraan, pagar acuan, pagar Tempat). */
+    static void disarmAll(Context ctx) {
+        Context c = ctx.getApplicationContext();
+        disarm(c);
+        try {
+            LocationServices.getGeofencingClient(c).removeGeofences(pi(c, ACT_PLACE, 73));
+        } catch (Throwable ignored) {
+        }
+        Sched.p(c).edit().putString("placesSig", "").putString("inPlaces", "").putLong("placesAt", 0L).apply();
     }
 
     static void disarm(Context ctx) {

@@ -30,8 +30,18 @@ final class Sched {
         return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    static boolean autoEnabled(Context c) {
+    /** v0.15.10: "Matikan total": tidak ada yang berjalan atau menyala sendiri sampai pengguna menyalakan lagi. */
+    static boolean masterOff(Context c) {
+        return p(c).getBoolean("masterOff", false);
+    }
+
+    /** Pengaturan "Rekam otomatis" apa adanya (tanpa memperhitungkan Matikan total). */
+    static boolean autoPref(Context c) {
         return p(c).getBoolean("auto", true);
+    }
+
+    static boolean autoEnabled(Context c) {
+        return !masterOff(c) && autoPref(c);
     }
 
     static int marginMin(Context c) {

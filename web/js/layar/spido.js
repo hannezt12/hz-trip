@@ -47,6 +47,7 @@
     return HARI[d.getDay()] + ' ' + T.hm(ts);
   }
   function modeHtml() {
+    if (S.masterOff && S.mode !== 'rekam') return '<b>Pemantauan MATI total</b> · tidak ada yang berjalan di latar belakang. Tekan "Nyalakan pemantauan" untuk mengaktifkan lagi.';
     if (S.mode === 'rekam') return (S.manual ? '<b>Merekam manual</b>' : '<b>Merekam otomatis</b> · titik tidak disimpan saat diam lebih dari 30 detik');
     if (S.mode === 'siaga') return '<b>Siaga</b> · merekam otomatis begitu kecepatan di atas 8 km/j';
     if (S.mode === 'cek') return '<b>Memeriksa gerakan…</b> GPS menyala sebentar';
@@ -56,6 +57,8 @@
     return '<b>Menyiapkan siaga…</b><br>Rekam otomatis berjalan kapan saja di luar Tempat.';
   }
   function modeBtnsHtml() {
+    if (S.masterOff) return '<div class="mrow2"><button class="btn" data-act="on">Nyalakan pemantauan</button></div>';
+    if (native) return (S.mode !== 'rekam' && !S.auto ? '<div class="mrow2"><button class="btn" data-act="auto">Aktifkan otomatis</button></div>' : '') + '<div class="mrow2"><button class="btn danger" data-act="off">Matikan total</button></div>';
     if (S.mode === 'rekam') return '';
     if (!S.auto) return '<div class="mrow2"><button class="btn" data-act="auto">Aktifkan otomatis</button></div>';
     return '';
@@ -139,6 +142,14 @@
     if (a === 'resume' || a === 'auto') {
       if (!S.auto) { toast('Rekam otomatis dimatikan di Pengaturan'); return; }
       Plug.resumeAuto().then(function (st) { applyStatus(st); setTimeout(syncStatus, 500);  });
+    }
+    else if (a === 'off') {
+      var msg = S.mode === 'rekam' ? 'Perjalanan yang sedang direkam akan disimpan, lalu HZ Trip dimatikan total. Lanjutkan?' : 'Matikan total? Tidak ada perekaman otomatis sampai Anda menyalakannya lagi.';
+      if (!window.confirm(msg)) return;
+      Plug.masterOff({ off: true }).then(function (st) { applyStatus(st); setTimeout(syncStatus, 700); toast('HZ Trip dimatikan total'); }).catch(function (er) { toast(String(er && er.message || er)); });
+    }
+    else if (a === 'on') {
+      Plug.masterOff({ off: false }).then(function (st) { applyStatus(st); setTimeout(syncStatus, 700); toast('Pemantauan dinyalakan'); }).catch(function (er) { toast(String(er && er.message || er)); });
     }
     else if (a === 'sched') go('set');
     else if (a === 'bg') askBackground();

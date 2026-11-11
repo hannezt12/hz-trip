@@ -96,6 +96,8 @@
       walkStop: function () { return Promise.resolve(); },
       walkRead: function (o) { var a = window.__walk || [], f = o.from || 0; return Promise.resolve({ text: a.slice(f).join('\n') + (a.length > f ? '\n' : ''), n: a.length }); },
       setWatch: function (o) { notif = o.mode === 'notif'; return Promise.resolve(); },
+      masterOff: function (o) { window.__moff = o.off !== false; if (window.__moff) { clearInterval(timer); mode = 'tidur'; } return Promise.resolve(Object.assign(st(), { masterOff: window.__moff })); },
+      setCharge: function (o) { window.__chg = o.on !== false; return Promise.resolve(Object.assign(st(), { chargeTrig: window.__chg })); },
       start: function () {
         mode = 'rekam'; sec = 0;
         timer = setInterval(function () {
@@ -174,7 +176,7 @@
   function applyStatus(s) {
     if (!s) return;
     S.mode = s.mode || (s.recording ? 'rekam' : 'tidur');
-    S.manual = !!s.manual; S.paused = !!s.paused; S.auto = s.auto !== false;
+    S.manual = !!s.manual; S.paused = !!s.paused; S.auto = s.auto !== false; S.masterOff = !!s.masterOff; S.charge = s.chargeTrig !== false;
     S.winEnd = s.winEnd || 0; S.nextStart = s.nextStart || 0;
     S.inPlaces = s.inPlaces || ''; S.popSnd = s.popupSound || 'alarm'; S.popName = s.popupName || ''; S.notif = !!s.notif; S.overlay = s.overlay !== false; S.actPerm = s.actPerm !== false; S.gpsOn = !!s.gpsOn; S.sigSensor = s.sigSensor !== false; S.lastT = s.lastT || 0;
     S.perm = s.permission !== false; S.bg = s.background !== false; S.battFree = !!s.batteryFree;
