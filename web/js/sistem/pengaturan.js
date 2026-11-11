@@ -111,7 +111,7 @@
     }).join('');
     renderUnitCard();
     $('splitSel').value = String(S.settings.splitSec);
-    $('radiusSel').value = String(S.settings.radius || 150);
+    if (document.activeElement !== $('radiusSel')) $('radiusSel').value = String(S.settings.radius || 150);
     if (document.activeElement !== $('driverIn')) $('driverIn').value = S.settings.driver || '';
     $('autoChk').checked = !!S.settings.auto;
     if ($('popSel') && document.activeElement !== $('popSel')) $('popSel').value = S.popSnd || 'alarm';

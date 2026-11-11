@@ -242,7 +242,14 @@
     HA.TC.setCap(S.settings.tileCapMB || 1024);
     $('tcCap').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-mb]'); if (!b) return; S.settings.tileCapMB = +b.getAttribute('data-mb'); saveSettings(); HA.TC.setCap(S.settings.tileCapMB); HA.renderCacheInfo && HA.renderCacheInfo(); toast('Batas cache ' + (S.settings.tileCapMB >= 1024 ? S.settings.tileCapMB / 1024 + ' GB' : S.settings.tileCapMB + ' MB')); };
     $('tcClear').onclick = function () { askConfirm('Bersihkan cache peta?', 'Peta yang tersimpan dihapus. Peta akan diunduh lagi saat Anda melihatnya dengan internet.', 'Bersihkan', function () { HA.TC.clear().then(function () { renderCacheInfo(); toast('Cache peta dibersihkan'); }); }); };
-    $('radiusSel').onchange = function () { S.settings.radius = +this.value; saveSettings(); pushSchedule(); };
+    $('radiusSel').onchange = function () {
+      var r = Math.round(+this.value);
+      if (!isFinite(r) || r < 50) r = 50;
+      if (r > 500) r = 500;
+      this.value = String(r);
+      S.settings.radius = r; saveSettings(); pushSchedule();
+      toast('Lingkaran titik berhenti ' + r + ' meter');
+    };
     $('driverIn').onchange = function () { S.settings.driver = this.value.trim(); saveSettings(); };
 
     Plug.addListener('fix', onFix);

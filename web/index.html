@@ -132,8 +132,8 @@
       <div class="muted" style="margin-top:6px">Berhenti selama ini = trip berakhir. Trip baru mulai otomatis saat kecepatan 5 km/jam atau lebih selama 5 detik, atau saat keluar dari lingkaran titik berhenti terakhir. Trip hanya disimpan bila pernah mencapai 10 km/jam.</div>
 
       <div class="h">LINGKARAN TITIK BERHENTI</div>
-      <select id="radiusSel"><option value="150">150 meter</option><option value="200">200 meter</option></select>
-      <div class="muted" style="margin-top:6px">Setelah berhenti, bila ponsel keluar dari lingkaran ini rekaman langsung dimulai tanpa menunggu kecepatan.</div>
+      <input type="number" id="radiusSel" inputmode="numeric" min="50" max="500" step="10" placeholder="Radius (meter)">
+      <div class="muted" style="margin-top:6px">Ketik jarak dalam meter (50 sampai 500; bawaan 150). Setelah berhenti, bila ponsel keluar dari lingkaran ini rekaman langsung dimulai tanpa menunggu kecepatan. Semakin kecil, semakin cepat mulai, tetapi di bawah 80 m GPS yang melayang bisa memicu rekaman palsu.</div>
       </div>
       <div class="spage" id="sp-tempat">
         <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Tempat (pagar virtual)</b></div>
@@ -251,7 +251,7 @@
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
   <a data-go="data">Data peta</a>
-  <div class="ver">by Yohanes div2<br>Versi 0.15.5</div>
+  <div class="ver">by Yohanes div2<br>Versi 0.15.6</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>
