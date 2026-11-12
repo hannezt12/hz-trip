@@ -168,7 +168,12 @@
     };
     $('splitSel').onchange = function () { S.settings.splitSec = +this.value; saveSettings(); recomputeLive(); toast('Batas pisah trip disimpan'); };
     $('autoChk').onchange = function () { S.settings.auto = this.checked; saveSettings(); pushSchedule(); if (this.checked && native && !S.actPerm) askActivity(); };
-    $('chgChk').onchange = function () { var on = this.checked; S.charge = on; Plug.setCharge({ on: on }).then(applyStatus).catch(function () {}); };
+    $('pkIn').onchange = function () {
+      var v = Math.round(+this.value); if (!isFinite(v) || v < 10) v = 10; if (v > 60) v = 60;
+      this.value = String(v); S.placeKmh = v;
+      Plug.setPlaceKmh({ kmh: v }).then(applyStatus).catch(function () {});
+      toast('Langsung rekam di Tempat mulai ' + v + ' km/j');
+    };
     $('btnAct').onclick = askActivity;
     $('marginSel').onchange = function () { S.settings.margin = +this.value; saveSettings(); renderSched(); pushSchedule(); };
     $('schedBox').onchange = onSched;

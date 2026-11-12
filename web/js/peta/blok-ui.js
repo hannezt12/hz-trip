@@ -112,6 +112,24 @@
     blocksList().forEach(function (b) { var q = bbOf(b); if (ll.lat < q[0] || ll.lat > q[2] || ll.lng < q[1] || ll.lng > q[3]) return; if (llPip(ll, b.pts)) { var ar = blkHa(b); if (ar < ba) { ba = ar; best = b; } } });
     return best;
   }
+  // v0.15.11 (SpidoMap): garis row tiap 10 lajur untuk seluruh blok (tanpa nomor), dan jarak titik ke tepi blok
+  HA.blokRows10 = function (b) {
+    if (!b || b.dir == null) return Promise.resolve(null);
+    return computeRows(b, 'datar', true).then(function (res) {
+      if (!res || !res.lines || !res.lines.length) return null;
+      var nums = laneNums(res), out = res.lines.filter(function (_, i) { return (nums ? nums[i] : i + 1) % 10 === 0; });
+      return out.length ? out : null;
+    });
+  };
+  HA.blockEdgeM = function (ll, b) {
+    var best = Infinity, P = b.pts, cl = Math.cos(ll.lat * Math.PI / 180) || 1, i, j;
+    for (i = 0, j = P.length - 1; i < P.length; j = i++) {
+      var ax = (P[j][1] - ll.lng) * 111320 * cl, ay = (P[j][0] - ll.lat) * 111320, bx = (P[i][1] - ll.lng) * 111320 * cl, by = (P[i][0] - ll.lat) * 111320;
+      var dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy, t = L2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0;
+      var d = Math.hypot(ax + t * dx, ay + t * dy); if (d < best) best = d;
+    }
+    return best;
+  };
   function drawBlocks() {
     if (!HA.map) return;
     if (HA.DM.blkLayer) { HA.map.removeLayer(HA.DM.blkLayer); HA.DM.blkLayer = null; }

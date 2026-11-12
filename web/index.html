@@ -27,6 +27,7 @@
           <path id="gVal" fill="none" stroke="#3FD07A" stroke-width="22" stroke-linecap="round"/>
         </svg>
         <div class="gnum"><b id="gNum">0</b><span>KM/JAM</span></div>
+        <button class="pwr on" id="btnPwr" aria-label="Pemantauan"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M7.2 6.6a8 8 0 1 0 9.6 0"/><path d="M12 3v8"/></svg></button>
       </div>
       <div class="stats">
         <div class="stat"><small>MAKS</small><b id="sMax">–</b><i>km/j</i></div>
@@ -119,8 +120,6 @@
       <div class="h">JADWAL MINGGUAN</div>
       <div class="card">
         <label class="chk"><input type="checkbox" id="autoChk"> Rekam otomatis (kapan saja)</label>
-        <label class="chk" style="margin-top:8px"><input type="checkbox" id="chgChk"> Bersiap merekam saat pengisi daya dipasang</label>
-        <div class="muted" style="margin:4px 0 6px">Berguna untuk truk tanpa Bluetooth: begitu adaptor 12 V terpasang, GPS diperiksa singkat. Matikan bila tidak diperlukan.</div>
         <div class="muted" style="margin:6px 0 10px">HZ Trip merekam sendiri kapan saja kendaraan melaju di atas 8 km/j, kecuali saat Anda berada di dalam salah satu Tempat (menu Tempat). Jadwal di bawah hanya dipakai untuk menandai trip sebagai Kerja atau Pribadi.</div>
         <div class="muted" style="margin-bottom:4px">Jam kerja dihitung mulai sebelum masuk dan berakhir setelah pulang:</div>
         <select id="marginSel"><option value="0">tepat jam masuk / pulang</option><option value="15">15 menit sebelum / sesudah</option><option value="30">30 menit sebelum / sesudah</option><option value="45">45 menit sebelum / sesudah</option><option value="60">1 jam sebelum / sesudah</option></select>
@@ -140,7 +139,8 @@
       <div class="spage" id="sp-tempat">
         <div class="sph"><button class="ib" data-back="1" aria-label="Kembali"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><b>Tempat (pagar virtual)</b></div>
       <div class="h">TEMPAT</div>
-      <div class="card"><div class="muted">Di dalam Tempat, HZ Trip tidak merekam dan GPS mati; hanya menjaga sensor gerak dan deteksi kendaraan (hampir tanpa baterai). Saat kendaraan bergerak, GPS menyala sebentar, dan rekam otomatis mulai begitu Anda keluar dari lingkarannya. Di luar Tempat, HZ Trip selalu siap merekam. Radius dalam meter (1000 = 1 km).</div>
+      <div class="card"><div class="muted">Di dalam Tempat, HZ Trip tidak merekam dan GPS mati; hanya menjaga sensor gerak dan deteksi kendaraan (hampir tanpa baterai). Saat kendaraan bergerak, GPS menyala sebentar, dan rekam otomatis mulai begitu Anda keluar dari lingkarannya, atau langsung bila laju kendaraan cukup tinggi (atur di bawah). Di luar Tempat, HZ Trip selalu siap merekam. Radius dalam meter (1000 = 1 km).</div>
+        <div style="margin-top:10px"><label class="muted" for="pkIn">Langsung rekam di dalam Tempat bila laju bertahan 5 detik (km/j)</label><input type="number" id="pkIn" inputmode="numeric" min="10" max="60" step="5" placeholder="20"></div>
         <div id="tempatBox" style="margin-top:10px"></div>
         <button class="btn pri" id="tpAdd" style="margin-top:10px;width:100%">+ Jadikan lokasi ini tempat</button></div>
       </div>
@@ -253,7 +253,7 @@
   <a data-print="1">Cetak</a>
   <a data-go="set">Pengaturan</a>
   <a data-go="data">Data peta</a>
-  <div class="ver">by Yohanes div2<br>Versi 0.15.10</div>
+  <div class="ver">by Yohanes div2<br>Versi 0.15.11</div>
 </nav>
 <div id="mergeBar"><div id="mergeInfo"></div><button class="btn" id="mergeNo">Batal</button><button class="btn pri" id="mergeGo">Gabungkan</button></div>
 <div id="sheet"></div>

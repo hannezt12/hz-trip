@@ -153,7 +153,7 @@ public class TripService extends Service {
     private boolean cekPlace = false;   // Cek yang dimulai saat tercatat di dalam Tempat
     private boolean watching = false;   // mode menjaga di dalam Tempat (GPS mati, sensor gerak + kendaraan aktif)
     private long placeCool = PLACE_COOL_MIN;
-    private long lastPowerT = 0L;
+    private long placeRun = 0L;      // v0.15.11: awal laju >= placeKmh di dalam Tempat
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -175,47 +175,6 @@ public class TripService extends Service {
         }
         createChannel();
         loadAnchor();
-        try {
-            IntentFilter pf = new IntentFilter(Intent.ACTION_POWER_CONNECTED);
-            if (Build.VERSION.SDK_INT >= 33) {
-                registerReceiver(powerRx, pf, 4); // 4 = RECEIVER_NOT_EXPORTED
-            } else {
-                registerReceiver(powerRx, pf);
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /** Pengisi daya terpasang (mis. adaptor 12 V truk saat mesin hidup): salah satu tanda mau berangkat, tanpa menunggu Android. */
-    private final BroadcastReceiver powerRx = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context c, Intent i) {
-            if (h == null) {
-                return;
-            }
-            h.post(new Runnable() {
-                @Override
-                public void run() {
-                    onPowerConnected();
-                }
-            });
-        }
-    };
-
-    private void onPowerConnected() {
-        long now = System.currentTimeMillis();
-        if (!Sched.p(this).getBoolean("chargeTrig", true)) {
-            return;
-        }
-        if (manual || mode == M_REKAM || mode == M_OFF || now - lastPowerT < 60000L) {
-            return;
-        }
-        if (!Sched.autoPossible(this, now) && !Sched.placeWatch(this, now)) {
-            return;
-        }
-        lastPowerT = now;
-        diag("Pengisi daya terpasang");
-        handleCommand(ACTION_TRIG, "pengisi daya terpasang");
     }
 
     @Override
@@ -237,10 +196,6 @@ public class TripService extends Service {
 
     @Override
     public void onDestroy() {
-        try {
-            unregisterReceiver(powerRx);
-        } catch (Exception ignored) {
-        }
         try {
             stopGps();
             stopPassive();
@@ -290,7 +245,7 @@ public class TripService extends Service {
             }
         } else if (ACTION_MASTER_OFF.equals(action)) {
             // Matikan total: simpan rekaman yang sedang jalan, lalu hentikan semuanya dan lepas semua pemicu.
-            p.edit().putBoolean("masterOff", true).putBoolean("manual", false).putBoolean("notif", false).putLong("pausedUntil", 0L).apply();
+            p.edit().putBoolean("masterOff", true).putLong("masterOffUntil", Sched.masterOffUntil(this, System.currentTimeMillis())).putBoolean("manual", false).putBoolean("notif", false).putLong("pausedUntil", 0L).apply();
             diag("Dimatikan total oleh pengguna");
             if (mode == M_REKAM) {
                 manual = false;
@@ -946,6 +901,21 @@ public class TripService extends Service {
             }
             if (placeGate) {
                 go = false; // masih di dalam lingkaran Tempat: tunggu sampai keluar (titik tetap ditampung)
+                // v0.15.11: laju tinggi yang bertahan di dalam Tempat pasti kendaraan: rekam langsung (titik tampungan ikut tersimpan)
+                if (acc <= 30f && kmh >= Sched.placeKmh(this)) {
+                    if (placeRun == 0L) {
+                        placeRun = t;
+                    }
+                    if (t - placeRun >= START_HOLD_MS) {
+                        go = true;
+                        why = "laju " + Math.round(kmh) + " km/j di dalam Tempat, akurasi " + Math.round(acc) + " m";
+                        Sched.p(this).edit().putString("inPlaces", "").apply();
+                        placeGate = false;
+                        placeRun = 0L;
+                    }
+                } else {
+                    placeRun = 0L;
+                }
                 if (acc <= ACC_START && kmh >= START_KMH) {
                     // kendaraan bergerak di dalam Tempat: beri waktu sampai keluar lingkaran
                     long ntm = System.currentTimeMillis();
@@ -1275,7 +1245,6 @@ public class TripService extends Service {
             b.addAction(new Notification.Action.Builder(android.R.drawable.ic_menu_view, "Buka", openPi).build());
         } else {
             b.addAction(new Notification.Action.Builder(android.R.drawable.ic_media_play, "Mulai rekam", actionPi(ACTION_START, 3)).build());
-            b.addAction(new Notification.Action.Builder(android.R.drawable.ic_lock_power_off, "Matikan total", actionPi(ACTION_MASTER_OFF, 4)).build());
         }
         return b.build();
     }

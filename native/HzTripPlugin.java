@@ -168,8 +168,13 @@ public class HzTripPlugin extends Plugin {
         o.put("popupSound", Sched.p(ctx).getString("popupSound", "alarm"));
         o.put("popupName", Sched.p(ctx).getString("popupUriName", ""));
         o.put("auto", Sched.autoPref(ctx));
+        if (Sched.expireMasterOff(ctx, now)) {
+            Trig.armPlaces(ctx, true);
+            Sched.evaluate(ctx);
+        }
         o.put("masterOff", Sched.masterOff(ctx));
-        o.put("chargeTrig", Sched.p(ctx).getBoolean("chargeTrig", true));
+        o.put("masterOffUntil", Sched.p(ctx).getLong("masterOffUntil", 0L));
+        o.put("placeKmh", Sched.placeKmh(ctx));
         o.put("winEnd", Sched.windowEnd(ctx, now));
         o.put("nextStart", Sched.nextStart(ctx, now));
         o.put("paused", now < Sched.pausedUntil(ctx));
@@ -323,7 +328,11 @@ public class HzTripPlugin extends Plugin {
         boolean off = Boolean.TRUE.equals(call.getBoolean("off", true));
         try {
             if (off) {
-                Sched.p(ctx).edit().putBoolean("masterOff", true).apply();
+                if (TripService.mode == TripService.M_REKAM && TripService.lastSpeed * 3.6f >= 1f) {
+                    call.reject("Berhenti dulu untuk mematikan");
+                    return;
+                }
+                Sched.p(ctx).edit().putBoolean("masterOff", true).putLong("masterOffUntil", Sched.masterOffUntil(ctx, System.currentTimeMillis())).apply();
                 if (TripService.instance != null) {
                     ctx.startService(new Intent(ctx, TripService.class).setAction(TripService.ACTION_MASTER_OFF));
                 } else {
@@ -332,7 +341,7 @@ public class HzTripPlugin extends Plugin {
                     Sched.arm(ctx);
                 }
             } else {
-                Sched.p(ctx).edit().putBoolean("masterOff", false).putLong("pausedUntil", 0L).apply();
+                Sched.p(ctx).edit().putBoolean("masterOff", false).putLong("masterOffUntil", 0L).putLong("pausedUntil", 0L).apply();
                 Trig.armPlaces(ctx, true);
                 Sched.evaluate(ctx);
             }
@@ -343,9 +352,11 @@ public class HzTripPlugin extends Plugin {
         call.resolve(statusObject());
     }
 
+    /** v0.15.11: laju minimum (km/j) untuk langsung merekam di dalam Tempat. */
     @PluginMethod
-    public void setCharge(PluginCall call) {
-        Sched.p(getContext()).edit().putBoolean("chargeTrig", !Boolean.FALSE.equals(call.getBoolean("on", true))).apply();
+    public void setPlaceKmh(PluginCall call) {
+        Integer v = call.getInt("kmh", 20);
+        Sched.p(getContext()).edit().putInt("placeKmh", v == null ? 20 : v).apply();
         call.resolve(statusObject());
     }
 

@@ -71,7 +71,35 @@
     HA.SP.map.on('zoomend', function () { HA.SP.zoomBusy = false; });
     return true;
   }
+  // v0.15.11: di dalam blok yang sudah punya arah row, tampilkan garis row tiap 10 lajur (seluruh blok, semua zoom).
+  // Hilang bila posisi sudah di luar blok >= 20 m atau >= 10 dtk (supaya tidak berkedip di tepi blok).
+  function spRows(ll) {
+    var SP = HA.SP, now = Date.now();
+    if (now - (SP.rowT || 0) < 1000 || !HA.blockAt) return;
+    SP.rowT = now;
+    var p = L.latLng(ll[0], ll[1]), b = HA.blockAt(p), cur = SP.rowB ? HA.blocksList().filter(function (x) { return x.id === SP.rowB; })[0] : null;
+    if (b && b.dir != null) {
+      SP.outT = 0;
+      if (SP.rowB !== b.id) {
+        SP.rowB = b.id;
+        var id = b.id;
+        HA.blokRows10(b).then(function (ls) {
+          if (SP.rowB !== id) return;
+          if (SP.rowLay) { SP.map.removeLayer(SP.rowLay); SP.rowLay = null; }
+          if (ls) SP.rowLay = L.polyline(ls, { color: '#FFE04D', weight: 2, opacity: 1, interactive: false, smoothFactor: 0.5 }).addTo(SP.map);
+        }).catch(function () {});
+      }
+      return;
+    }
+    if (!SP.rowB) return;
+    if (!SP.outT) SP.outT = now;
+    if (now - SP.outT >= 10000 || !cur || HA.blockEdgeM(p, cur) >= 20) {
+      SP.rowB = null; SP.outT = 0;
+      if (SP.rowLay) { SP.map.removeLayer(SP.rowLay); SP.rowLay = null; }
+    }
+  }
   function spArrow(ll) {
+    try { if (ll) spRows(ll); } catch (e) {}
     if (!HA.SP.mk) {
       HA.SP.mk = L.marker(ll, { icon: L.divIcon({ className: 'spar', html: '<svg viewBox="0 0 24 24" width="38" height="38"><path d="M12 1.5L21.5 22 12 17 2.5 22Z" fill="#8A97A0" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>', iconSize: [38, 38], iconAnchor: [19, 19] }), interactive: false, keyboard: false, zIndexOffset: 1000 }).addTo(HA.SP.map);
     } else HA.SP.mk.setLatLng(ll);
@@ -212,10 +240,11 @@
   }
   function spLocate() {
     HA.SP.follow = true; HA.SP.autoPaused = false; spBtns();
-    if (S.mode === 'rekam' && HA.SP.cur) { HA.SP.map.setView(HA.SP.cur, HA.SP.map.getZoom(), { animate: true }); return; }
+    if (S.mode === 'rekam' && HA.SP.cur) { HA.SP.map.setView(HA.SP.cur, HA.SP.map.getZoom(), { animate: true }); HA.accToast(S.live.t ? S.live.acc : NaN, S.live.t ? Date.now() - S.live.t : 0); return; }
     if (!navigator.geolocation) { toast('Lokasi tidak tersedia'); return; }
-    toast('Mencari posisi…');
+    toast('Mencari GPS…');
     navigator.geolocation.getCurrentPosition(function (p) {
+      HA.accToast(p.coords.accuracy, Date.now() - (p.timestamp || Date.now()));
       var ll = [p.coords.latitude, p.coords.longitude];
       HA.SP.from = HA.SP.to = HA.SP.cur = ll; spArrow(ll); HA.SP.map.setView(ll, 17, { animate: true });
       $('spNote').style.display = 'block'; $('spNote').textContent = 'Posisi sekarang (belum merekam)';

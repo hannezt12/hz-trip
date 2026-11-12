@@ -114,7 +114,7 @@
     if (document.activeElement !== $('radiusSel')) $('radiusSel').value = String(S.settings.radius || 150);
     if (document.activeElement !== $('driverIn')) $('driverIn').value = S.settings.driver || '';
     $('autoChk').checked = !!S.settings.auto;
-    $('chgChk').checked = S.charge !== false;
+    if (document.activeElement !== $('pkIn')) $('pkIn').value = String(S.placeKmh || 20);
     if ($('popSel') && document.activeElement !== $('popSel')) $('popSel').value = S.popSnd || 'alarm';
     if ($('popName')) $('popName').textContent = S.popName ? 'Nada pilihan: ' + S.popName : 'Nada bawaan sistem (menurut pilihan di atas)';
     $('marginSel').value = String(S.settings.margin);
@@ -129,7 +129,7 @@
       bits.push(S.gpsOn ? 'GPS: menyala.' : 'GPS: istirahat (normal saat siaga).');
       bits.push(S.sigSensor ? 'Sensor gerak: ada.' : 'Sensor gerak: tidak ada; pemicu hanya dari pemeriksaan berkala.');
       bits.push(S.lastT ? 'Titik terakhir: ' + Math.max(0, Math.round((Date.now() - S.lastT) / 1000)) + ' detik lalu.' : 'Titik terakhir: belum ada.');
-      bits.push(S.masterOff ? 'Pemantauan: MATI total (nyalakan dari layar utama).' : (S.auto ? 'Rekam otomatis: aktif.' : 'Rekam otomatis: mati.'));
+      bits.push(S.masterOff ? 'Pemantauan: MATI total (nyalakan dari tombol di Spidometer).' : (S.auto ? 'Rekam otomatis: aktif.' : 'Rekam otomatis: mati.'));
     } else bits.push('Mode uji di browser.');
     $('setStat').innerHTML = bits.join('<br>');
     if (!S.setPage && $('setMenu').firstChild) renderSetMenu();

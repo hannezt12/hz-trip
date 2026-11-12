@@ -791,3 +791,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .locbtn.tpbtn svg{stroke:currentColor}
 .locbtn.tpbtn.on{color:#FFB020}
 .locbtn.tpbtn.on svg{stroke:#FFB020}
+
+/* v0.15.11: tombol Matikan total */
+.pwr{position:absolute;top:0;right:0.25rem;width:2.5rem;height:2.5rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;border:2px solid #4a5358;color:#4a5358;padding:0;z-index:2}
+.pwr.on{border-color:#00D4FF;color:#00D4FF;box-shadow:0 0 10px #00D4FF99,inset 0 0 6px #00D4FF55}

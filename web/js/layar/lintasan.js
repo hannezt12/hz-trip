@@ -222,12 +222,12 @@
     st.id = navigator.geolocation.watchPosition(function (p) {
       if (!m._container) return;
       var ll = [p.coords.latitude, p.coords.longitude], first = !st.pos;
-      st.pos = ll;
+      st.pos = ll; st.accV = p.coords.accuracy; st.fixT = p.timestamp || Date.now();
       if (!st.acc) st.acc = L.circle(ll, { radius: p.coords.accuracy || 20, color: '#4DA3FF', weight: 1, fillColor: '#4DA3FF', fillOpacity: 0.15, interactive: false }).addTo(m);
       else { st.acc.setLatLng(ll); st.acc.setRadius(p.coords.accuracy || 20); }
       if (!st.dot) st.dot = L.circleMarker(ll, { radius: 8, color: '#fff', weight: 3, fillColor: '#4285F4', fillOpacity: 1, interactive: false, className: 'locdot' }).addTo(m);
       else st.dot.setLatLng(ll);
-      if (st.want) { st.want = false; st.follow = true; if (st.btn) st.btn.classList.add('on'); m.setView(ll, Math.max(m.getZoom(), 17)); }
+      if (st.want) { st.want = false; HA.accToast(st.accV, 0); st.follow = true; if (st.btn) st.btn.classList.add('on'); m.setView(ll, Math.max(m.getZoom(), 17)); }
       else if (st.follow) m.panTo(ll, { animate: true });
     }, function (e) {
       if (st.want) { st.want = false; toast(e && e.code === 1 ? 'Izin lokasi belum diberikan' : 'Lokasi belum didapat. Pastikan GPS menyala.'); }
@@ -245,8 +245,8 @@
         b.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
         b.onclick = function () {
           if (st.id === null) locStart(m);
-          if (st.pos) { st.follow = true; b.classList.add('on'); m.setView(st.pos, Math.max(m.getZoom(), 17)); }
-          else { st.want = true; toast('Mencari posisi…'); }
+          if (st.pos) { st.follow = true; b.classList.add('on'); m.setView(st.pos, Math.max(m.getZoom(), 17)); HA.accToast(st.accV, Date.now() - st.fixT); }
+          else { st.want = true; toast('Mencari GPS…'); }
         };
         st.btn = b;
         return b;

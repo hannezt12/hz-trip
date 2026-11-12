@@ -97,7 +97,7 @@
       walkRead: function (o) { var a = window.__walk || [], f = o.from || 0; return Promise.resolve({ text: a.slice(f).join('\n') + (a.length > f ? '\n' : ''), n: a.length }); },
       setWatch: function (o) { notif = o.mode === 'notif'; return Promise.resolve(); },
       masterOff: function (o) { window.__moff = o.off !== false; if (window.__moff) { clearInterval(timer); mode = 'tidur'; } return Promise.resolve(Object.assign(st(), { masterOff: window.__moff })); },
-      setCharge: function (o) { window.__chg = o.on !== false; return Promise.resolve(Object.assign(st(), { chargeTrig: window.__chg })); },
+      setPlaceKmh: function (o) { window.__pk = o.kmh; return Promise.resolve(Object.assign(st(), { placeKmh: o.kmh })); },
       start: function () {
         mode = 'rekam'; sec = 0;
         timer = setInterval(function () {
@@ -170,13 +170,14 @@
   }
 
   var toastT;
-  function toast(msg) { var e = $('toast'); e.textContent = msg; e.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(function () { e.style.display = 'none'; }, 2800); }
+  function toast(msg) { var e = $('toast'); e.style.color = ''; e.textContent = msg; e.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(function () { e.style.display = 'none'; }, 2800); }
 
   // ---------- status dari Android ----------
   function applyStatus(s) {
     if (!s) return;
     S.mode = s.mode || (s.recording ? 'rekam' : 'tidur');
-    S.manual = !!s.manual; S.paused = !!s.paused; S.auto = s.auto !== false; S.masterOff = !!s.masterOff; S.charge = s.chargeTrig !== false;
+    S.manual = !!s.manual; S.paused = !!s.paused; S.auto = s.auto !== false; var wasOff = S.masterOff; S.masterOff = !!s.masterOff;
+    if (wasOff && !S.masterOff && Date.now() - (HA.pwrQuiet || 0) > 4000) toast('Pemantauan menyala'); S.placeKmh = s.placeKmh || 20;
     S.winEnd = s.winEnd || 0; S.nextStart = s.nextStart || 0;
     S.inPlaces = s.inPlaces || ''; S.popSnd = s.popupSound || 'alarm'; S.popName = s.popupName || ''; S.notif = !!s.notif; S.overlay = s.overlay !== false; S.actPerm = s.actPerm !== false; S.gpsOn = !!s.gpsOn; S.sigSensor = s.sigSensor !== false; S.lastT = s.lastT || 0;
     S.perm = s.permission !== false; S.bg = s.background !== false; S.battFree = !!s.batteryFree;
@@ -227,6 +228,15 @@
     $('cfNo').onclick = closeSheet;
     $('cfYes').onclick = function () { closeSheet(); onOk(); };
   }
+  // v0.15.11: toast akurasi GPS untuk tombol Lokasi saya (hijau <= 8 m, kuning <= 15 m, merah di atasnya)
+  function accToast(acc, ageMs) {
+    if (!isFinite(acc)) { toast('Mencari GPS…'); return; }
+    var t = 'Akurasi ±' + Math.round(acc) + ' m';
+    if (ageMs > 10000) t += ' · terakhir ' + Math.round(ageMs / 1000) + ' dtk lalu';
+    toast(t);
+    $('toast').style.color = acc <= 8 ? '#3FD07A' : (acc <= 15 ? '#FFD24D' : '#FF6B6B');
+  }
+  HA.accToast = accToast;
   function closeSheet() { $('sheet').classList.remove('on'); $('sheet').classList.remove('cmp'); $('scrim').classList.remove('on'); var h = HA.onSheetClose; HA.onSheetClose = null; if (h) h(); }
 
   // Tombol back Android (dipanggil dari MainActivity): true = sudah ditangani di halaman.

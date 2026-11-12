@@ -35,6 +35,37 @@ final class Sched {
         return p(c).getBoolean("masterOff", false);
     }
 
+    /** v0.15.11: laju minimum (km/j) untuk langsung merekam saat berada di dalam Tempat. */
+    static int placeKmh(Context c) {
+        return Math.max(10, Math.min(60, p(c).getInt("placeKmh", 20)));
+    }
+
+    /** v0.15.11: Matikan total menyala lagi sendiri pada awal jadwal hari berikutnya (dikurangi margin); tanpa jadwal: 00:00. */
+    static long masterOffUntil(Context c, long now) {
+        long[] w = win(c, 1);
+        if (w != null && w[0] > now) {
+            return w[0];
+        }
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        cal.add(Calendar.DAY_OF_MONTH, 1);
+        return cal.getTimeInMillis();
+    }
+
+    /** Matikan total sudah lewat masa berlakunya? Bila ya, cabut dan kembalikan true (pemanggil memasang ulang pemicu). */
+    static boolean expireMasterOff(Context c, long now) {
+        SharedPreferences sp = p(c);
+        long u = sp.getLong("masterOffUntil", 0L);
+        if (sp.getBoolean("masterOff", false) && u > 0L && now >= u) {
+            sp.edit().putBoolean("masterOff", false).putLong("masterOffUntil", 0L).apply();
+            return true;
+        }
+        return false;
+    }
+
     /** Pengaturan "Rekam otomatis" apa adanya (tanpa memperhitungkan Matikan total). */
     static boolean autoPref(Context c) {
         return p(c).getBoolean("auto", true);
@@ -261,7 +292,10 @@ final class Sched {
         am.cancel(pi);
         long now = System.currentTimeMillis();
         long t = nextBoundary(c, now);
-        if (t == 0L || !autoEnabled(c)) {
+        long mu = p(c).getLong("masterOffUntil", 0L);
+        if (masterOff(c) && mu > now) {
+            t = mu; // v0.15.11: bangunkan untuk menyalakan lagi pemantauan
+        } else if (t == 0L || !autoEnabled(c)) {
             return;
         }
         try {
@@ -281,6 +315,9 @@ final class Sched {
     /** Dipanggil saat alarm batas jendela, setelah boot, ganti jam, atau saat jadwal diubah. */
     static void evaluate(Context c) {
         long now = System.currentTimeMillis();
+        if (expireMasterOff(c, now)) {
+            Trig.armPlaces(c, true);
+        }
         if (autoPossible(c, now) || placeWatch(c, now)) {
             try {
                 Intent i = new Intent(c, TripService.class).setAction(TripService.ACTION_AUTO);

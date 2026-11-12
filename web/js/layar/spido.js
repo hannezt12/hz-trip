@@ -47,7 +47,7 @@
     return HARI[d.getDay()] + ' ' + T.hm(ts);
   }
   function modeHtml() {
-    if (S.masterOff && S.mode !== 'rekam') return '<b>Pemantauan MATI total</b> · tidak ada yang berjalan di latar belakang. Tekan "Nyalakan pemantauan" untuk mengaktifkan lagi.';
+    if (S.masterOff && S.mode !== 'rekam') return '';
     if (S.mode === 'rekam') return (S.manual ? '<b>Merekam manual</b>' : '<b>Merekam otomatis</b> · titik tidak disimpan saat diam lebih dari 30 detik');
     if (S.mode === 'siaga') return '<b>Siaga</b> · merekam otomatis begitu kecepatan di atas 8 km/j';
     if (S.mode === 'cek') return '<b>Memeriksa gerakan…</b> GPS menyala sebentar';
@@ -57,8 +57,8 @@
     return '<b>Menyiapkan siaga…</b><br>Rekam otomatis berjalan kapan saja di luar Tempat.';
   }
   function modeBtnsHtml() {
-    if (S.masterOff) return '<div class="mrow2"><button class="btn" data-act="on">Nyalakan pemantauan</button></div>';
-    if (native) return (S.mode !== 'rekam' && !S.auto ? '<div class="mrow2"><button class="btn" data-act="auto">Aktifkan otomatis</button></div>' : '') + '<div class="mrow2"><button class="btn danger" data-act="off">Matikan total</button></div>';
+    if (S.masterOff) return '';
+    if (native) return (S.mode !== 'rekam' && !S.auto ? '<div class="mrow2"><button class="btn" data-act="auto">Aktifkan otomatis</button></div>' : '');
     if (S.mode === 'rekam') return '';
     if (!S.auto) return '<div class="mrow2"><button class="btn" data-act="auto">Aktifkan otomatis</button></div>';
     return '';
@@ -90,6 +90,7 @@
     putTxt('gpsLine', g);
     put('modeBox', modeHtml());
     put('modeBtns', modeBtnsHtml());
+    pwrDraw();
     var w = '';
     if (!S.perm) w += '<div class="warn">Izin lokasi belum diberikan. Tekan Mulai lalu pilih "Izinkan".</div>';
     else if (native && S.auto && !S.bg) w += '<div class="warn">Agar rekam otomatis jalan saat layar mati, izinkan lokasi "Selalu".<br><button class="btn sm" data-act="bg" style="margin-top:8px">Atur izin lokasi</button></div>';
@@ -137,19 +138,34 @@
     }).catch(function (e) { toast(String(e && e.message || e)); });
   }
   function openBatt() { Plug.openBatterySettings().catch(function () { toast('Tidak bisa membuka pengaturan baterai'); }); }
+  // v0.15.11: tombol bulat Matikan total (pojok kanan atas Spidometer), tanpa teks
+  function pwrDraw() {
+    var b = $('btnPwr'); if (!b) return;
+    var on = !S.masterOff;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+  function pwrFail(er) { toast(String(er && er.message || er)); }
+  function pwrTap() {
+    HA.pwrQuiet = Date.now();
+    if (S.masterOff) {
+      Plug.masterOff({ off: false }).then(function (st) { applyStatus(st); setTimeout(syncStatus, 700); toast('Pemantauan menyala'); }).catch(pwrFail);
+      return;
+    }
+    var rec = S.mode === 'rekam';
+    if (rec && S.live.t && (Date.now() - S.live.t) < 5000 && S.live.v >= 1) { toast('Berhenti dulu untuk mematikan'); return; }
+    var msg = rec ? 'Perjalanan yang sedang direkam akan disimpan, lalu HZ Trip dimatikan total. Menyala lagi sendiri mengikuti jadwal hari berikutnya.' : 'Tidak ada perekaman otomatis sampai menyala lagi. Menyala lagi sendiri mengikuti jadwal hari berikutnya, atau ketuk tombol ini.';
+    HA.askConfirm('Matikan total?', msg, 'Matikan', function () {
+      Plug.masterOff({ off: true }).then(function (st) { applyStatus(st); setTimeout(syncStatus, 700); toast('HZ Trip dimatikan total'); }).catch(pwrFail);
+    });
+  }
+  HA.pwrDraw = pwrDraw;
+  if ($('btnPwr')) $('btnPwr').onclick = pwrTap;
   function onModeAction(e) {
     var a = e.target.getAttribute && e.target.getAttribute('data-act');
     if (a === 'resume' || a === 'auto') {
       if (!S.auto) { toast('Rekam otomatis dimatikan di Pengaturan'); return; }
       Plug.resumeAuto().then(function (st) { applyStatus(st); setTimeout(syncStatus, 500);  });
-    }
-    else if (a === 'off') {
-      var msg = S.mode === 'rekam' ? 'Perjalanan yang sedang direkam akan disimpan, lalu HZ Trip dimatikan total. Lanjutkan?' : 'Matikan total? Tidak ada perekaman otomatis sampai Anda menyalakannya lagi.';
-      if (!window.confirm(msg)) return;
-      Plug.masterOff({ off: true }).then(function (st) { applyStatus(st); setTimeout(syncStatus, 700); toast('HZ Trip dimatikan total'); }).catch(function (er) { toast(String(er && er.message || er)); });
-    }
-    else if (a === 'on') {
-      Plug.masterOff({ off: false }).then(function (st) { applyStatus(st); setTimeout(syncStatus, 700); toast('Pemantauan dinyalakan'); }).catch(function (er) { toast(String(er && er.message || er)); });
     }
     else if (a === 'sched') go('set');
     else if (a === 'bg') askBackground();
