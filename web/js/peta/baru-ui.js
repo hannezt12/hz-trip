@@ -261,6 +261,18 @@
     var card = document.createElement('div'); card.className = 'mzR';
     card.innerHTML = ['P', 'L', 'K'].map(function (k) { return '<div class="mzRow" data-k="' + k + '"><span class="mzL">' + k + '<i class="mzI" data-k="' + k + '" role="button" aria-label="Info ' + k + '">i</i></span><span class="mzV" id="mz' + k + '">–</span></div>'; }).join('');
     box.appendChild(card); L.DomEvent.disableClickPropagation(card);
+    var img = document.createElement('div'); img.className = 'mzImg'; img.style.display = 'none'; box.appendChild(img); L.DomEvent.disableClickPropagation(img);
+    var imgT = null, imgSeq = 0;
+    // tanggal citra satelit di titik bidik: tampil selama belum ada titik, diperbarui setelah peta berhenti digeser
+    function imgUpd() {
+      clearTimeout(imgT); var my = ++imgSeq;
+      if (!HA.imgDate) return;
+      if (!img.textContent) img.textContent = 'Citra: …';
+      imgT = setTimeout(function () {
+        var c = map.getCenter();
+        HA.imgDate(c.lat, c.lng, map.getZoom()).then(function (t) { if (my !== imgSeq || pts.length) return; img.textContent = t || 'Citra: tidak diketahui'; });
+      }, 500);
+    }
     var sv = document.createElement('button'); sv.type = 'button'; sv.className = 'mzSave'; sv.textContent = 'Simpan'; sv.style.display = 'none'; box.appendChild(sv); L.DomEvent.disableClickPropagation(sv);
     var tip = document.createElement('div'); tip.className = 'mzTip'; tip.style.display = 'none'; box.appendChild(tip); L.DomEvent.disableClickPropagation(tip);
     var undo = document.createElement('div'); undo.className = 'mzUndo'; undo.style.display = 'none'; box.appendChild(undo); L.DomEvent.disableClickPropagation(undo);
@@ -307,14 +319,17 @@
       });
       // hasil
       var len = pts.length ? flat(closed ? line : pts.concat([cp]), false).len : 0;
-      $('mzP').textContent = pts.length ? fmtLen(len) : '–';
+      $('mzP').textContent = pts.length === 1 && !closed ? pts[0][0].toFixed(5) + ', ' + pts[0][1].toFixed(5) : (pts.length ? fmtLen(len) : '–');
       if (pl && pl.length >= 3) { var f = flat(pl, true); $('mzL').textContent = ukRibu(f.area) + ' m² / ' + (f.area / 10000).toFixed(3).replace('.', ',') + ' ha'; $('mzK').textContent = fmtLen(f.len); }
       else { $('mzL').textContent = '–'; $('mzK').textContent = '–'; }
-      sv.style.display = closed ? '' : 'none';
+      var empty = !pts.length;
+      card.style.display = empty ? 'none' : ''; img.style.display = empty ? 'block' : 'none';
+      if (empty) imgUpd(); else { clearTimeout(imgT); imgSeq++; img.textContent = ''; }
+      sv.style.display = (closed || pts.length >= 1) ? '' : 'none';
       card.classList.toggle('shut', !!closed);
       sv.style.top = (card.offsetTop + card.offsetHeight + 8) + 'px'; undo.style.top = (card.offsetTop + card.offsetHeight + 8) + 'px';
     }
-    function setClosed(c) { var was = !!closed; closed = c; if (c && !was) toast('Simpan blok baru'); }
+    function setClosed(c) { var was = !!closed; closed = c; if (c && !was) toast('Poligon tertutup. Tekan Simpan'); }
     function addPt() {
       if (closed) { toast('Poligon sudah tertutup. Tekan Back untuk membukanya lagi'); return; }
       if (nearFirst()) { setClosed({ k: 't' }); upd(); return; }
@@ -341,7 +356,7 @@
       hideTip(); clearTimeout(undoT);
       map.off('move', upd); window.removeEventListener('resize', place);
       map._lakeDraw = null; HA.ukurBack = null; map.removeLayer(g);
-      cross.remove(); add.remove(); card.remove(); sv.remove(); tip.remove(); undo.remove();
+      clearTimeout(imgT); imgSeq++; cross.remove(); add.remove(); card.remove(); img.remove(); sv.remove(); tip.remove(); undo.remove();
     }
     // tombol Back Android: 1x hapus titik terakhir, 3x cepat (jeda <= 300 ms) hapus semua, lagi = keluar
     HA.ukurBack = function () {
@@ -391,7 +406,36 @@
       });
       return { pieces: out, total: tot };
     }
-    function doSave() {
+    function r6(p) { return [+(+p[0]).toFixed(6), +(+p[1]).toFixed(6)]; }
+    function ink2(hex) { var h = String(hex).replace('#', ''); if (h.length !== 6) return '#fff'; var rr = parseInt(h.slice(0, 2), 16), gg = parseInt(h.slice(2, 4), 16), bb = parseInt(h.slice(4, 6), 16); return (0.299 * rr + 0.587 * gg + 0.114 * bb) > 150 ? '#111' : '#fff'; }
+    function dateField(def) { return '<label class="ukDt">Tanggal<input type="date" id="ukDate" value="' + def + '" max="' + S.today + '"></label>'; }
+    function dateVal(def) { var v = $('ukDate') ? $('ukDate').value : ''; return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : def; }
+    // titik (1 titik) atau garis (titik tidak menyatu): wajib menyentuh blok terkonfirmasi
+    function saveOpen() {
+      var P = pts.map(r6), kind = P.length === 1 ? 'pt' : 'ln', hit = null;
+      P.forEach(function (p) { if (hit) return; var b = HA.blockAt(L.latLng(p[0], p[1])); if (b && b.conf) hit = b; });
+      if (!hit) {
+        openSheet('<div class="grab"></div><div class="st">Tidak bisa ditandai</div><div class="muted" style="margin:6px 0 10px">' + (kind === 'pt' ? 'Titik' : 'Garis') + ' ini tidak berada di blok terkonfirmasi. Tanda hanya untuk blok terkonfirmasi. Konfirmasi blok dulu di Edit Blok.</div><div class="row" style="margin-top:12px"><button class="btn" id="ukNo" style="flex:1;height:50px">Tutup</button></div>');
+        $('ukNo').onclick = closeSheet; return;
+      }
+      var d = HA.tandaData(), br = HA.tandaBrush(), cat = br.cat, sb = br.sub, def = S.mapDay || S.today;
+      var catRow = d.cats.map(function (c) { return '<button type="button" class="tdk' + (c.id === cat ? ' on' : '') + '" data-cat="' + c.id + '" style="background:' + c.col + ';color:' + ink2(c.col) + '">' + esc(c.name) + '</button>'; }).join('');
+      openSheet('<div class="grab"></div><div class="st">Simpan sebagai tanda ' + (kind === 'pt' ? 'titik' : 'garis') + '</div><div class="muted" style="margin:4px 0 8px">Blok: ' + esc(hit.name) + '. Pilih kategori:</div><div class="tdKs" id="ukCats">' + catRow + '</div>' + dateField(def) +
+        '<div class="row" style="margin-top:12px"><button class="btn" id="ukNo" style="flex:1;height:50px">Batal</button><button class="btn pri" id="ukYes" style="flex:1;height:50px">Simpan</button></div>');
+      $('ukCats').onclick = function (e) {
+        var bt = e.target.closest && e.target.closest('button[data-cat]'); if (!bt) return;
+        cat = bt.getAttribute('data-cat'); sb = (cat === br.cat) ? br.sub : null;
+        Array.prototype.forEach.call($('ukCats').children, function (x) { x.classList.toggle('on', x === bt); });
+      };
+      $('ukNo').onclick = closeSheet;
+      $('ukYes').onclick = function () {
+        var dt = dateVal(def); closeSheet(); end();
+        HA.tandaAdd({ id: HA.tandaNewId(), t: kind, pts: P, cat: cat, sub: sb, col: null, op: br.op, name: '', note: '', ts: Date.now(), date: dt });
+        toast('Tanda ' + (kind === 'pt' ? 'titik' : 'garis') + ' tersimpan'); HA.KM && HA.KM.show(dt);
+      };
+    }
+    function doSave() { if (closed) doSavePoly(); else if (pts.length) saveOpen(); }
+    function doSavePoly() {
       var pl = poly(); if (!pl || pl.length < 3) return;
       var P = pl.map(function (p) { return [+(+p[0]).toFixed(6), +(+p[1]).toFixed(6)]; });
       if (flat(P, true).area < 1) { toast('Area terlalu kecil'); return; }
@@ -415,7 +459,7 @@
         openSheet('<div class="grab"></div><div class="st">Tidak bisa ditandai</div><div class="muted" style="margin:6px 0 10px">Area ini menimpa blok yang belum terkonfirmasi. Tanda kategori hanya untuk blok terkonfirmasi. Konfirmasi blok dulu di Edit Blok.</div><div id="ukRows">' + rows() + '</div><div class="row" style="margin-top:12px"><button class="btn pri" id="ukNo" style="flex:1;height:50px">Mengerti</button></div>');
         $('ukNo').onclick = closeSheet; return;
       }
-      openSheet('<div class="grab"></div><div class="st">Simpan sebagai tanda kategori</div><div class="muted" style="margin:4px 0 8px">Area dipotong mengikuti batas tiap blok. Pilih kategori:</div><div class="tdKs" id="ukCats">' + catRow + '</div><div id="ukRows" style="margin-top:10px">' + rows() + '</div>' +
+      openSheet('<div class="grab"></div><div class="st">Simpan sebagai tanda kategori</div><div class="muted" style="margin:4px 0 8px">Area dipotong mengikuti batas tiap blok. Pilih kategori:</div><div class="tdKs" id="ukCats">' + catRow + '</div>' + dateField(S.mapDay || S.today) + '<div id="ukRows" style="margin-top:10px">' + rows() + '</div>' +
         '<div class="row" style="margin-top:12px"><button class="btn" id="ukNo" style="flex:1;height:50px">Batal</button><button class="btn pri" id="ukYes" style="flex:1;height:50px">Simpan ' + conf.length + ' tanda</button></div>');
       $('ukCats').onclick = function (e) {
         var bt = e.target.closest && e.target.closest('button[data-cat]'); if (!bt) return;
@@ -424,10 +468,10 @@
       };
       $('ukNo').onclick = closeSheet;
       $('ukYes').onclick = function () {
-        closeSheet(); end();
-        conf.forEach(function (x) { HA.tandaAdd({ id: HA.tandaNewId(), t: 'pg', pts: x.ring, cat: cat, sub: sb, col: null, op: br.op, name: '', note: '', ts: Date.now() }); });
+        var dt = dateVal(S.mapDay || S.today); closeSheet(); end();
+        conf.forEach(function (x) { HA.tandaAdd({ id: HA.tandaNewId(), t: 'pg', pts: x.ring, cat: cat, sub: sb, col: null, op: br.op, name: '', note: '', ts: Date.now(), date: dt }); });
         var cn = ''; d.cats.forEach(function (c) { if (c.id === cat) cn = c.name; });
-        toast(conf.length + ' tanda ' + cn + ' tersimpan di ' + nB + ' blok. Lihat di Marking (SpidoMap)');
+        toast(conf.length + ' tanda ' + cn + ' tersimpan di ' + nB + ' blok'); HA.KM && HA.KM.show(dt);
       };
     }
     map._lakeDraw = { tap: function () {} };

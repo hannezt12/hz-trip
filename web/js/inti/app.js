@@ -190,7 +190,6 @@
     $('btnBg').onclick = askBackground;
     $('btnPrint').onclick = function () { openPrint({ day: S.hMode === 'list' ? T.ymd(Date.now()) : S.hDay }); };
     document.querySelectorAll('#drawer a[data-print]').forEach(function (a) { a.onclick = function () { closeDrawer(); openPrint({ day: S.hDay }); }; });
-    $('mapSeg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-map'); if (m) { S.settings.mapMode = m; saveSettings(); setTiles(); if (HA.mini) { setBase(HA.mini); syncOverlays(HA.mini); } } };
     $('mapChips').onclick = function (e) {
       var t = e.target; if (!t.getAttribute) return;
       if (t.getAttribute('data-k')) {

@@ -795,3 +795,16 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 /* v0.15.11: tombol Matikan total */
 .pwr{position:absolute;top:0;right:0.25rem;width:2.5rem;height:2.5rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;border:2px solid #4a5358;color:#4a5358;padding:0;z-index:2}
 .pwr.on{border-color:#00D4FF;color:#00D4FF;box-shadow:0 0 10px #00D4FF99,inset 0 0 6px #00D4FF55}
+
+/* v0.16.0: mode Kategori, label tanggal citra, tanggal di lembar Simpan */
+#katBar{padding:0 1rem 0.5rem}
+#katBar .seg{margin-bottom:0.4rem}
+#katRng{gap:0.5rem}
+#katRng label{flex:1;display:flex;flex-direction:column;font-size:max(0.6875rem,calc(0.75rem * var(--fs,1)));color:var(--tx2)}
+#katRng input{height:2.25rem;margin-top:0.15rem}
+#katInfo{margin-top:0.35rem}
+#v-lintasan.kat #mapChips,#v-lintasan.kat #mapMsg{display:none!important}
+#v-lintasan.katR .mapnav{display:none}
+.mzImg{position:absolute;top:0.6rem;left:4.6rem;z-index:1000;padding:0.45rem 0.7rem;border-radius:0.75rem;background:var(--ov);border:1px solid var(--line);box-shadow:0 2px 8px rgba(0,0,0,.35);font-size:max(0.75rem,calc(0.8125rem * var(--fs,1)))}
+.ukDt{display:flex;align-items:center;gap:0.6rem;margin-top:0.6rem;font-size:max(0.75rem,calc(0.8125rem * var(--fs,1)))}
+.ukDt input{flex:1;height:2.5rem}

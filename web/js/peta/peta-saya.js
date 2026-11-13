@@ -323,7 +323,8 @@
       S.mapView = { pts: pts, trips: trips, sel: HA.mapSel, day: day };
       if (S.profOpen) renderProfile();
       $('mapMsg').textContent = bounds.length ? '' : (day === S.today ? 'Belum ada lintasan hari ini. Lintasan muncul saat ada trip yang terekam.' : 'Tidak ada lintasan pada ' + T.dateLong(day) + '.');
-      if (bounds.length && (fit || !HA.fitted)) { HA.map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 }); HA.fitted = true; }
+      if (HA.KM) HA.KM.sync();
+      if (bounds.length && (fit || !HA.fitted) && !(HA.KM && HA.KM.mode === 'kategori')) { HA.map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 }); HA.fitted = true; }
       if (HA.PB.open) { pbPlay(false); pbBuild(); if (!HA.PB.seq.length) pbClose(); else pbDraw(false); }
     });
   }

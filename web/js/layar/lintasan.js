@@ -77,7 +77,7 @@
     syncOverlays(HA.map);
     if (HA.DM.syncMode) HA.DM.syncMode();
     batRedraw();
-    document.querySelectorAll('#mapSeg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-map') === S.settings.mapMode); });
+    if ($('mapBase')) $('mapBase').textContent = S.settings.mapMode === 'sat' ? 'Satelit' : 'Peta';
   }
   function gapText(g) { return 'Berhenti ' + T.hm(g.from) + '–' + T.hm(g.to) + ' (' + T.durText((g.to - g.from) / 1000) + ')'; }
   // Ketuk pin: label tampil dengan garis tipis ke pin. Beberapa pin yang berdekatan tampil bersamaan, berurutan menurut jam.
