@@ -746,7 +746,8 @@
     function sw() { return '<div class="tdCs tdCw">' + PAL.map(function (c) { return '<button type="button" class="tdc" data-pc="' + c[1] + '" style="background:' + c[1] + '" aria-label="' + c[0] + '"></button>'; }).join('') + '</div>'; }
     function draw() {
       openSheet('<div class="grab"></div><div class="st">KATEGORI</div><div class="muted" style="margin-bottom:8px">Nama dan warna bebas diubah. Sub-kategori ikut warna kategori, tapi warnanya boleh diganti.</div><div id="kgL">' + d.cats.map(function (c) {
-        var h = '<div class="kgc"><div class="kgr"><button type="button" class="kgd" data-pk="c:' + c.id + '" style="background:' + c.col + '" aria-label="Warna"></button><input type="text" maxlength="30" placeholder="Nama kategori" data-nc="' + c.id + '" value="' + esc(c.name) + '"><button type="button" class="ib" data-dc="' + c.id + '" aria-label="Hapus">' + IC.trash + '</button></div>';
+        var h = '<div class="kgc"><div class="kgr"><button type="button" class="kgd" data-pk="c:' + c.id + '" style="background:' + c.col + '" aria-label="Warna"></button><input type="text" maxlength="30" placeholder="Nama kategori" data-nc="' + c.id + '" value="' + esc(c.name) + '"><button type="button" class="ib" data-dc="' + c.id + '" aria-label="Hapus">' + IC.trash + '</button></div>' +
+          '<div class="kgst"><span>Gaya</span><div class="kgg" data-gs="' + c.id + '"><button type="button" data-g="isi"' + (c.style === 'garis' ? '' : ' class="on"') + '>Isi</button><button type="button" data-g="garis"' + (c.style === 'garis' ? ' class="on"' : '') + '>Garis tepi</button></div><span>Tebal</span><input type="range" min="1" max="8" step="1" data-gw="' + c.id + '" value="' + (c.w || 3) + '"><b>' + (c.w || 3) + '</b></div>';
         if (ex === 'c:' + c.id) h += sw();
         c.subs.forEach(function (s) {
           var k = 's:' + c.id + ':' + s.id;
@@ -756,6 +757,8 @@
         return h + '<button type="button" class="kga" data-as="' + c.id + '">+ Sub-kategori</button></div>';
       }).join('') + '</div><button class="btn" id="kgA" style="width:100%;margin-top:10px">+ Kategori baru</button><button class="btn pri" id="kgX" style="width:100%;margin-top:8px">Selesai</button>');
       var sh = $('sheet');
+      sh.querySelectorAll('[data-gs] button').forEach(function (e) { e.onclick = function () { var c = catOf(e.parentNode.getAttribute('data-gs')); if (c) { c.style = e.getAttribute('data-g'); save(); draw(); } }; });
+      sh.querySelectorAll('[data-gw]').forEach(function (e) { e.oninput = function () { var c = catOf(e.getAttribute('data-gw')); if (c) { c.w = +e.value; if (e.nextSibling) e.nextSibling.textContent = e.value; save(); } }; });
       sh.querySelectorAll('[data-nc]').forEach(function (e) { e.oninput = function () { var c = catOf(e.getAttribute('data-nc')); if (c) { c.name = e.value; save(); } }; });
       sh.querySelectorAll('[data-ns]').forEach(function (e) { e.oninput = function () { var a = e.getAttribute('data-ns').split(':'), s = subOf(catOf(a[0]), a[1]); if (s) { s.name = e.value; save(); } }; });
       sh.querySelectorAll('[data-pk]').forEach(function (e) { e.onclick = function () { var k = e.getAttribute('data-pk'); ex = ex === k ? null : k; draw(); }; });
@@ -791,8 +794,8 @@
           save(); draw();
         };
       });
-      $('kgA').onclick = function () { var c = { id: uid('k'), name: '', col: (function () { var u = {}; d.cats.forEach(function (x) { u[String(x.col).toLowerCase()] = 1; }); var f = PAL.filter(function (x) { return !u[x[1].toLowerCase()]; })[0]; return (f || PAL[d.cats.length % PAL.length])[1]; })(), subs: [] }; d.cats.push(c); foc = 'nc:' + c.id; save(); draw(); };
-      $('kgX').onclick = function () { norm(); save(); closeSheet(); TD.palOpen = false; drawAll(); if (HA.BT) HA.BT.refresh(); if (TD.ed) edBar(); else barMain(); };
+      $('kgA').onclick = function () { var c = { id: uid('k'), name: '', style: 'garis', w: 3, col: (function () { var u = {}; d.cats.forEach(function (x) { u[String(x.col).toLowerCase()] = 1; }); var f = PAL.filter(function (x) { return !u[x[1].toLowerCase()]; })[0]; return (f || PAL[d.cats.length % PAL.length])[1]; })(), subs: [] }; d.cats.push(c); foc = 'nc:' + c.id; save(); draw(); };
+      $('kgX').onclick = function () { norm(); save(); closeSheet(); TD.palOpen = false; drawAll(); if (HA.BT) HA.BT.refresh(); if (TD.on) { if (TD.ed) edBar(); else barMain(); } if (HA.KM) HA.KM.sync(); };
       if (foc) { var fe = sh.querySelector('[data-' + foc.split(':')[0] + '="' + foc.slice(foc.indexOf(':') + 1) + '"]'); foc = null; if (fe) { try { fe.focus(); } catch (x) {} } }
     }
     draw();
@@ -1051,7 +1054,7 @@
     if (blk && o.buf) { var lc0 = (mb[0] + mb[2]) / 2, dl = o.buf / 111320, dg = o.buf / (111320 * Math.cos(lc0 * Math.PI / 180)); mb = [mb[0] - dl, mb[1] - dg, mb[2] + dl, mb[3] + dg]; }
     return mb;
   }
-  HA.tandaPageBox = pageBox; HA.tandaPal = PAL; HA.tandaColOf = colOf; HA.tandaColorName = colorName;
+  HA.tandaPageBox = pageBox; HA.tandaPal = PAL; HA.tandaCatOf = catOf; HA.tandaColOf = colOf; HA.tandaColorName = colorName;
   function buildMarkPdf(itemsAll, o) {
     var objs = [], ver = (document.querySelector('.ver') ? (document.querySelector('.ver').textContent.match(/Versi\s*([\d.]+)/) || [])[1] : '') || '';
     function add(b) { objs.push(b); return objs.length; }

@@ -146,6 +146,12 @@
       TILES.forEach(function (t) { byId[t[0]] = t; });
       saved.forEach(function (id) { if (byId[id]) { out.push(byId[id]); delete byId[id]; } });
       TILES.forEach(function (t) { if (byId[t[0]]) out.push(t); });
+      if (HA.KM && HA.KM.mode === 'kategori') { // mode Kategori: alat tanda di depan
+        var fr = ['measure', 'draw', 'fill'], front = [], rest = [];
+        out.forEach(function (t) { (fr.indexOf(t[0]) >= 0 ? front : rest).push(t); });
+        front.sort(function (a, b) { return fr.indexOf(a[0]) - fr.indexOf(b[0]); });
+        out = front.concat(rest);
+      }
       return out;
     }
     function gridHtml() { return orderedTiles().map(function (t) { return tile(t[0], t[1], t[2], t[3]); }).join(''); }
@@ -215,6 +221,7 @@
       if (HA.DM.main) HA.DM.main.classList.toggle('hason', any);
     }
     HA.DM.sync = sync; HA.DM.syncMode = syncMode;
+    HA.DM.regrid = function () { var g = $('tGrid'); if (g) { g.innerHTML = gridHtml(); sync(); } };
     panel.onclick = function (e) {
       if (e.target.closest && e.target.closest('#tArr')) return;
       if (HA.DM.arranging && HA.DM.arranging()) return;
