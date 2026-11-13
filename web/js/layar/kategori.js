@@ -8,13 +8,14 @@
   function toast() { return HA.toast.apply(this, arguments); }
   function p2(n) { return (n < 10 ? '0' : '') + n; }
   function iso(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
-  var KM = HA.KM = { mode: 'lintasan', range: false, from: '', to: '', lay: null };
+  var KM = HA.KM = { mode: 'lintasan', range: false, from: '', to: '', lay: null, only: null };
   function map() { return HA.map; }
   function items() { try { return HA.tandaData().items || []; } catch (e) { return []; } }
   function dateOf(it) { return HA.tandaU.dateOf(it); }
   function visible() {
     return items().filter(function (it) {
       var d = dateOf(it);
+      if (KM.only && it.cat !== KM.only) return false;
       return KM.range ? ((!KM.from || d >= KM.from) && (!KM.to || d <= KM.to)) : d === S.mapDay;
     });
   }
@@ -30,8 +31,9 @@
       else if (it.t === 'ln') L.polyline(it.pts, { color: col, weight: w || 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(g);
       else L.polygon(it.pts, { color: col, weight: gar ? (w || 3) : 2.5, fill: !gar, fillColor: col, fillOpacity: gar ? 0 : opOf(it), interactive: false }).addTo(g);
     });
-    var n = list.length;
-    $('katInfo').textContent = n ? n + ' tanda' + (KM.range ? '' : ' pada tanggal ini') : (KM.range ? 'Tidak ada tanda pada rentang ini.' : 'Belum ada tanda pada tanggal ini.');
+    var n = list.length, oc = KM.only ? HA.tandaCatOf(KM.only) : null;
+    if (KM.only && !oc) KM.only = null;
+    $('katInfo').textContent = (oc ? 'Hanya ' + oc.name + ' · ' : '') + (n ? n + ' tanda' + (KM.range ? '' : ' pada tanggal ini') : (KM.range ? 'Tidak ada tanda pada rentang ini.' : 'Belum ada tanda pada tanggal ini.'));
   }
   function inkOn(hex) { var h = String(hex).replace('#', ''); if (h.length !== 6) return '#fff'; var r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#111' : '#fff'; }
   function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -39,7 +41,7 @@
   function stripDraw() {
     var el = $('katStrip'); if (!el) return;
     var d = HA.tandaData(), act = d.brush.cat, cc = HA.tandaCatOf(act), keep = el.querySelector('.tdKs'), sl = keep ? keep.scrollLeft : 0;
-    var boxes = d.cats.map(function (c) { return '<button type="button" class="tdk' + (c.id === act ? ' on' : '') + '" data-cat="' + c.id + '" style="background:' + c.col + ';color:' + inkOn(c.col) + '">' + esc(c.name) + '</button>'; }).join('') +
+    var boxes = d.cats.map(function (c) { return '<button type="button" class="tdk' + (c.id === act ? ' on' : '') + (c.id === KM.only ? ' only' : '') + '" data-cat="' + c.id + '" style="background:' + c.col + ';color:' + inkOn(c.col) + '">' + esc(c.name) + '</button>'; }).join('') +
       '<button type="button" class="tdk kgear" data-gear="1" aria-label="Kelola kategori">⚙</button>';
     var subs = cc && cc.subs.length ? '<div class="tdSb">' + cc.subs.map(function (s, i) { var c0 = s.col || cc.col; return '<button type="button" class="tdsc' + (d.brush.sub === s.id ? ' on' : '') + '" data-sub="' + s.id + '" style="background:' + c0 + ';color:' + inkOn(c0) + '" aria-label="' + esc(s.name) + '">' + (i + 1) + '</button>'; }).join('') + '</div>' : '';
     el.innerHTML = '<div class="tdKw"><div class="tdKs">' + boxes + '</div></div>' + subs;
@@ -53,7 +55,12 @@
       if (b.getAttribute('data-gear')) { HA.tandaCatPage(); return; }
       var sub = b.getAttribute('data-sub'), cat = b.getAttribute('data-cat'), d = HA.tandaData();
       if (sub) { var c = HA.tandaCatOf(d.brush.cat), sb = c && c.subs.filter(function (x) { return x.id === sub; })[0]; var was = d.brush.sub === sub; HA.tandaSetBrush(d.brush.cat, was ? null : sub); if (sb && !was) toast(c.name + ' / ' + (sb.name || 'Sub')); }
-      else if (cat) { HA.tandaSetBrush(cat, null); toast('Kategori aktif: ' + HA.tandaCatOf(cat).name); }
+      else if (cat) {
+        var nm = HA.tandaCatOf(cat).name;
+        if (KM.only === cat) { KM.only = null; toast('Semua kategori tampil'); }
+        else { KM.only = cat; HA.tandaSetBrush(cat, null); toast('Hanya ' + nm + ' · ketuk lagi untuk semua'); }
+        draw();
+      }
       stripDraw();
     };
     el.addEventListener('pointerdown', function (e) { var b = e.target.closest && e.target.closest('.tdk[data-cat]'); if (!b) return; fired = false; clearTimeout(tm); tm = setTimeout(function () { fired = true; HA.tandaCatPage(); }, 550); });
@@ -80,18 +87,31 @@
     el.querySelectorAll('.bprow').forEach(function (e) {
       e.onclick = function () {
         var id = e.getAttribute('data-id'), b = HA.blocksList().filter(function (o) { return String(o.id) === id; })[0];
-        el.style.display = 'none'; $('katQ').value = ''; try { $('katQ').blur(); } catch (x) {}
+        srchClose();
         if (!b) return;
         map().fitBounds(L.polygon(b.pts).getBounds(), { padding: [40, 40], maxZoom: 19 });
         if (HA.openBlockPop) HA.openBlockPop(b);
       };
     });
   }
+  function srchClose() { var e = $('katSrch'); if (!e) return; $('katSl').style.display = 'none'; e.style.display = 'none'; $('katQ').value = ''; try { $('katQ').blur(); } catch (x) {} }
+  function srchOpen() {
+    if (HA.DM && HA.DM.closePanel) HA.DM.closePanel();
+    $('katSrch').style.display = 'block'; var q = $('katQ'); q.value = ''; srchList();
+    setTimeout(function () { try { q.focus(); } catch (x) {} }, 60);
+  }
   function srchWire() {
     var q = $('katQ');
     q.onfocus = srchList; q.oninput = srchList;
-    q.onblur = function () { setTimeout(function () { $('katSl').style.display = 'none'; }, 250); };
+    q.onblur = function () { setTimeout(function () { if (document.activeElement !== q) srchClose(); }, 250); };
   }
+  KM.openSearch = srchOpen;
+  // tombol Back: tutup pencarian lalu panel Alat peta
+  HA.mapBack = function () {
+    var e = $('katSrch'); if (e && e.style.display !== 'none') { srchClose(); return true; }
+    var p = document.querySelector('.toolpanel'); if (p && p.style.display !== 'none' && HA.DM && HA.DM.closePanel) { HA.DM.closePanel(); return true; }
+    return false;
+  };
   function syncUi() {
     stripDraw();
     var kat = KM.mode === 'kategori', v = $('v-lintasan');

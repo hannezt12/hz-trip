@@ -429,10 +429,10 @@
     var mode = S.settings.rowMode || 'datar', id = HA.DM.popSeq, el = document.createElement('div');
     el.className = 'blkpop' + (HA.DM.bpFold ? ' fold' : ''); HA.map.getContainer().appendChild(el); HA.DM.pop = el; L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);
     var PEN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16 5l3 3L8 19z"/></svg>';
-    el.innerHTML = '<div class="bh"><b>' + esc(b.name) + '<small class="bha"> · ' + nf(blkHa(b), 2) + ' ha</small></b><button type="button" class="ib2" id="bpE" aria-label="Edit blok">' + PEN + '</button>' + '' + '<button type="button" class="ib2" id="bpSh" aria-label="Bagikan blok"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.4"/><circle cx="17" cy="6" r="2.4"/><circle cx="17" cy="18" r="2.4"/><path d="M8 11l7-4M8 13l7 4"/></svg></button><button type="button" class="ib2" id="bpT" aria-label="Lipat atau buka panel" aria-expanded="' + (HA.DM.bpFold ? 'false' : 'true') + '"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button><button type="button" class="ib2" id="bpX" aria-label="Tutup">✕</button></div>' +
+    el.innerHTML = '<div class="bh"><b>' + esc(b.name) + '<small class="bha"> · ' + nf(blkHa(b), 2) + ' ha</small></b><button type="button" class="ib2" id="bpE" aria-label="Edit blok">' + PEN + '</button>' + '' + '<button type="button" class="ib2" id="bpHi" aria-label="Riwayat blok"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></button>' + '<button type="button" class="ib2" id="bpSh" aria-label="Bagikan blok"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.4"/><circle cx="17" cy="6" r="2.4"/><circle cx="17" cy="18" r="2.4"/><path d="M8 11l7-4M8 13l7 4"/></svg></button><button type="button" class="ib2" id="bpT" aria-label="Lipat atau buka panel" aria-expanded="' + (HA.DM.bpFold ? 'false' : 'true') + '"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button><button type="button" class="ib2" id="bpX" aria-label="Tutup">✕</button></div>' +
       '<div class="bs" id="bpS"></div><div id="bpBody">' +
       '<div class="bl">' + nf(blkHa(b), 2) + ' ha' + (b.luasCat ? ' (tercatat ' + nf(+b.luasCat, 2) + ')' : '') + ' · ' + (b.dir == null ? 'arah row belum diatur' : 'arah ' + Math.round(b.dir) + '° · jarak ' + nf(blkSp(b), 2) + ' m') + ' · <small>' + blkStatusText(b) + '</small></div>' +
-      '<div class="bl" id="bpR">Menghitung…</div><div class="bl" id="bpA"></div><div class="bl" id="bpD"></div><div class="bl" id="bpH"></div><div class="bl" id="bpL"></div>' + (b.note ? '<div class="bl"><small>' + esc(b.note) + '</small></div>' : '') +
+      '<div class="bl" id="bpR">Menghitung…</div>' + (mode === 'kontur' ? '<div class="bl" id="bpA"></div><div class="bl" id="bpD"></div><div class="bl" id="bpH"></div><div class="bl" id="bpL"></div>' : '') + (b.note ? '<div class="bl"><small>' + esc(b.note) + '</small></div>' : '') +
       '<div class="tseg" id="bpM"><button type="button" data-m="datar">Datar</button><button type="button" data-m="kontur">Kontur</button></div>' +
       (mode === 'kontur' ? '<div class="tseg" id="bpK"><button type="button" data-k="1">Rapat</button><button type="button" data-k="2">Sedang</button><button type="button" data-k="3">Jarang</button></div><div class="tseg"><button type="button" id="bpG">Edit garis pedoman</button>' + (b.guide ? '<button type="button" id="bpG0">Atur ulang pedoman</button>' : '') + '</div>' : '') + '</div>';
     el.querySelectorAll('#bpM button').forEach(function (x) { x.classList.toggle('on', x.getAttribute('data-m') === mode); });
@@ -440,6 +440,7 @@
     $('bpT').onclick = function () { HA.DM.bpFold = !HA.DM.bpFold; applyFold(); };
     function updSum() { var e = $('bpS'); if (e) e.textContent = [sumR, sumD].filter(Boolean).join(' · '); }
     $('bpE').onclick = function () { openBlockEdit(b); };
+    $('bpHi').onclick = function () { if (HA.BRiw) HA.BRiw.open(b); };
     $('bpSh').onclick = function () {
       if (!b.conf) { toast('Hanya blok terkonfirmasi yang bisa dibagikan'); return; }
       if (!HA.BT || !HA.BT.itemsOf || !HA.BT.itemsOf(b).length) { toast('Blok ini belum punya tanda'); return; }
@@ -461,7 +462,7 @@
     if (mode === 'kontur') $('bpR').textContent = 'Menghitung kontur… (beberapa detik, aplikasi tetap bisa dipakai)';
     var rowsP = computeRows(b, mode), rowsRes = null;
     // cekungan dihitung setelah row selesai, supaya garis tampil lebih dulu
-    var depP = rowsP.catch(function () { return null; }).then(function () { return computeDep(b); }).catch(function () { return null; });
+    var depP = mode !== 'kontur' ? Promise.resolve(undefined) : rowsP.catch(function () { return null; }).then(function () { return computeDep(b); }).catch(function () { return null; });
     rowsP.then(function (r) {
       if (id !== HA.DM.popSeq || !$('bpR')) return;
       rowsRes = r; sumR = r ? (r.lk ? r.n.toLocaleString('id-ID') + ' lajur' : '≈' + r.n.toLocaleString('id-ID') + ' garis') : 'arah row belum diatur'; updSum();
@@ -469,12 +470,12 @@
       else { $('bpR').innerHTML = (r.lk ? '<b>' + r.n.toLocaleString('id-ID') + ' lajur</b>' : '<b>≈ ' + r.n.toLocaleString('id-ID') + ' garis</b> <small>(kontur lama; bersihkan dan siapkan ulang untuk jumlah lajur)</small>') + (mode === 'kontur' ? ' mengikuti kontur' : '') + ' · rata-rata ' + Math.round(r.avg) + ' m · total ' + nf(r.total / 1000, 2) + ' km' + (mode === 'kontur' ? '<br><small>perkiraan dari garis pedoman dan jarak row</small>' : ''); drawRowsInto(lay, b, mode, r, null); }
     }).catch(function (e) { if (id === HA.DM.popSeq && $('bpR')) $('bpR').textContent = String(e && e.message || e); });
     if (S.settings.rowOn) drawRows();
-    if (b.dir != null && window.HzDem) {
+    if (mode === 'kontur' && b.dir != null && window.HzDem) {
       var c0 = HzBlok.proj(b.pts[0][0], b.pts[0][1]), cx = 0, cy = 0; b.pts.forEach(function (p) { cx += p[0]; cy += p[1]; }); cx /= b.pts.length; cy /= b.pts.length; void c0;
       HzDem.info(cx, cy).then(function (r) { if (id !== HA.DM.popSeq || !r || !$('bpA')) return; if (r.pct < 1) { $('bpA').textContent = 'Lereng di tengah blok hampir datar (' + nf(r.pct, 1) + '%)'; return; } var an = HzBlok.angleToSlope(b.dir, r.down); $('bpA').innerHTML = 'Lereng ' + nf(r.pct, 1) + '% · row ' + Math.round(an) + '° terhadap arah turun (' + downText(an) + ')'; }).catch(function () {});
     }
     depP.then(function (d) {
-      if (id !== HA.DM.popSeq || !$('bpD')) return;
+      if (mode !== 'kontur' || id !== HA.DM.popSeq || !$('bpD')) return;
       if (d && mode === 'kontur') { drawDepInto(lay, d); if (rowsRes && d.flow) drawArrows(lay, shownLines(b, rowsRes, mode), d.flow); }
       sumD = d ? (d.list.length ? d.list.length + ' cekungan' : 'tanpa cekungan') + (d.hump && d.hump.length ? ' · ' + d.hump.length + ' cembung' : '') : ''; updSum();
       if (d && $('bpH')) {
@@ -602,9 +603,9 @@
     openSheet('<div class="grab"></div><div class="bth"><div class="st">EDIT BLOK</div><button class="btn pri" id="beX">Selesai</button></div>' +
       '<div class="bnm"><input type="text" id="beN" maxlength="40" value="' + esc(b.name) + '"><label><input type="checkbox" id="beC"' + (b.conf ? ' checked' : '') + '> Terkonfirmasi</label></div>' +
       '<div class="muted" id="beLk" style="display:none;margin-top:8px;color:#FFB020">Blok terkunci. Hilangkan centang Terkonfirmasi untuk mengedit.</div>' +
-      '<div class="muted" style="margin-top:8px">Arah row (° dari utara, 0–179)</div>' +
-      '<div class="row bedir"><button class="btn" data-d="-5">−5</button><button class="btn" data-d="-1">−1</button><input type="number" id="beD" min="0" max="359" step="1" value="' + (b.dir == null ? '' : Math.round(b.dir * 10) / 10) + '" placeholder="arah"><button class="btn" data-d="1">+1</button><button class="btn" data-d="5">+5</button><button class="btn sgb" id="beS"></button></div>' +
+      '<div class="muted" id="beDt" style="margin-top:8px">' + (b.dir == null ? 'Arah row belum diatur. Gunakan Ketuk 2 titik.' : 'Arah row ' + Math.round(b.dir) + '° · ' + dirStat(b.dir)) + '</div>' +
       '<div class="row" style="margin-top:6px;gap:6px"><button class="btn" id="beP" style="flex:1">Ketuk 2 titik</button><button class="btn" id="beB" style="flex:1">Edit batas</button></div>' +
+      '<button class="btn" id="beHi" style="width:100%;margin-top:8px">Riwayat blok</button>' +
       '<button class="btn" id="beMo" style="width:100%;margin-top:8px">Lainnya ▾</button>' +
       '<div class="bmore" id="beMore"><div class="row" style="margin-top:10px;gap:8px"><div style="flex:1"><div class="muted">Jarak row (m)</div><input type="number" id="beJ" step="0.05" min="0.5" max="5" value="' + blkSp(b) + '"></div><div style="flex:1"><div class="muted">Kurangi tepi (m)</div><input type="number" id="beM" step="1" min="0" max="50" value="' + (+b.margin || 0) + '"></div></div>' +
       '<textarea id="beT" rows="2" maxlength="200" placeholder="Catatan (varietas, R&D, dll.)" style="margin-top:8px;width:100%">' + esc(b.note || '') + '</textarea>' +
@@ -612,23 +613,16 @@
     if (inMap) { $('scrim').classList.remove('on'); $('sheet').classList.add('cmp'); }
     $('beMo').onclick = function () { var m = $('beMore'), on = !m.classList.contains('on'); m.classList.toggle('on', on); $('beMo').textContent = on ? 'Lainnya ▴' : 'Lainnya ▾'; if (on) $('sheet').scrollTop = $('sheet').scrollHeight; setTimeout(function () { fitBlockVisible(b, true); }, 60); };
     function live() { saveSettings(); drawBlocks(); if (HA.DM.pop && HA.DM.popId === b.id) openBlockPop(b); if (S.settings.rowOn) drawRows(); }
-    function setDir(v) { b.dir = v == null ? null : ((v % 180) + 180) % 180; if (b.dir == null) b.conf = false; $('beD').value = b.dir == null ? '' : Math.round(b.dir * 10) / 10; if (b.dir == null) $('beC').checked = false; live(); }
     $('beN').onchange = function () { b.name = $('beN').value.trim() || b.name; live(); };
-    $('beD').onchange = function () { var v = $('beD').value; setDir(v === '' ? null : +v); };
-    $('sheet').querySelectorAll('button[data-d]').forEach(function (x) { x.onclick = function () { setDir((b.dir == null ? sg : b.dir) + (+x.getAttribute('data-d'))); }; });
-    var lg = (sg + 90) % 180, nextSg = 0; // 0 = berikutnya terpendek, 1 = terjauh
-    function sgLabel() { var d = nextSg ? lg : sg; $('beS').innerHTML = (nextSg ? 'Terjauh ' : 'Terpendek ') + d + '°<small>' + dirStat(d) + '</small>'; }
-    $('beS').onclick = function () { setDir(nextSg ? lg : sg); nextSg = nextSg ? 0 : 1; sgLabel(); };
-    sgLabel();
     $('beJ').onchange = function () { var v = +$('beJ').value; b.sp = v >= 0.5 && v <= 5 ? Math.round(v * 100) / 100 : null; live(); };
     $('beM').onchange = function () { b.margin = Math.max(0, +$('beM').value || 0); live(); };
     function applyLock() {
       var lk = !!b.conf;
-      ['beN', 'beD', 'beS', 'beP', 'beB', 'beJ', 'beM', 'beT', 'beD2'].forEach(function (id) { var e = $(id); if (e) e.disabled = lk; });
-      $('sheet').querySelectorAll('button[data-d]').forEach(function (x) { x.disabled = lk; });
+      ['beN', 'beP', 'beB', 'beJ', 'beM', 'beT', 'beD2'].forEach(function (id) { var e = $(id); if (e) e.disabled = lk; });
       $('beLk').style.display = lk ? '' : 'none';
     }
     $('beC').onchange = function () { if ($('beC').checked && b.dir == null) { $('beC').checked = false; toast('Atur arah row dulu'); return; } b.conf = $('beC').checked; live(); applyLock(); };
+    $('beHi').onclick = function () { HA.onSheetClose = null; if (HA.BRiw) HA.BRiw.open(b, function () { openBlockEdit(b); }); };
     $('beT').onchange = function () { b.note = $('beT').value.trim(); live(); };
     $('beP').onclick = function () { HA.onSheetClose = null; closeSheet(); needMap(b.pts, function () { tapDir(b); }); };
     $('beB').onclick = function () { HA.onSheetClose = null; closeSheet(); needMap(b.pts, function () { closeBlockPop(); editPoly(b.pts, true, function (res) { if (res) { b.pts = res; delete b._bb; saveSettings(); } drawBlocks(); drawRows(); openBlockPop(b); openBlockEdit(b); }); }); };

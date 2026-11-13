@@ -126,6 +126,7 @@
       shpOn: ic('<path d="M5 17l3-10 9 3 2 8z"/><circle cx="5" cy="17" r="1.5"/><circle cx="8" cy="7" r="1.5"/><circle cx="17" cy="10" r="1.5"/>'),
       fill: ic('<path d="M7 4l9 9-5 5-6-6z"/><path d="M17 15c1.5 2 2 3 0 4s-2-2 0-4z"/>'),
       shift: ic('<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>'),
+      search: ic('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>'),
       measure: ic('<path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/>'),
       batDesa: ic('<path d="M4 7l5-3 6 3 5-2v12l-5 2-6-3-5 3z"/><path d="M9 4v13M15 7v13"/>'),
       batKec: ic('<path d="M3 5h18v14H3z"/><path d="M3 12h18M12 5v14"/>'),
@@ -138,7 +139,7 @@
       dataGo: ic('<path d="M5 5h14M5 12h14M5 19h14"/>')
     };
     function tile(id, label, st, badge) { return '<button type="button" class="tile' + (st ? ' st' : '') + '" data-t="' + id + '">' + IC[id] + '<span>' + label + '</span>' + (badge ? '<i class="tbd" id="bd_' + id + '"></i>' : '') + '</button>'; }
-    var TILES = [['contour', 'Kontur', 1], ['slopeLayer', 'Lereng', 1], ['hach', 'Arsiran', 1], ['v3d', '3D', 1], ['slopeTap', 'Info lereng', 1], ['prof', 'Profil', 1],
+    var TILES = [['search', 'Cari'], ['contour', 'Kontur', 1], ['slopeLayer', 'Lereng', 1], ['hach', 'Arsiran', 1], ['v3d', '3D', 1], ['slopeTap', 'Info lereng', 1], ['prof', 'Profil', 1],
       ['useNas', 'DEMNAS', 1], ['useFree', 'DEM gratis', 1], ['blkOn', 'Blok', 1, 1], ['rowOn', 'Arah row', 1], ['wlOn', 'Water lock', 1], ['lakesOn', 'Danau & drainase', 1, 1], ['linesOn', 'Jalan bantu', 1], ['batDesa', 'Desa', 1], ['play', 'Putar', 1],
       ['draw', 'Buat baru'], ['fill', 'Isi blok'], ['measure', 'Ukur'], ['shift', 'Geser blok'], ['batCfg', 'Atur batas'], ['dataGo', 'Data peta']];
     function orderedTiles() {
@@ -146,8 +147,9 @@
       TILES.forEach(function (t) { byId[t[0]] = t; });
       saved.forEach(function (id) { if (byId[id]) { out.push(byId[id]); delete byId[id]; } });
       TILES.forEach(function (t) { if (byId[t[0]]) out.push(t); });
-      if (HA.KM && HA.KM.mode === 'kategori') { // mode Kategori: alat tanda di depan
-        var fr = ['measure', 'draw', 'fill'], front = [], rest = [];
+      var si = -1; out.forEach(function (t, i) { if (t[0] === 'search') si = i; }); if (si > 0) out.unshift(out.splice(si, 1)[0]);
+      if (HA.KM && HA.KM.mode === 'kategori') { // mode Kategori: Cari lalu alat tanda di depan
+        var fr = ['search', 'measure', 'draw', 'fill'], front = [], rest = [];
         out.forEach(function (t) { (fr.indexOf(t[0]) >= 0 ? front : rest).push(t); });
         front.sort(function (a, b) { return fr.indexOf(a[0]) - fr.indexOf(b[0]); });
         out = front.concat(rest);
@@ -234,6 +236,7 @@
       var b = e.target.closest && e.target.closest('.tsw, .tbtn, .tile'); if (!b) return;
       var id = b.getAttribute('data-t');
       if (id === 'play') { if (HA.PB.open) HA.pbClose(); else { closeP(); HA.pbOpen(); } sync(); return; }
+      if (id === 'search') { closeP(); if (HA.KM && HA.KM.openSearch) HA.KM.openSearch(); return; }
       if (id === 'measure') { closeP(); HA.measureStart(); return; }
       if (id === 'fill') { closeP(); HA.fillStart(); return; }
       if (id === 'shift') { closeP(); HA.shiftStart(); return; }
@@ -272,11 +275,17 @@
         b.type = 'button'; b.setAttribute('aria-label', 'Alat peta'); b.innerHTML = ICO_T;
         L.DomEvent.disableClickPropagation(b);
         b.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-        b.onclick = function () { var open = panel.style.display === 'none'; if (open) HA.closeAll({ panel: true }); panel.style.display = open ? 'block' : 'none'; b.classList.toggle('open', open); sync(); };
+        b.onclick = function () { var open = panel.style.display === 'none'; if (open && HA.DM.edit) { toast('Selesaikan atau batalkan edit dulu'); return; } if (open) HA.closeAll({ panel: true }); panel.style.display = open ? 'block' : 'none'; b.classList.toggle('open', open); sync(); };
         HA.DM.main = b; closeP = function () { panel.style.display = 'none'; b.classList.remove('open'); }; HA.DM.closePanel = closeP; return b;
       }
     });
     new Ctl().addTo(m);
+    // ketuk di luar panel menutup panel saja (ketukan tidak diteruskan ke peta)
+    m.getContainer().addEventListener('click', function (e) {
+      if (panel.style.display === 'none') return;
+      if (e.target.closest && e.target.closest('.toolpanel, .locbtn')) return;
+      closeP(); e.stopPropagation(); e.preventDefault();
+    }, true);
     // tombol lama dipertahankan sebagai penampung status (tidak tampil)
     if (S.settings.btnPos) { delete S.settings.btnPos; saveSettings(); }
     HA.DM.btnL = document.createElement('button'); HA.DM.btnS = document.createElement('button'); HA.DM.btnK = document.createElement('button'); HA.DM.btnP = document.createElement('button');
