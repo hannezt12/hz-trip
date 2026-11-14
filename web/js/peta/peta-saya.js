@@ -300,7 +300,7 @@
   function renderMap(fit) {
     if (!HA.map) return;
     var day = S.mapDay;
-    $('mPick').value = day; $('mPick').max = S.today;
+    $('mPick').value = day; $('mPick').max = S.today; if (HA.KM && HA.KM.calLabel) HA.KM.calLabel();
     $('mNext').style.opacity = day >= S.today ? '.3' : '1';
     $('mToday').style.visibility = day === S.today ? 'hidden' : 'visible';
     mapData().then(function (d) {

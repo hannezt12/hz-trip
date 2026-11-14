@@ -239,7 +239,7 @@
     HA.SP.follow = false; HA.SP.autoPaused = true;
     if (!TD.bound) { m.on('click', onMapClick); TD.bound = true; }
     setOverlays(false); ensureLay(); drawAll(); strokeBind();
-    $('spBar').style.display = 'none'; $('tdBar').style.display = 'flex'; $('spTanda').classList.add('on');
+    $('spBar').style.display = 'none'; $('tdBar').style.display = 'flex'; if ($('spTanda')) $('spTanda').classList.add('on');
     if (HA.BT) HA.BT.enter();
     barMain(); if (!HA.BT) hud('');
     setTimeout(draftOffer, 700);
@@ -258,7 +258,7 @@
     edCancel(); if (HA.BT) HA.BT.leave(); TD.tool = null; TD.selIt = null; TD.del = null; TD.palOpen = false; lockMap(false); TD.on = false;
     if (TD.lay) { TD.lay.clearLayers(); }
     setOverlays(false);
-    $('tdBar').style.display = 'none'; $('spBar').style.display = ''; $('spTanda').classList.remove('on'); hud('');
+    $('tdBar').style.display = 'none'; $('spBar').style.display = ''; if ($('spTanda')) $('spTanda').classList.remove('on'); hud('');
     if (TD.prevFollow != null) { HA.SP.follow = TD.prevFollow; TD.prevFollow = null; }
     HA.SP.autoPaused = false;
     if (HA.spBtns) HA.spBtns();

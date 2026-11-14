@@ -127,6 +127,8 @@
       fill: ic('<path d="M7 4l9 9-5 5-6-6z"/><path d="M17 15c1.5 2 2 3 0 4s-2-2 0-4z"/>'),
       shift: ic('<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>'),
       search: ic('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>'),
+      daftar: ic('<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>'),
+      isi: ic('<path d="M5 3l7 7-6 9-3-3 9-13z"/><path d="M19 14c1.5 2 2 3 2 4a2 2 0 01-4 0c0-1 .5-2 2-4z"/>'),
       measure: ic('<path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/>'),
       batDesa: ic('<path d="M4 7l5-3 6 3 5-2v12l-5 2-6-3-5 3z"/><path d="M9 4v13M15 7v13"/>'),
       batKec: ic('<path d="M3 5h18v14H3z"/><path d="M3 12h18M12 5v14"/>'),
@@ -139,17 +141,22 @@
       dataGo: ic('<path d="M5 5h14M5 12h14M5 19h14"/>')
     };
     function tile(id, label, st, badge) { return '<button type="button" class="tile' + (st ? ' st' : '') + '" data-t="' + id + '">' + IC[id] + '<span>' + label + '</span>' + (badge ? '<i class="tbd" id="bd_' + id + '"></i>' : '') + '</button>'; }
-    var TILES = [['search', 'Cari'], ['contour', 'Kontur', 1], ['slopeLayer', 'Lereng', 1], ['hach', 'Arsiran', 1], ['v3d', '3D', 1], ['slopeTap', 'Info lereng', 1], ['prof', 'Profil', 1],
-      ['useNas', 'DEMNAS', 1], ['useFree', 'DEM gratis', 1], ['blkOn', 'Blok', 1, 1], ['rowOn', 'Arah row', 1], ['wlOn', 'Water lock', 1], ['lakesOn', 'Danau & drainase', 1, 1], ['linesOn', 'Jalan bantu', 1], ['batDesa', 'Desa', 1], ['play', 'Putar', 1],
-      ['draw', 'Buat baru'], ['fill', 'Isi blok'], ['measure', 'Ukur'], ['shift', 'Geser blok'], ['batCfg', 'Atur batas'], ['dataGo', 'Data peta']];
+    var TILES = [['search', 'Cari'], ['daftar', 'Daftar tanda'], ['isi', 'Ketuk isi', 1], ['contour', 'Kontur', 1], ['slopeLayer', 'Lereng', 1], ['hach', 'Arsiran', 1], ['v3d', '3D', 1], ['slopeTap', 'Info lereng', 1], ['prof', 'Profil', 1],
+      ['useNas', 'DEMNAS', 1], ['useFree', 'DEM gratis', 1], ['blkOn', 'Blok', 1, 1], ['rowOn', 'Arah row', 1], ['wlOn', 'Water lock', 1], ['lakesOn', 'Danau & drainase', 1, 1], ['linesOn', 'Jalan bantu', 1], ['batDesa', 'Batas', 1], ['play', 'Putar', 1],
+      ['draw', 'Buat baru'], ['fill', 'Isi blok'], ['measure', 'Ukur'], ['shift', 'Geser blok']];
+    var RARE = { v3d: 1, slopeLayer: 1, hach: 1, slopeTap: 1, prof: 1 };
+    function tileShown(id) { var t = S.settings.tileShow || {}; if (t[id] != null) return !!t[id]; return !!(id === 'slopeLayer' ? S.settings.slopeLayer : id === 'hach' ? S.settings.hach : false); }
+    HA.DM.rare = [['v3d', '3D'], ['slopeLayer', 'Kemiringan (Lereng)'], ['hach', 'Arsiran'], ['slopeTap', 'Info lereng'], ['prof', 'Profil']]; HA.DM.tileShown = tileShown;
     function orderedTiles() {
       var saved = S.settings.tileOrder || [], byId = {}, out = [];
       TILES.forEach(function (t) { byId[t[0]] = t; });
       saved.forEach(function (id) { if (byId[id]) { out.push(byId[id]); delete byId[id]; } });
       TILES.forEach(function (t) { if (byId[t[0]]) out.push(t); });
+      out = out.filter(function (t) { return !RARE[t[0]] || tileShown(t[0]); });
+      if (!(HA.KM && HA.KM.mode === 'kategori')) out = out.filter(function (t) { return t[0] !== 'isi'; });
       var si = -1; out.forEach(function (t, i) { if (t[0] === 'search') si = i; }); if (si > 0) out.unshift(out.splice(si, 1)[0]);
       if (HA.KM && HA.KM.mode === 'kategori') { // mode Kategori: Cari lalu alat tanda di depan
-        var fr = ['search', 'measure', 'draw', 'fill'], front = [], rest = [];
+        var fr = ['search', 'daftar', 'isi', 'measure', 'draw', 'fill'], front = [], rest = [];
         out.forEach(function (t) { (fr.indexOf(t[0]) >= 0 ? front : rest).push(t); });
         front.sort(function (a, b) { return fr.indexOf(a[0]) - fr.indexOf(b[0]); });
         out = front.concat(rest);
@@ -202,7 +209,7 @@
     })();
     function state(id) {
       return id === 'contour' ? !!S.settings.contour : id === 'slopeLayer' ? !!S.settings.slopeLayer : id === 'hach' ? !!S.settings.hach : id === 'slopeTap' ? !!m._slopeOn :
-        id === 'blkOn' ? S.settings.blkOn !== false : id === 'wlOn' ? !!(HA.wlOn && HA.wlOn()) : id === 'rowOn' ? !!S.settings.rowOn : id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'play' ? !!HA.PB.open : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'v3d' ? HA.V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : id === 'linesOn' ? S.settings.linesOn !== false : !!S.profOpen;
+        id === 'blkOn' ? S.settings.blkOn !== false : id === 'wlOn' ? !!(HA.wlOn && HA.wlOn()) : id === 'rowOn' ? !!S.settings.rowOn : id === 'isi' ? !!(HA.KM && HA.KM.fillTap) : id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'play' ? !!HA.PB.open : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'v3d' ? HA.V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : id === 'linesOn' ? S.settings.linesOn !== false : !!S.profOpen;
     }
     function sync() {
       var any = false;
@@ -223,6 +230,7 @@
       if (HA.DM.main) HA.DM.main.classList.toggle('hason', any);
     }
     HA.DM.sync = sync; HA.DM.syncMode = syncMode;
+    HA.DM.orderedTiles = orderedTiles;
     HA.DM.regrid = function () { var g = $('tGrid'); if (g) { g.innerHTML = gridHtml(); sync(); } };
     panel.onclick = function (e) {
       if (e.target.closest && e.target.closest('#tArr')) return;
@@ -230,13 +238,16 @@
       var k = e.target.closest && e.target.closest('#tHk button');
       if (k) { S.settings.hachKind = k.getAttribute('data-k'); saveSettings(); if (!S.settings.hach) setHach(true); else if (HA.DM.hach) HA.DM.hach.redraw(); sync(); return; }
       var rm = e.target.closest && e.target.closest('#tRm button');
-      if (rm) { S.settings.rowMode = rm.getAttribute('data-m'); saveSettings(); drawRows(); sync(); return; }
+      if (rm) { S.settings.rowMode = rm.getAttribute('data-m'); saveSettings(); drawRows(); sync(); if (HA.DM.pop && HA.DM.popId != null) { var pb = blocksList().filter(function (o) { return o.id === HA.DM.popId; })[0]; if (pb) HA.openBlockPop(pb, true); } return; }
       var sm = e.target.closest && e.target.closest('#tHs button');
       if (sm) { S.settings.hachSmooth = sm.getAttribute('data-s'); saveSettings(); if (!S.settings.hach) setHach(true); else if (HA.DM.hach) HA.DM.hach.redraw(); sync(); return; }
       var b = e.target.closest && e.target.closest('.tsw, .tbtn, .tile'); if (!b) return;
       var id = b.getAttribute('data-t');
       if (id === 'play') { if (HA.PB.open) HA.pbClose(); else { closeP(); HA.pbOpen(); } sync(); return; }
+      if (id === 'daftar') { closeP(); if (HA.BT && HA.BT.listOpen) HA.BT.listOpen(); return; }
+      if (id === 'isi') { if (HA.KM && HA.KM.toggleFill) HA.KM.toggleFill(); sync(); return; }
       if (id === 'search') { closeP(); if (HA.KM && HA.KM.openSearch) HA.KM.openSearch(); return; }
+      if (id === 'measure' || id === 'draw' || id === 'fill') { if (HA.KM) HA.KM.fillTap = false; }
       if (id === 'measure') { closeP(); HA.measureStart(); return; }
       if (id === 'fill') { closeP(); HA.fillStart(); return; }
       if (id === 'shift') { closeP(); HA.shiftStart(); return; }

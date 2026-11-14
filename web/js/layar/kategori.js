@@ -8,7 +8,7 @@
   function toast() { return HA.toast.apply(this, arguments); }
   function p2(n) { return (n < 10 ? '0' : '') + n; }
   function iso(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
-  var KM = HA.KM = { mode: 'lintasan', range: false, from: '', to: '', lay: null, only: null };
+  var KM = HA.KM = { mode: 'lintasan', range: false, from: '', to: '', lay: null, only: null, all: false };
   function map() { return HA.map; }
   function items() { try { return HA.tandaData().items || []; } catch (e) { return []; } }
   function dateOf(it) { return HA.tandaU.dateOf(it); }
@@ -16,6 +16,7 @@
     return items().filter(function (it) {
       var d = dateOf(it);
       if (KM.only && it.cat !== KM.only) return false;
+      if (KM.all) return true;
       return KM.range ? ((!KM.from || d >= KM.from) && (!KM.to || d <= KM.to)) : d === S.mapDay;
     });
   }
@@ -33,13 +34,14 @@
     });
     var n = list.length, oc = KM.only ? HA.tandaCatOf(KM.only) : null;
     if (KM.only && !oc) KM.only = null;
-    $('katInfo').textContent = (oc ? 'Hanya ' + oc.name + ' · ' : '') + (n ? n + ' tanda' + (KM.range ? '' : ' pada tanggal ini') : (KM.range ? 'Tidak ada tanda pada rentang ini.' : 'Belum ada tanda pada tanggal ini.'));
+    $('katInfo').textContent = (KM.fillTap ? 'Ketuk isi: ' + HA.tandaBrush().name + ' \u00B7 ' : '') + (oc ? 'Hanya ' + oc.name + ' · ' : '') + (n ? n + ' tanda' + (KM.all ? ' · semua tanggal' : KM.range ? '' : ' pada tanggal ini') : (KM.all ? 'Belum ada tanda.' : KM.range ? 'Tidak ada tanda pada rentang ini.' : 'Belum ada tanda pada tanggal ini.'));
   }
   function inkOn(hex) { var h = String(hex).replace('#', ''); if (h.length !== 6) return '#fff'; var r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#111' : '#fff'; }
   function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   // strip kategori: ketuk = kategori aktif (dipakai saat Simpan di Ukur), tahan lama atau gir = kelola kategori
   function stripDraw() {
     var el = $('katStrip'); if (!el) return;
+    if (KM.mode !== 'kategori') { el.innerHTML = ''; return; }
     var d = HA.tandaData(), act = d.brush.cat, cc = HA.tandaCatOf(act), keep = el.querySelector('.tdKs'), sl = keep ? keep.scrollLeft : 0;
     var boxes = d.cats.map(function (c) { return '<button type="button" class="tdk' + (c.id === act ? ' on' : '') + (c.id === KM.only ? ' only' : '') + '" data-cat="' + c.id + '" style="background:' + c.col + ';color:' + inkOn(c.col) + '">' + esc(c.name) + '</button>'; }).join('') +
       '<button type="button" class="tdk kgear" data-gear="1" aria-label="Kelola kategori">⚙</button>';
@@ -97,13 +99,13 @@
   function srchClose() { var e = $('katSrch'); if (!e) return; $('katSl').style.display = 'none'; e.style.display = 'none'; $('katQ').value = ''; try { $('katQ').blur(); } catch (x) {} }
   function srchOpen() {
     if (HA.DM && HA.DM.closePanel) HA.DM.closePanel();
-    $('katSrch').style.display = 'block'; var q = $('katQ'); q.value = ''; srchList();
+    $('katSrch').style.display = 'block'; var q = $('katQ'); q.value = ''; stripDraw(); srchList();
     setTimeout(function () { try { q.focus(); } catch (x) {} }, 60);
   }
   function srchWire() {
     var q = $('katQ');
     q.onfocus = srchList; q.oninput = srchList;
-    q.onblur = function () { setTimeout(function () { if (document.activeElement !== q) srchClose(); }, 250); };
+    $('katXc').onclick = srchClose;
   }
   KM.openSearch = srchOpen;
   // tombol Back: tutup pencarian lalu panel Alat peta
@@ -112,19 +114,48 @@
     var p = document.querySelector('.toolpanel'); if (p && p.style.display !== 'none' && HA.DM && HA.DM.closePanel) { HA.DM.closePanel(); return true; }
     return false;
   };
+  function dm(x) { var a = String(x || '').split('-'); return a.length === 3 ? a[2] + '/' + a[1] : ''; }
+  function calLabel() {
+    var e = $('mapCalT'); if (!e) return;
+    var k = KM.mode === 'kategori';
+    e.textContent = k && KM.all ? 'Semua' : k && KM.range ? dm(KM.from) + '–' + dm(KM.to) : dm(S.mapDay || S.today);
+  }
+  KM.calLabel = calLabel;
+  function openCal() {
+    var k = KM.mode === 'kategori';
+    if (k && KM.all) { toast('Mode Semua: semua tanggal tampil'); return; }
+    if (HA.DM && HA.DM.closePanel) HA.DM.closePanel();
+    var rng = k && KM.range, mx = S.today;
+    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">' + (rng ? 'RENTANG TANGGAL' : 'TANGGAL') + '</div><button class="btn pri" id="calOk">Selesai</button></div>' + (rng
+      ? '<div class="row" style="gap:8px;margin-top:8px"><label class="calL">Dari<input type="date" id="calF" max="' + mx + '" value="' + (KM.from || '') + '"></label><label class="calL">Sampai<input type="date" id="calT" max="' + mx + '" value="' + (KM.to || '') + '"></label></div>'
+      : '<div class="row" style="gap:6px;margin-top:8px;align-items:center"><button class="ib" id="calP" aria-label="Hari sebelumnya"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><input type="date" id="calD" max="' + mx + '" value="' + (S.mapDay || mx) + '" style="flex:1;height:2.5rem"><button class="ib" id="calN" aria-label="Hari berikutnya"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button></div><button class="btn" id="calTd" style="width:100%;margin-top:8px">Hari ini</button>'));
+    $('scrim').classList.remove('on'); $('sheet').classList.add('cmp');
+    $('calOk').onclick = function () { HA.closeSheet(); };
+    if (rng) {
+      $('calF').onchange = function () { if (!this.value) return; KM.from = this.value; if (KM.to && KM.to < KM.from) KM.to = KM.from; $('calT').value = KM.to; syncUi(); draw(); };
+      $('calT').onchange = function () { if (!this.value) return; KM.to = this.value; if (KM.from && KM.from > KM.to) KM.from = KM.to; $('calF').value = KM.from; syncUi(); draw(); };
+    } else {
+      var back = function () { setTimeout(function () { var d = $('calD'); if (d) d.value = S.mapDay || mx; }, 80); };
+      $('calD').onchange = function () { if (!this.value) return; $('mPick').value = this.value; $('mPick').dispatchEvent(new Event('change')); back(); };
+      $('calP').onclick = function () { $('mPrev').click(); back(); };
+      $('calN').onclick = function () { if ((S.mapDay || mx) >= mx) { toast('Sudah hari ini'); return; } $('mNext').click(); back(); };
+      $('calTd').onclick = function () { $('mToday').click(); back(); };
+    }
+  }
   function syncUi() {
     stripDraw();
     var kat = KM.mode === 'kategori', v = $('v-lintasan');
     v.classList.toggle('kat', kat);
     $('katBar').style.display = kat ? 'block' : 'none';
-    $('katRng').style.display = kat && KM.range ? 'flex' : 'none';
-    v.classList.toggle('katR', kat && KM.range);
+    $('katRng').style.display = 'none';
     $('mapMode').textContent = kat ? 'Kategori' : 'Lintasan';
-    Array.prototype.forEach.call($('katSeg').children, function (b) { b.classList.toggle('on', (b.getAttribute('data-r') === '1') === KM.range); });
+    Array.prototype.forEach.call($('katSeg').children, function (b) { b.classList.toggle('on', b.getAttribute('data-r') === (KM.all ? '2' : KM.range ? '1' : '0')); });
+    calLabel();
     $('katFrom').value = KM.from; $('katTo').value = KM.to;
     $('katFrom').max = $('katTo').max = S.today;
   }
   function setMode(m, quiet) {
+    if (m !== 'kategori') KM.fillTap = false;
     if (m === KM.mode) return;
     var map_ = map();
     KM.mode = m;
@@ -140,7 +171,7 @@
   KM.setMode = setMode; KM.sync = function () { if (KM.mode === 'kategori') { syncUi(); draw(); } };
   // dipanggil setelah tanda baru disimpan: tampilkan tanggalnya di mode Kategori
   KM.show = function (date) {
-    if (date) { S.mapDay = date; KM.range = false; if (HA.renderMap) HA.renderMap(false); }
+    if (date) { S.mapDay = date; KM.range = false; KM.all = false; if (HA.renderMap) HA.renderMap(false); }
     if (KM.mode !== 'kategori') setMode('kategori', true); else { syncUi(); draw(); }
   };
   KM.toggleBase = function () {
@@ -154,9 +185,11 @@
     $('mapBase').onclick = KM.toggleBase;
     $('mapMode').onclick = function () { setMode(KM.mode === 'kategori' ? 'lintasan' : 'kategori'); };
     srchWire(); stripWire();
+    if ($('mapCal')) $('mapCal').onclick = openCal;
+    $('katInfo').onclick = function () { if (KM.only) { KM.only = null; draw(); stripDraw(); toast('Semua kategori tampil'); } };
     $('katSeg').onclick = function (e) {
       var r = e.target.getAttribute && e.target.getAttribute('data-r'); if (r === null || r === undefined) return;
-      KM.range = r === '1'; syncUi(); draw();
+      KM.range = r === '1'; KM.all = r === '2'; syncUi(); draw();
     };
     $('katFrom').onchange = function () { KM.from = this.value; if (KM.to && KM.from > KM.to) KM.to = KM.from; syncUi(); draw(); };
     $('katTo').onchange = function () { KM.to = this.value; if (KM.from && KM.to < KM.from) KM.from = KM.to; syncUi(); draw(); };

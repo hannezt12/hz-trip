@@ -65,13 +65,19 @@
     });
     $('lsBody').innerHTML = h; foot();
   }
-  function openBlock(b) { LS.back = true; HA.closeSheet(); BT.pick(b, true); }
+  function inLintasan() { var v = document.getElementById('v-lintasan'); return !!(v && v.classList.contains('on') && HA.map); }
+  function showBlock(b) {
+    LS.back = false; HA.closeSheet();
+    var m = HA.map; try { m.fitBounds(L.polygon(b.pts).getBounds(), { padding: [40, 40], maxZoom: 19 }); } catch (e) {}
+    if (HA.openBlockPop) HA.openBlockPop(b);
+  }
+  function openBlock(b) { if (inLintasan()) { showBlock(b); return; } LS.back = true; HA.closeSheet(); BT.pick(b, true); }
   function open() {
     all = rows(); byKey = {}; all.forEach(function (r) { byKey[r.key] = r; });
     Object.keys(LS.sel).forEach(function (k) { if (!byKey[k]) delete LS.sel[k]; });
     var cs = {}, co = [];
     all.forEach(function (r) { if (!cs[r.k]) { cs[r.k] = { k: r.k, name: r.name, col: r.col, n: 0 }; co.push(cs[r.k]); } cs[r.k].n++; });
-    HA.openSheet('<div class="grab"></div><div class="lsTop"><div class="st">DAFTAR MARKING</div><input type="search" id="lsQ" placeholder="Cari no blok, kategori, tanggal" value="' + esc(LS.q) + '" autocomplete="off">' +
+    HA.openSheet('<div class="grab"></div><div class="lsTop"><div class="st">DAFTAR TANDA</div><input type="search" id="lsQ" placeholder="Cari no blok, kategori, tanggal" value="' + esc(LS.q) + '" autocomplete="off">' +
       '<div class="lsCh" id="lsCh">' + co.map(function (c) { return '<label class="lsC"><input type="checkbox" data-c="' + esc(c.k) + '"' + (LS.off[c.k] ? '' : ' checked') + '><i style="background:' + c.col + '"></i>' + esc(c.name) + '</label>'; }).join('') + '</div>' +
       '<label class="lsA"><input type="checkbox" id="lsAll"> Pilih semua yang tampil <span class="muted" id="lsCnt"></span></label></div>' +
       '<div id="lsBody"></div>' +
@@ -103,7 +109,7 @@
       HA.pdfPreview(bytes, function () { HA.saveFile(BT.fileName(groups.length, names, 'pdf', true), btoa(bytes), 'application/pdf'); }, {
         labels: labs, off: off, go: 'Cetak PDF', onBack: function () { open(); },
         actions: [
-          { label: 'Edit blok ini', fn: function (i) { LS.back = true; HA.closeSheet(); BT.pick(pg[i].blk, true); } },
+          { label: inLintasan() ? 'Lihat blok ini' : 'Edit blok ini', fn: function (i) { if (inLintasan()) { HA.closeSheet(); showBlock(pg[i].blk); } else { LS.back = true; HA.closeSheet(); BT.pick(pg[i].blk, true); } } },
           { label: 'Keluarkan', fn: function (i) { var id = pg[i].blk.id; all.forEach(function (r) { if (r.b.id === id) LS.sel[r.key] = false; }); if (selData().blks.length) preview(); else open(); } }
         ]
       });

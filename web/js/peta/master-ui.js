@@ -188,6 +188,8 @@
     };
   }
   HA.openPrintMaster = printPanel;
+  HA.masterAtur = function (m, back) { return aturSheet(m, back); };
+  HA.masterCetak = function () { return cetak.apply(this, arguments); };
   function cetak(m, fmt, opts, prev) {
     var mem = members(m);
     if (!mem.in.length && !mem.man.length) { toast('Belum ada blok Terkonfirmasi yang seluruhnya di dalam master ini'); return; }
@@ -199,6 +201,7 @@
   function run(m, mem, fmt, opts, prev) {
     var list = mem.in.concat(mem.man).sort(nat), lj = {}, i = 0, base = 'Master_' + m.name.replace(/[^\w\-]+/g, '_') + '_' + stamp();
     if (fmt === 'kml') { HA.saveFile(base + '.kml', HA.textB64(buildKml(m, list)), 'application/vnd.google-earth.kml+xml'); return; }
+    if (opts && opts.only) { var oid = {}; opts.only.forEach(function (x) { oid[x.id] = 1; }); list = list.filter(function (b) { return oid[b.id]; }); }
     toast('Menyusun PDF…');
     (function nx() {
       if (i >= list.length) {
@@ -297,7 +300,7 @@
     var data = { hzblok: 1, app: 'HZ Trip', ver: ver, tgl: tgl, master: { name: m.name, pts: m.pts }, blocks: list.map(function (b) { return { id: b.id, name: b.name, src: b.src || 'manual', pts: b.pts, dir: b.dir == null ? null : b.dir, sp: b.sp == null ? null : b.sp, margin: b.margin || 0, conf: !!b.conf, note: b.note || '', guide: b.guide || null }; }) };
     var js = jsonAscii(data), emb = add(stream('/Type /EmbeddedFile /Subtype /application#2Fjson /Params << /Size ' + js.length + ' >>', js));
     var fsp = add('<< /Type /Filespec /F (hzblok.json) /UF (hzblok.json) /EF << /F ' + emb + ' 0 R /UF ' + emb + ' 0 R >> /AFRelationship /Data /Desc (Data blok HZ Trip) >>');
-    var kids = [], res = '<< /Font << /F1 ' + f1 + ' 0 R /F2 ' + f2o + ' 0 R >> >>', tot = haOf(list);
+    var gs1 = add('<< /Type /ExtGState /ca 0.4 /CA 1 >>'), kids = [], res = '<< /Font << /F1 ' + f1 + ' 0 R /F2 ' + f2o + ' 0 R >> /ExtGState << /GS1 ' + gs1 + ' 0 R >> >>', tot = haOf(list);
     if (opts.map) {
       var allp = m.pts.slice(); list.forEach(function (b) { b.pts.forEach(function (p) { allp.push(p); }); });
       var mb = bbox(allp), latc = (mb[0] + mb[2]) / 2, kx = 111320 * Math.cos(latc * Math.PI / 180), ky = 111320;
@@ -306,7 +309,16 @@
       var X = function (lng) { return M + offx + (lng - mb[1]) * kx * sc; }, Y = function (lat) { return M + offy + (lat - mb[0]) * ky * sc; };
       var lngAt = function (x) { return mb[1] + (x - M - offx) / (kx * sc); }, latAt = function (y) { return mb[0] + (y - M - offy) / (ky * sc); };
       var c = [], infos = [];
-      c.push('0 0 0 RG 0 0 0 rg 0.6 w');
+      var bwPt = opts.bw ? opts.bw * 0.2 : 0.6;
+      function rgb(hex) { var h = String(hex || '#888888').replace('#', ''); if (h.length !== 6) h = '888888'; return f2(parseInt(h.slice(0, 2), 16) / 255) + ' ' + f2(parseInt(h.slice(2, 4), 16) / 255) + ' ' + f2(parseInt(h.slice(4, 6), 16) / 255); }
+      (opts.items || []).forEach(function (it) {
+        var path = '', k; it.pts.forEach(function (p, i) { path += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); });
+        if (it.t === 'pt') { var px = X(it.pts[0][1]), py = Y(it.pts[0][0]); c.push('q ' + rgb(it.col) + ' rg ' + f2(px - 1.5) + ' ' + f2(py - 1.5) + ' 3 3 re f Q'); }
+        else if (it.t === 'ln') c.push('q ' + rgb(it.col) + ' RG ' + f2((it.w || 5) * 0.35) + ' w 1 J ' + path + 'S Q');
+        else if (it.gar) c.push('q ' + rgb(it.col) + ' RG ' + f2((it.w || 3) * 0.35) + ' w ' + path + 'h S Q');
+        else c.push('q /GS1 gs ' + rgb(it.col) + ' rg ' + path + 'h f Q');
+      });
+      c.push('0 0 0 RG 0 0 0 rg ' + f2(bwPt) + ' w');
       var ttl = asc(opts.title || m.name), tw = ttl.length * 13 * 0.56;
       c.push('BT /F2 13 Tf ' + f2(PW / 2 - tw / 2) + ' ' + f2(PH - 17) + ' Td (' + pe(ttl) + ') Tj ET');
       list.forEach(function (b) {
@@ -315,14 +327,17 @@
         var q = bbox(b.pts), bw = (q[3] - q[1]) * kx * sc, bh = (q[2] - q[0]) * ky * sc, nm = asc(b.name);
         infos.push({ b: b, nm: nm, ar: fmtHa(HzBlok.areaHa(b.pts)) + ' ha', fit: Math.min(bw * 0.84 / (Math.max(3, nm.length) * 0.56), bh * (opts.luas === false ? 0.7 : 0.42)), x0: X(q[1]), x1: X(q[3]), y0: Y(q[0]), y1: Y(q[2]) });
       });
-      // ukuran teks seragam: dipilih agar sebagian besar blok muat; blok yang tidak muat tetap berlabel (boleh menyeberang)
-      var fits = infos.map(function (o) { return o.fit; }).sort(function (p, q) { return p - q; }), fsU = Math.max(3, Math.min(9, fits[Math.floor(fits.length * 0.25)] || 6)); if ({ s: 1, m: 1, l: 1 }[opts.fs]) fsU = { s: 5, m: 7.5, l: 11 }[opts.fs];
+      // ukuran teks seragam (pt): diatur pengguna; baris: no blok, luas blok, tanggal, luas kategori
+      var fits = infos.map(function (o) { return o.fit; }).sort(function (p, q) { return p - q; }), fsU = Math.max(3, Math.min(9, fits[Math.floor(fits.length * 0.25)] || 6)); if ({ s: 1, m: 1, l: 1 }[opts.fs]) fsU = { s: 5, m: 7.5, l: 11 }[opts.fs]; if (opts.fsPt) fsU = opts.fsPt;
       infos.forEach(function (o) {
-        var ip = (opts.pos === 't' ? poiBand(o.b.pts, kx, ky, 0.55, 0.95) : (opts.pos === 'b' ? poiBand(o.b.pts, kx, ky, 0.05, 0.45) : null)) || poi(o.b.pts, kx, ky), cx = X(ip[1]), cy = Y(ip[0]), w1 = o.nm.length * fsU * 0.52, w2 = o.ar.length * fsU * 0.52;
-        if (opts.luas !== false) {
-          c.push('BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - w1 / 2) + ' ' + f2(cy + fsU * 0.25) + ' Td (' + pe(o.nm) + ') Tj ET');
-          c.push('BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - w2 / 2) + ' ' + f2(cy - fsU * 0.9) + ' Td (' + pe(o.ar) + ') Tj ET');
-        } else c.push('BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - w1 / 2) + ' ' + f2(cy - fsU * 0.35) + ' Td (' + pe(o.nm) + ') Tj ET');
+        var ip = (opts.pos === 't' ? poiBand(o.b.pts, kx, ky, 0.55, 0.95) : (opts.pos === 'b' ? poiBand(o.b.pts, kx, ky, 0.05, 0.45) : null)) || poi(o.b.pts, kx, ky);
+        if (o.b.lblOff) ip = [ip[0] + o.b.lblOff[0], ip[1] + o.b.lblOff[1]];
+        var cx = X(ip[1]), cy = Y(ip[0]), ls = [];
+        if (opts.name !== false) ls.push(o.nm);
+        if (opts.luas !== false) ls.push(o.ar);
+        if (opts.lines) opts.lines(o.b).forEach(function (t) { ls.push(asc(t)); });
+        var lh = fsU * 1.15, y0 = cy + (ls.length * lh) / 2 - fsU * 0.85;
+        ls.forEach(function (t, i) { c.push('BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - t.length * fsU * 0.52 / 2) + ' ' + f2(y0 - i * lh) + ' Td (' + pe(t) + ') Tj ET'); });
       });
       // skala dan panah utara
       var L0 = [100, 200, 500, 1000, 2000, 5000].filter(function (v) { return v * sc < fw * 0.25; }).pop() || 100, bx = PW / 2 - L0 * sc / 2, by = M + 16;
@@ -332,18 +347,28 @@
       c.push('1 w ' + f2(nx0) + ' ' + f2(ny0) + ' m ' + f2(nx0) + ' ' + f2(ny0 + 28) + ' l S ' + f2(nx0 - 5) + ' ' + f2(ny0 + 20) + ' m ' + f2(nx0) + ' ' + f2(ny0 + 28) + ' l ' + f2(nx0 + 5) + ' ' + f2(ny0 + 20) + ' l S');
       c.push('BT /F2 9 Tf ' + f2(nx0 - 3) + ' ' + f2(ny0 - 10) + ' Td (U) Tj ET');
       // legenda: tabel kecil di sudut yang paling kosong
-      var rows = [['Master', m.name.length > 24 ? m.name.slice(0, 23) + '.' : m.name], ['Jumlah blok', String(list.length)], ['Total luas', fmtHa(tot) + ' ha'], ['Dicetak', tgl], ['Versi app', ver]], LW = 190, RH = 14, LH = RH * rows.length, G = 10;
+      var rows = [['Master', m.name.length > 24 ? m.name.slice(0, 23) + '.' : m.name], ['Jumlah blok', String(list.length)], ['Total luas', fmtHa(tot) + ' ha']].concat(opts.dates ? [['Tanggal', opts.dates]] : [], [['Dicetak', tgl], ['Versi app', ver]]), leg = opts.legend === false ? [] : (opts.leg || []), mx = 0; leg.forEach(function (r) { mx = Math.max(mx, asc(r.txt).length); });
+      var LW = Math.max(190, Math.min(340, 40 + mx * 4.6)), RH = 14, LH = RH * (rows.length + leg.length), G = 10;
       var cands = [[PW - M - G - LW, M + G], [M + G, M + G], [M + G, PH - M - G - LH]];
       function overlap(cd) { var n = 0; infos.forEach(function (o) { if (o.x1 > cd[0] - 6 && o.x0 < cd[0] + LW + 6 && o.y1 > cd[1] - 6 && o.y0 < cd[1] + LH + 6) n++; }); return n; }
       var best = cands[0], bo = overlap(best); cands.forEach(function (cd) { var o = overlap(cd); if (o < bo) { bo = o; best = cd; } });
       var lx = best[0], ly = best[1];
+      if (opts.legend !== false) {
       c.push('1 g 0.5 w ' + f2(lx) + ' ' + f2(ly) + ' ' + f2(LW) + ' ' + f2(LH) + ' re f 0 g ' + f2(lx) + ' ' + f2(ly) + ' ' + f2(LW) + ' ' + f2(LH) + ' re S');
       rows.forEach(function (r, i) {
         var ty = ly + LH - RH * (i + 1);
         if (i) c.push('0.5 w ' + f2(lx) + ' ' + f2(ty + RH) + ' m ' + f2(lx + LW) + ' ' + f2(ty + RH) + ' l S');
         c.push('BT /F2 8 Tf ' + f2(lx + 5) + ' ' + f2(ty + 4) + ' Td (' + pe(r[0]) + ') Tj ET BT /F1 8 Tf ' + f2(lx + 74) + ' ' + f2(ty + 4) + ' Td (' + pe(r[1]) + ') Tj ET');
       });
-      c.push('0.5 w ' + f2(lx + 70) + ' ' + f2(ly) + ' m ' + f2(lx + 70) + ' ' + f2(ly + LH) + ' l S');
+      c.push('0.5 w ' + f2(lx + 70) + ' ' + f2(ly + RH * leg.length) + ' m ' + f2(lx + 70) + ' ' + f2(ly + LH) + ' l S');
+      leg.forEach(function (r, i) {
+        var ty = ly + RH * (leg.length - 1 - i);
+        c.push('0.5 w 0 G ' + f2(lx) + ' ' + f2(ty + RH) + ' m ' + f2(lx + LW) + ' ' + f2(ty + RH) + ' l S');
+        if (r.style === 'garis') c.push('q ' + rgb(r.col) + ' RG ' + f2(Math.max(0.5, (r.w || 3) * 0.35)) + ' w ' + f2(lx + 5) + ' ' + f2(ty + RH / 2) + ' m ' + f2(lx + 25) + ' ' + f2(ty + RH / 2) + ' l S Q');
+        else c.push('q ' + rgb(r.col) + ' rg ' + f2(lx + 5) + ' ' + f2(ty + 2) + ' 20 ' + f2(RH - 4) + ' re f Q');
+        c.push('BT /F1 8 Tf 0 g ' + f2(lx + 31) + ' ' + f2(ty + 4) + ' Td (' + pe(r.txt) + ') Tj ET');
+      });
+      }
       var cs = add(stream('', c.join('\n')));
       var corners = [[M, M], [M, PH - M], [PW - M, PH - M], [PW - M, M]], lp = [0, 0, 0, 1, 1, 1, 1, 0], gp = [];
       corners.forEach(function (q) { gp.push(latAt(q[1]).toFixed(7), lngAt(q[0]).toFixed(7)); });
