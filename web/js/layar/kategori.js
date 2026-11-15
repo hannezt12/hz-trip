@@ -21,13 +21,17 @@
     });
   }
   function opOf(it) { var v = it.op; return (typeof v === 'number' && v >= 0.05 && v <= 0.95) ? v : 0.35; }
+  HA.gyOf = function (it) {
+    var cc = it.cat ? HA.tandaCatOf(it.cat) : null, g = it.gy || {};
+    return { gar: g.m ? g.m === 'tepi' : !!(cc && cc.style === 'garis'), w: g.w || (cc && cc.w) || 0, col: g.col || HA.tandaColOf(it), op: opOf(it) };
+  };
   function draw() {
     var m = map(); if (!m) return;
     if (KM.lay) { try { m.removeLayer(KM.lay); } catch (e) {} KM.lay = null; }
     if (KM.mode !== 'kategori') return;
     var list = visible(), g = KM.lay = L.layerGroup().addTo(m);
     list.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); }).forEach(function (it) {
-      var col = HA.tandaColOf(it), cc = it.cat ? HA.tandaCatOf(it.cat) : null, gar = !!(cc && cc.style === 'garis'), w = cc && cc.w ? cc.w : 0;
+      var gy = HA.gyOf(it), col = gy.col, gar = gy.gar, w = gy.w;
       if (it.t === 'pt') L.circleMarker(it.pts[0], { radius: 8, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1, interactive: false }).addTo(g);
       else if (it.t === 'ln') L.polyline(it.pts, { color: col, weight: w || 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(g);
       else L.polygon(it.pts, { color: col, weight: gar ? (w || 3) : 2.5, fill: !gar, fillColor: col, fillOpacity: gar ? 0 : opOf(it), interactive: false }).addTo(g);

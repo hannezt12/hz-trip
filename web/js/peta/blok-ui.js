@@ -644,6 +644,8 @@
         '<button class="btn pri" id="lgGo" style="width:100%;margin-top:10px;height:48px">Pilih berkas blok (.json)</button><input type="file" id="lgFile" accept=".json,application/json" style="display:none">' +
         '<div class="muted" style="margin-top:8px">Berkas dibuat oleh tombol Ekspor blok di Logbook.HZ (tab Peta). Peta PDF yang dipilih harus gambar peta yang sama dengan yang dipakai di Logbook.HZ. Blok ditampilkan dulu untuk diperiksa. Hanya blok baru yang ditambahkan. Blok yang namanya sudah ada di HZ Trip dilewati dan tidak diubah sama sekali.</div>'
         : '<div class="muted">Belum ada peta PDF yang dikalibrasi. Tambahkan di tab PDF.</div>') + '</div>' +
+      '<div class="h">IMPOR DATA BLOK (.hzblok)</div><div class="card"><button class="btn pri" id="hbGo" style="width:100%;height:48px">Pilih berkas data blok</button><input type="file" id="hbFile" accept=".hzblok,.json,application/json" style="display:none"><div class="muted" style="margin-top:8px">Berkas dibuat dari Cetak > Master > Data blok (satu berkas per master). Hanya blok baru yang ditambahkan; blok yang namanya sudah ada dilewati, tidak ditimpa.</div></div>' +
+      '<div class="h">CEK DATA KETINGGIAN</div><div class="card"><div class="row" style="gap:6px"><input type="number" id="dcLa" step="any" placeholder="Lintang" style="flex:1"><input type="number" id="dcLo" step="any" placeholder="Bujur" style="flex:1"></div><div class="row" style="gap:8px;margin-top:8px"><button class="btn" id="dcMid" style="flex:1">Tengah peta</button><button class="btn pri" id="dcGo" style="flex:1">Cek</button></div><div id="dcOut" class="muted" style="margin-top:8px">Masukkan koordinat lalu Cek, untuk melihat kapan data ketinggian di titik itu dibuat.</div></div>' +
       '<div class="h">JARAK ROW BAWAAN</div><div class="card"><div class="row"><input type="number" id="rwSp" step="0.05" min="0.5" max="5" value="' + (S.settings.rowSp || 1.5) + '"><span class="muted" style="padding:0 8px">m</span></div>' +
       '<div class="muted" style="margin-top:8px">Batas kedalaman cekungan (m)</div><input type="number" id="depT" step="0.1" min="0.1" max="3" value="' + (S.settings.depThr || 0.3) + '">' +
       '<div class="muted" style="margin-top:8px">Batas tinggi cembung (m)</div><input type="number" id="humpT" step="0.1" min="0.3" max="5" value="' + (S.settings.humpThr || 1) + '"></div>' +
@@ -682,6 +684,31 @@
       }
     });
     if ($('shUn')) $('shUn').onclick = function () { askConfirm('Urungkan geser?', 'Posisi blok yang tadi digeser dikembalikan seperti sebelum digeser. Perubahan bentuk setelahnya pada blok yang sama ikut hilang.', 'Urungkan', function () { HA.shiftUndo(); renderData(); }); };
+    if ($('hbGo')) {
+      $('hbGo').onclick = function () { $('hbFile').value = ''; $('hbFile').click(); };
+      $('hbFile').onchange = function () {
+        var f = this.files && this.files[0]; if (!f) return;
+        f.text().then(function (t) {
+          var d; try { d = JSON.parse(t); } catch (e) { throw new Error('Bukan berkas data blok'); }
+          if (!d || d.hzblok !== 1 || !Array.isArray(d.blocks)) throw new Error('Bukan berkas data blok HZ Trip');
+          var r = HA.restoreHzBlok(d); toast(r.added + ' blok baru' + (r.skipped ? ', ' + r.skipped + ' sudah ada (dilewati)' : '') + (r.master ? ', master ditambahkan' : ''));
+          if (typeof renderData === 'function') renderData();
+        }).catch(function (e) { toast('Impor gagal: ' + (e && e.message || e)); });
+      };
+    }
+    if ($('dcGo')) {
+      $('dcMid').onclick = function () { if (HA.map) { var c = HA.map.getCenter(); $('dcLa').value = c.lat.toFixed(6); $('dcLo').value = c.lng.toFixed(6); } };
+      $('dcGo').onclick = function () {
+        var la = parseFloat($('dcLa').value), lo = parseFloat($('dcLo').value), o = $('dcOut');
+        if (!isFinite(la) || !isFinite(lo)) { toast('Isi lintang dan bujur'); return; }
+        var free = '<b>DEM gratis</b>: data global gabungan (umumnya SRTM, diambil 2000). Tanggal tidak tercatat per titik, jadi hanya perkiraan era.';
+        if (!window.HzDem || !HzDem.sheetsAt) { o.innerHTML = free; return; }
+        HzDem.sheetsAt(la, lo).then(function (sh) {
+          var nas = sh.length ? sh.map(function (q) { var d = q.dt ? q.dt.replace(/^(\d{4}):(\d{2}):(\d{2}).*/, '$3-$2-$1') : ''; return esc(q.name) + ' (±' + q.res + ' m/piksel) · ' + (d ? 'tanggal berkas ' + d : 'tanggal tidak tercatat di berkas (impor ulang berkas bila baru diperbarui)') + (q.desc ? ' · ' + esc(q.desc) : '') + ' · diimpor ' + new Date(q.at).toLocaleDateString('id-ID'); }).join('<br>') : 'titik ini di luar lembar DEMNAS yang diimpor';
+          o.innerHTML = '<b>DEMNAS</b>: ' + nas + '<br>' + free;
+        });
+      };
+    }
     if ($('bkScan')) $('bkScan').onclick = function () { askConfirm('Hapus blok hasil deteksi?', bl.filter(isScanBlk).length + ' blok hasil deteksi otomatis dihapus. Blok dari Logbook.HZ dan blok gambar sendiri tidak terhapus.', 'Hapus', function () { toast(delScanBlocks() + ' blok dihapus'); renderData(); }); };
     if (false) $('bkAll').onclick = function () { askConfirm('Hapus semua blok?', bl.length + ' blok dihapus dari aplikasi. Peta PDF tidak terpengaruh.', 'Hapus', function () { S.settings.blocks = []; HA.RC.rows = {}; HA.RC.dep = {}; HzBlok.cache.clear(); saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); renderData(); }); };
   }

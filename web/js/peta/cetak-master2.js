@@ -13,7 +13,7 @@
   function addDays(iso, n) { var a = iso.split('-'), d = new Date(+a[0], +a[1] - 1, +a[2] + n); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function dayDiff(a, b) { var x = a.split('-'), y = b.split('-'); return Math.round((new Date(+y[0], +y[1] - 1, +y[2]) - new Date(+x[0], +x[1] - 1, +x[2])) / 864e5); }
   function d8(iso) { return HA.tandaU.d8(iso); }
-  var DEF = function () { return { sel: null, fmt: 'pdf', off: {}, scope: 'master', blk: '', from: addDays(S.today, -29), to: S.today, kTgl: true, kNo: true, kLuas: true, kLeg: true, luas: true, list: false, bw: 4, fs: 4, leg: [], title: '' }; };
+  var DEF = function () { return { sel: null, fmt: 'pdf', off: {}, scope: 'master', blk: '', from: addDays(S.today, -29), to: S.today, kTgl: true, kNo: true, kLuas: true, kLeg: true, luas: true, list: false, bw: 1, fs: 2, leg: [], title: '' }; };
   var PS = Object.assign(DEF(), S.settings.pmPS || {});
   function persist() { S.settings.pmPS = JSON.parse(JSON.stringify(PS)); HA.saveSettings(); }
   function clampNum(v, a, b, d) { v = parseFloat(String(v).replace(',', '.')); if (!isFinite(v)) return d; return Math.max(a, Math.min(b, v)); }
@@ -37,23 +37,23 @@
   function linesFor(b) {
     var its = itemsOfBlock(b), out = [];
     if (!its.length) return out;
-    if (PS.kTgl) { var last = ''; its.forEach(function (it) { var d = HA.tandaU.dateOf(it); if (d > last) last = d; }); out.push(d8(last)); }
+    if (PS.kTgl) { var last = ''; its.forEach(function (it) { var d = HA.tandaU.dateOf(it); if (d > last) last = d; }); out.push({ t: d8(last), l: 'Tanggal' }); }
     if (PS.kLuas) {
       var by = {}, ord = [];
       its.forEach(function (it) { var k = it.cat || '_'; if (!by[k]) { by[k] = { n: HA.tandaCatInfo(it).name, ha: 0, m: 0, p: 0 }; ord.push(k); } var st = HA.tandaStat(it); if (it.t === 'pg') by[k].ha += st.ha || 0; else if (it.t === 'ln') by[k].m += st.m || 0; else by[k].p++; });
-      ord.forEach(function (k) { var o = by[k]; out.push(String(o.n).slice(0, 12) + ' ' + (o.ha ? fmtHa(o.ha) : o.m ? Math.round(o.m) + 'm' : o.p + 'x')); });
+      ord.forEach(function (k) { var o = by[k]; out.push({ t: String(o.n).slice(0, 12) + ' ' + (o.ha ? fmtHa(o.ha) : o.m ? Math.round(o.m) + 'm' : o.p + 'x'), l: 'Luas kategori' }); });
     }
     return out;
   }
   function drawItems(list) {
     var seen = {}, out = [];
-    list.forEach(function (b) { itemsOfBlock(b).forEach(function (it) { if (seen[it.id]) return; seen[it.id] = 1; var c = it.cat ? HA.tandaCatOf(it.cat) : null; out.push({ t: it.t, pts: it.pts, col: HA.tandaColOf(it), gar: !!(c && c.style === 'garis'), w: c && c.w ? c.w : 0 }); }); });
+    list.forEach(function (b) { itemsOfBlock(b).forEach(function (it) { if (seen[it.id]) return; seen[it.id] = 1; var c = it.cat ? HA.tandaCatOf(it.cat) : null, gy = HA.gyOf(it); out.push({ t: it.t, catName: (c ? c.name : 'tanda'), pts: it.pts, col: gy.col, gar: gy.gar, w: gy.w }); }); });
     return out;
   }
   function legFromCats() { return cats().filter(function (c) { return catOn(c.id); }).map(function (c) { return { col: c.col, style: c.style === 'garis' ? 'garis' : 'isi', w: c.w || 3, txt: c.name }; }); }
   function buildOpts(m) {
     var list = scopeList(m);
-    return { map: true, list: PS.list, luas: PS.luas, title: PS.title, name: PS.kNo, bw: PS.bw, fsPt: PS.fs, items: drawItems(list), lines: linesFor, legend: PS.kLeg, leg: PS.leg, dates: d8(PS.from) + ' - ' + d8(PS.to), only: list };
+    return { map: true, layers: true, list: PS.list, luas: PS.luas, title: PS.title, name: PS.kNo, bw: PS.bw, fsPt: PS.fs, items: drawItems(list), lines: linesFor, legend: PS.kLeg, leg: PS.leg, dates: d8(PS.from) + ' - ' + d8(PS.to), only: list };
   }
   // ---------- panel ----------
   function panel() {
@@ -66,8 +66,11 @@
       '<div class="seg" id="pmMode" style="margin:6px 0 10px"><button data-m="trip">Trip</button><button data-m="master" class="on">Master</button></div>';
     if (!ms.length) { HA.openSheet(h + '<div class="card muted" style="margin-top:6px">Belum ada master. Buat di Data peta > Master: gambar poligon kawasan, lalu kembali ke sini untuk mencetak.</div><button class="btn" id="pmX" style="width:100%;margin-top:8px">Tutup</button>'); $('pmX').onclick = HA.closeSheet; wireMode(); return; }
     h += '<div class="plist"><div class="h">MASTER</div>' + ms.map(function (x) { return '<label><input type="radio" name="pmSel" value="' + esc(String(x.id)) + '"' + (String(x.id) === String(PS.sel) ? ' checked' : '') + '> ' + esc(x.name) + '</label>'; }).join('') +
-      '<div class="h">FORMAT (pilih satu)</div><div class="seg" id="pmFmt"><button data-f="pdf"' + (PS.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-f="kml"' + (PS.fmt === 'kml' ? ' class="on"' : '') + '>KML</button></div>';
-    if (PS.fmt === 'kml') {
+      '<div class="h">FORMAT (pilih satu)</div><div class="seg" id="pmFmt"><button data-f="pdf"' + (PS.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-f="kml"' + (PS.fmt === 'kml' ? ' class="on"' : '') + '>KML</button><button data-f="data"' + (PS.fmt === 'data' ? ' class="on"' : '') + '>Data blok</button></div>';
+    if (PS.fmt === 'data') {
+      h += '<div class="h">PILIH MASTER YANG DIKIRIM</div>' + ms.map(function (x) { var n = HA.masterMembers(x); return '<label><input type="checkbox" class="pmDs" data-id="' + esc(String(x.id)) + '"' + ((PS.dsel || {})[x.id] ? ' checked' : '') + '> ' + esc(x.name) + ' <span class="muted">(' + (n.in.length + n.man.length) + ' blok Terkonfirmasi)</span></label>'; }).join('') +
+        '<div class="muted" style="margin-top:6px">Satu berkas ringan per master (tanpa gambar), isinya blok Terkonfirmasi di dalam master. Impor di perangkat lain lewat Data peta > Blok. Hanya blok baru yang ditambahkan.</div>';
+    } else if (PS.fmt === 'kml') {
       h += '<div class="muted" style="margin-top:6px">KML berisi bentuk dan posisi blok serta batas master, tanpa luasan.</div>';
     } else {
       h += '<div class="h">1. KATEGORI</div><div class="pmCats">' + (cl.length ? cl.map(function (c) { return '<label class="pmC"><input type="checkbox" data-c="' + c.id + '"' + (catOn(c.id) ? ' checked' : '') + '><i style="background:' + c.col + '"></i>' + esc(c.name) + '</label>'; }).join('') : '<div class="muted">Belum ada kategori.</div>') + '</div>' +
@@ -77,8 +80,8 @@
         '<div class="h">3. TANGGAL (1 hari sampai 1 tahun)</div><div class="row" style="gap:8px"><label class="calL">Dari<input type="date" id="pmFr" max="' + S.today + '" value="' + PS.from + '"></label><label class="calL">Sampai<input type="date" id="pmTo" max="' + S.today + '" value="' + PS.to + '"></label></div>' +
         '<div class="h">4. TAMPILKAN</div>' +
         '<label><input type="checkbox" id="pmKt"' + (PS.kTgl ? ' checked' : '') + '> Tanggal (terakhir per blok)</label><label><input type="checkbox" id="pmKn"' + (PS.kNo ? ' checked' : '') + '> No blok</label><label><input type="checkbox" id="pmLuas"' + (PS.luas ? ' checked' : '') + '> Luas blok (ha)</label><label><input type="checkbox" id="pmKl"' + (PS.kLuas ? ' checked' : '') + '> Luas kategori per blok</label><label><input type="checkbox" id="pmKg"' + (PS.kLeg ? ' checked' : '') + '> Legenda</label><label><input type="checkbox" id="pmList"' + (PS.list ? ' checked' : '') + '> Daftar blok lengkap (lembar tabel)</label>' +
-        '<div class="h">5. UKURAN</div><div class="row" style="gap:8px"><label class="calL">Garis blok (px)<input type="number" id="pmBw" min="3" max="9" step="1" value="' + PS.bw + '"></label><label class="calL">Teks (pt)<input type="number" id="pmFs" min="3" max="12" step="0.5" value="' + PS.fs + '"></label></div>' +
-        '<div class="muted" style="margin-top:4px">Garis blok 3–9: 3 tipis (blok rapat), 9 tebal (terbaca jauh). Teks 3–12 pt: 4 untuk blok rapat, 8–12 untuk blok besar. Satu ukuran untuk no blok, luas, dan tanggal.</div>' +
+        '<div class="h">5. UKURAN</div><div class="row" style="gap:8px"><label class="calL">Garis blok (px)<input type="number" id="pmBw" min="0.5" max="9" step="0.5" value="' + PS.bw + '"></label><label class="calL">Teks (pt)<input type="number" id="pmFs" min="1" max="12" step="0.5" value="' + PS.fs + '"></label></div>' +
+        '<div class="muted" style="margin-top:4px">Garis blok 0,5–9 px (0,5 = garis rambut, cocok untuk 1000+ blok). Teks 1–12 pt: 1–2 untuk master sangat padat (dibaca dengan zoom), 8–12 untuk blok besar. Satu ukuran untuk no blok, luas, dan tanggal.</div>' +
         (PS.kLeg ? '<div class="h">6. LEGENDA</div><div id="pmLg">' + PS.leg.map(function (r, i) {
           return '<div class="pmL" data-i="' + i + '"><input type="color" data-k="col" value="' + esc(r.col) + '"><select data-k="style"><option value="isi"' + (r.style === 'isi' ? ' selected' : '') + '>Isi</option><option value="garis"' + (r.style === 'garis' ? ' selected' : '') + '>Garis</option></select><input type="number" data-k="w" min="1" max="8" value="' + (r.w || 3) + '" title="Tebal"><input type="text" data-k="txt" maxlength="40" value="' + esc(r.txt) + '" placeholder="Keterangan"><button type="button" data-x="' + i + '" aria-label="Hapus baris">✕</button></div>';
         }).join('') + '</div><div class="row" style="gap:8px;margin-top:6px"><button class="btn" id="pmLgA" style="flex:1">+ Baris</button><button class="btn" id="pmLgC" style="flex:1">Isi dari kategori</button></div>' : '') +
@@ -100,6 +103,22 @@
     sh.querySelectorAll('input[name=pmSel]').forEach(function (r) { r.onchange = function () { PS.sel = r.value; persist(); panel(); }; });
     $('pmFmt').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-f]'); if (b) { PS.fmt = b.getAttribute('data-f'); persist(); panel(); } };
     $('pmAtur').onclick = function () { if (HA.masterAtur) HA.masterAtur(m, panel); };
+    if (PS.fmt === 'data') {
+      sh.querySelectorAll('.pmDs').forEach(function (e) { e.onchange = function () { (PS.dsel || (PS.dsel = {}))[e.getAttribute('data-id')] = e.checked; persist(); }; });
+      $('pmGo').onclick = function () {
+        var sel = masters().filter(function (x) { return (PS.dsel || {})[x.id]; });
+        if (!sel.length) { toast('Centang minimal satu master'); return; }
+        var k = 0; (function nx() {
+          if (k >= sel.length) return; var mm = sel[k++], mem = HA.masterMembers(mm), list = mem.in.concat(mem.man);
+          if (!list.length) { toast(mm.name + ': belum ada blok Terkonfirmasi'); setTimeout(nx, 300); return; }
+          var d = new Date(), p2 = function (n) { return (n < 10 ? '0' : '') + n; }, st = p2(d.getDate()) + p2(d.getMonth() + 1) + String(d.getFullYear()).slice(2);
+          var data = { hzblok: 1, app: 'HZ Trip', tgl: p2(d.getDate()) + '-' + p2(d.getMonth() + 1) + '-' + d.getFullYear(), master: { name: mm.name, pts: mm.pts }, blocks: list.map(function (b) { return { id: b.id, name: b.name, src: b.src || 'manual', pts: b.pts, dir: b.dir == null ? null : b.dir, sp: b.sp == null ? null : b.sp, margin: b.margin || 0, conf: !!b.conf, note: b.note || '', guide: b.guide || null, lblOff: b.lblOff || null }; }) };
+          HA.saveFile('Master_' + String(mm.name).replace(/[^\w\-]+/g, '_') + '_' + st + '.hzblok', HA.textB64(JSON.stringify(data)), 'application/json');
+          setTimeout(nx, 900);
+        })();
+      };
+      return;
+    }
     if (PS.fmt === 'kml') { $('pmGo').onclick = function () { HA.masterCetak(m, 'kml', {}); }; return; }
     function cnt() { if ($('pmN')) $('pmN').textContent = scopeList(m).length + ' blok akan dicetak'; }
     sh.querySelectorAll('.pmC input').forEach(function (e) { e.onchange = function () { PS.off[e.getAttribute('data-c')] = !e.checked; persist(); }; });
@@ -110,8 +129,8 @@
     $('pmTo').onchange = function () { if (this.value) { PS.to = this.value; persist(); } };
     [['pmKt', 'kTgl'], ['pmKn', 'kNo'], ['pmLuas', 'luas'], ['pmKl', 'kLuas'], ['pmList', 'list']].forEach(function (p) { $(p[0]).onchange = function () { PS[p[1]] = this.checked; persist(); }; });
     $('pmKg').onchange = function () { PS.kLeg = this.checked; if (PS.kLeg && !PS.leg.length) PS.leg = legFromCats(); persist(); panel(); };
-    $('pmBw').onchange = function () { PS.bw = Math.round(clampNum(this.value, 3, 9, 4)); this.value = PS.bw; persist(); };
-    $('pmFs').onchange = function () { PS.fs = clampNum(this.value, 3, 12, 4); this.value = PS.fs; persist(); };
+    $('pmBw').onchange = function () { PS.bw = Math.round(clampNum(this.value, 0.5, 9, 1) * 2) / 2; this.value = PS.bw; persist(); };
+    $('pmFs').onchange = function () { PS.fs = Math.round(clampNum(this.value, 1, 12, 2) * 2) / 2; this.value = PS.fs; persist(); };
     $('pmTtl').oninput = function () { PS.title = this.value; };
     $('pmTtl').onchange = persist;
     if ($('pmLg')) {
@@ -176,7 +195,7 @@
     var gAll = document.createElementNS(ns, 'g'); svg.appendChild(gAll);
     list.forEach(function (b) {
       var P = b.pts.map(XY), poly = document.createElementNS(ns, 'polygon'); poly.setAttribute('points', P.map(function (q) { return q.join(','); }).join(' ')); poly.setAttribute('class', 'edP'); poly.setAttribute('stroke-width', (PS.bw * 0.2) / sc); gAll.appendChild(poly);
-      var ip = HA.poi(b.pts, kx, ky), ls = []; if (PS.kNo) ls.push(String(b.name)); if (PS.luas) ls.push(fmtHa(HzBlok.areaHa(b.pts)) + ' ha'); linesFor(b).forEach(function (t) { ls.push(t); });
+      var ip = HA.poi(b.pts, kx, ky), ls = []; if (PS.kNo) ls.push(String(b.name)); if (PS.luas) ls.push(fmtHa(HzBlok.areaHa(b.pts)) + ' ha'); linesFor(b).forEach(function (t) { ls.push(t.t); });
       if (!ls.length) ls.push(String(b.name));
       var c0 = XY(ip), off = b.lblOff || [0, 0], cx = c0[0] + off[1] * kx, cy = c0[1] - off[0] * ky;
       var g = document.createElementNS(ns, 'g'); g.setAttribute('class', 'edL'); g.setAttribute('data-id', String(b.id));

@@ -40,11 +40,12 @@
     var U = HA.tandaU, inf = HA.tandaCatInfo(it), sn = subName(it);
     HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TANDA · ' + esc(inf.name) + (sn ? ' / ' + esc(sn) : '') + '</div><button class="btn pri" id="rdOk">Kembali</button></div>' +
       '<div class="muted" style="margin:4px 0 10px">' + U.d8(U.dateOf(it)) + ' · ' + statTxt(it) + '</div>' +
-      '<div class="rdG"><button class="btn" id="rdLh">Lihat di peta</button><button class="btn" id="rdKt">Ubah kategori</button><button class="btn" id="rdTg">Ubah tanggal</button><button class="btn" id="rdDl" style="color:var(--r)">Hapus tanda ini</button></div>');
+      '<div class="rdG"><button class="btn" id="rdLh">Lihat di peta</button><button class="btn" id="rdKt">Ubah kategori</button>' + (it.t === 'pg' ? '<button class="btn" id="rdGy">Ubah gaya</button>' : '') + '<button class="btn" id="rdTg">Ubah tanggal</button><button class="btn" id="rdDl" style="color:var(--r)">Hapus tanda ini</button></div>');
     HA.onSheetClose = back;
     $('rdOk').onclick = function () { HA.closeSheet(); };
     $('rdLh').onclick = function () { lihat(it); };
     $('rdKt').onclick = function () { pickCat(it, function () { detail(it, back); }); };
+    if ($('rdGy')) $('rdGy').onclick = function () { HA.BRiw.gaya(it, function () { detail(it, back); }); };
     $('rdTg').onclick = function () { pickDate(it, function () { detail(it, back); }); };
     $('rdDl').onclick = function () {
       HA.onSheetClose = null;
@@ -97,13 +98,14 @@
       }).join('');
       HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">RIWAYAT · ' + esc(b.name) + '</div><button class="btn pri" id="rbOk">Tutup</button></div>' +
         (ord.length ? sum + chips + '<div class="rbL">' + rows + '</div>' : '<div class="muted" style="padding:12px 2px">Belum ada riwayat. Tanda yang disimpan di blok ini akan muncul di sini.</div>') +
-        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="rbFull" style="flex:1">Tandai blok penuh</button>' + (ord.length ? '<button class="btn" id="rbSh" style="flex:1">Bagikan blok (PDF)</button>' : '') + '</div>');
+        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="rbFull" style="flex:1">Tandai blok penuh</button><button class="btn" id="rbVr" style="flex:1">Versi</button>' + (ord.length ? '<button class="btn" id="rbSh" style="flex:1">Bagikan blok (PDF)</button>' : '') + '</div>');
       HA.onSheetClose = onClose || null;
       $('rbOk').onclick = function () { HA.closeSheet(); };
       $('rbFull').onclick = function () {
         if (!b.conf) { HA.toast('Hanya blok terkonfirmasi yang bisa ditandai'); return; }
         var h = HA.onSheetClose; if (HA.KM.fillBlock(b, null)) { render(); HA.onSheetClose = h; }
       };
+      if ($('rbVr')) $('rbVr').onclick = function () { var h = HA.onSheetClose; HA.BRiw.versi(b, function () { render(); HA.onSheetClose = h; }); };
       if ($('rbSh')) $('rbSh').onclick = function () {
         if (!b.conf) { HA.toast('Hanya blok terkonfirmasi yang bisa dibagikan'); return; }
         HA.onSheetClose = null; HA.closeSheet(); HA.BT.share([b]);

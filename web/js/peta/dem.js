@@ -229,7 +229,7 @@
 
   // baca satu berkas GeoTIFF ketinggian (EPSG:4326) dan simpan sebagai kotak lokal z11-14
   function importTiff(file, onProg) {
-    var prog = onProg || function () {}, G, img, W, H, bbox, nod, data, Z0 = 11, Z1 = 14;
+    var fdt = '', fds = '', prog = onProg || function () {}, G, img, W, H, bbox, nod, data, Z0 = 11, Z1 = 14;
     return loadLib().then(function (g) { G = g; return G.fromBlob(file).then(function (t) { return t.getImage(); }).catch(function (e) { throw new Error('Bukan berkas GeoTIFF yang bisa dibaca (' + (e && e.message || e) + ')'); }); }).then(function (im) {
       img = im; W = img.getWidth(); H = img.getHeight();
       var gk = {}; try { gk = img.getGeoKeys() || {}; } catch (e) {}
@@ -237,6 +237,7 @@
       try { bbox = img.getBoundingBox(); } catch (e) { throw new Error('Berkas tidak punya data lokasi (georeferensi).'); }
       if (!bbox || Math.abs(bbox[0]) > 180 || Math.abs(bbox[2]) > 180 || Math.abs(bbox[1]) > 90 || Math.abs(bbox[3]) > 90) throw new Error('Koordinat berkas bukan derajat (kemungkinan proyeksi). Saat ini hanya EPSG:4326 yang didukung.');
       if (img.getSamplesPerPixel() < 1) throw new Error('Berkas tidak berisi data ketinggian.');
+      try { var fd0 = img.getFileDirectory() || {}; fdt = String(fd0.DateTime || '').trim(); fds = String(fd0.ImageDescription || '').trim().slice(0, 120); } catch (e) {}
       nod = null; try { nod = img.getGDALNoData(); } catch (e) {}
       data = new Float32Array(W * H); var y = 0, STEP = 256;
       function rd() {
@@ -295,7 +296,7 @@
       return loop(0).then(function () {
         return loadCov().then(function (sh) {
           sh = sh.filter(function (q) { return q.name !== file.name; });
-          sh.push({ name: file.name, bbox: bbox.slice(), at: Date.now(), res: Math.round(rx * 111320) });
+          sh.push({ name: file.name, bbox: bbox.slice(), at: Date.now(), res: Math.round(rx * 111320), dt: fdt, desc: fds });
           return lreq('meta', 'readwrite', function (s) { return s.put(sh, 'sheets'); });
         }).then(loadCov).then(function () { resetMem(); return { tiles: made, bbox: bbox, name: file.name, w: W, h: H }; });
       });
@@ -775,5 +776,6 @@
   function meshLayer(o) { o = o || {}; o.mode = 'mesh'; o.pane = 'meshPane'; o.z = 262; return new (layerClass())(o); }
   function slopeLayer(o) { o = o || {}; o.mode = 'slope'; o.pane = 'slopePane'; o.z = 255; return new (layerClass())(o); }
 
-  root.HzDem = { measure: measure, meshLayer: meshLayer, sampleGrid: sampleGrid, inLake: inLake, gradRGB: gradRGB, GRAD_CSS: GRAD_CSS, elev: elev, setSources: setSources, source: source, setLakes: setLakes, lakeLevel: lakeLevel, hasAnyLocal: function () { return cov.length > 0; }, hachLayer: hachLayer, slopeLayer: slopeLayer, SLOPE_CLASSES: SLOPE_CLASSES, rampColor: rampColor, contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
+  function sheetsAt(lat, lng) { return loadCov().then(function (sh) { return sh.filter(function (q) { var b = q.bbox; return lng >= b[0] && lng <= b[2] && lat >= b[1] && lat <= b[3]; }); }); }
+  root.HzDem = { measure: measure, sheetsAt: sheetsAt, meshLayer: meshLayer, sampleGrid: sampleGrid, inLake: inLake, gradRGB: gradRGB, GRAD_CSS: GRAD_CSS, elev: elev, setSources: setSources, source: source, setLakes: setLakes, lakeLevel: lakeLevel, hasAnyLocal: function () { return cov.length > 0; }, hachLayer: hachLayer, slopeLayer: slopeLayer, SLOPE_CLASSES: SLOPE_CLASSES, rampColor: rampColor, contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
 })(window);

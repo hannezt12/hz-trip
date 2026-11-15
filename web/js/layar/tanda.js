@@ -1064,7 +1064,10 @@
     var gsM = {};
     function gsFor(op) { var k = Math.round(op * 100); if (!gsM[k]) gsM[k] = add('<< /Type /ExtGState /ca ' + (k / 100) + ' /CA 1 >>'); return k; }
     var res0 = '<< /Font << /F1 ' + f1 + ' 0 R /F2 ' + f2o + ' 0 R >>';
-    var usedGs = {};
+    var usedGs = {}, patM = {}, usedPat = {};
+    var PATC = ['0 G 0.7 w 0 0 m 6 6 l S', '0 G 0.7 w 0 6 m 6 0 l S', '0 G 0.6 w 0 0 m 6 6 l S 0 6 m 6 0 l S', '0 G 0.7 w 0 3 m 6 3 l S', '0 G 0.7 w 3 0 m 3 6 l S', '0 g 2.2 2.2 1.6 1.6 re f'];
+    function patK(it) { var ix = -1; data().cats.forEach(function (c, i) { if (c.id === it.cat) ix = i; }); return (ix < 0 ? 0 : ix) % 6; }
+    function patFor(k) { if (!patM[k]) patM[k] = add(stream('/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 6 6] /XStep 6 /YStep 6 /Resources << >>', PATC[k])); usedPat[k] = 1; return 'P' + k; }
     var groups = o.groups || [{ title: o.title, items: itemsAll }];
     function page(items, ttlText, blk, img, catName) {
     var mb = pageBox(items, blk, o), hasImg = !!img;
@@ -1073,7 +1076,7 @@
     var trow = {}, tord = [], anyPL = false;
     items.forEach(function (it) {
       var k = tabKey(it), st0 = statOf(it);
-      if (!trow[k]) { trow[k] = { name: tabName(it), col: colOf(it), date: dateOf(it), ord: catIdx(it), ha: 0, lj: 0, lm: 0, pt: 0, m: 0 }; tord.push(k); }
+      if (!trow[k]) { trow[k] = { pk: patK(it), name: tabName(it), col: colOf(it), date: dateOf(it), ord: catIdx(it), ha: 0, lj: 0, lm: 0, pt: 0, m: 0 }; tord.push(k); }
       var r0 = trow[k];
       if (it.t === 'pt') { r0.pt++; anyPL = true; } else if (it.t === 'ln') { r0.m += st0.m; anyPL = true; } else { r0.ha += st0.ha; r0.lj += st0.n; r0.lm += st0.lm; }
     });
@@ -1097,6 +1100,7 @@
       });
       if (hasImg) c.push('[] 0 d');
     }
+    if (o.sketsa && blk && HA.cutsFor) { try { (HA.cutsFor(blk) || []).forEach(function (cu) { var cp = ''; cu.pts.forEach(function (p, i) { cp += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); c.push('0.72 G ' + f2(Math.max(1.2, (cu.w || 2) * sc)) + ' w ' + cp + 'S'); }); } catch (e) {} }
     if (blk) { var bs = ''; blk.pts.forEach(function (p, i) { bs += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); c.push(hasImg ? '1 0.9 0 RG 2.2 w ' + bs + 'h S' : '0 G 1.6 w ' + bs + 'h S'); }
     var fits = [];
     items.forEach(function (it) {
@@ -1112,8 +1116,8 @@
     // bentuk
     info.forEach(function (n) {
       var it = n.it, s = '', i;
-      if (it.t === 'pg') { it.pts.forEach(function (p, i2) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i2 ? ' l ' : ' m '); }); usedGs[gsFor(opOf(it))] = 1; c.push('q /G' + gsFor(opOf(it)) + ' gs ' + rgb(n.col) + ' rg ' + s + 'h f Q ' + rgb(n.col) + ' RG 1.3 w ' + s + 'h S'); }
-      else if (it.t === 'ln') { it.pts.forEach(function (p, i2) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i2 ? ' l ' : ' m '); }); c.push(rgb(n.col) + ' RG 2.4 w 1 J 1 j ' + s + 'S 0 J 0 j'); }
+      if (it.t === 'pg') { it.pts.forEach(function (p, i2) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i2 ? ' l ' : ' m '); }); var gyi = HA.gyOf ? HA.gyOf(it) : null, gcol = gyi ? gyi.col : n.col; if (o.hatch && !(gyi && gyi.gar)) c.push('q /Pattern cs /' + patFor(patK(it)) + ' scn ' + s + 'h f Q 0 G 1.1 w ' + s + 'h S'); else if (gyi && gyi.gar) c.push((o.hatch ? '0 0 0' : rgb(gcol)) + ' RG ' + f2(Math.max(0.6, (gyi.w || 3) * 0.45)) + ' w ' + s + 'h S'); else { usedGs[gsFor(opOf(it))] = 1; c.push('q /G' + gsFor(opOf(it)) + ' gs ' + rgb(gcol) + ' rg ' + s + 'h f Q ' + rgb(gcol) + ' RG 1.3 w ' + s + 'h S'); } }
+      else if (it.t === 'ln') { it.pts.forEach(function (p, i2) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i2 ? ' l ' : ' m '); }); c.push((o.hatch ? '0 0 0' : rgb(n.col)) + ' RG 2.4 w 1 J 1 j ' + s + 'S 0 J 0 j'); }
       else { var px = X(it.pts[0][1]), py = Y(it.pts[0][0]), r = 4.2, k = r * 0.5523; c.push(rgb(n.col) + ' rg 1 G 0.9 w ' + f2(px + r) + ' ' + f2(py) + ' m ' + f2(px + r) + ' ' + f2(py + k) + ' ' + f2(px + k) + ' ' + f2(py + r) + ' ' + f2(px) + ' ' + f2(py + r) + ' c ' + f2(px - k) + ' ' + f2(py + r) + ' ' + f2(px - r) + ' ' + f2(py + k) + ' ' + f2(px - r) + ' ' + f2(py) + ' c ' + f2(px - r) + ' ' + f2(py - k) + ' ' + f2(px - k) + ' ' + f2(py - r) + ' ' + f2(px) + ' ' + f2(py - r) + ' c ' + f2(px + k) + ' ' + f2(py - r) + ' ' + f2(px + r) + ' ' + f2(py - k) + ' ' + f2(px + r) + ' ' + f2(py) + ' c B'); }
     });
     // teks
@@ -1161,7 +1165,8 @@
     hd.forEach(function (h, i) { txc(bnd[i] + 4 + (i === 0 ? 0 : 0), hb, i === 0 ? cut(h, Math.floor((c0W - 8) / 4.4)) : h, true, 8); });
     tord.forEach(function (k, i) {
       var r = trow[k], rowBot = ty0 - TRH * (i + 2), bs = Math.min(TRH - 6, 20), tb0 = rowBot + (TRH - fsT) / 2 + 1;
-      c.push(rgb(r.col) + ' rg 0 G 0.8 w ' + f2(M + 4) + ' ' + f2(rowBot + (TRH - bs) / 2) + ' ' + f2(bs) + ' ' + f2(bs) + ' re B');
+      if (o.hatch) c.push('q /Pattern cs /' + patFor(r.pk) + ' scn ' + f2(M + 4) + ' ' + f2(rowBot + (TRH - bs) / 2) + ' ' + f2(bs) + ' ' + f2(bs) + ' re f Q 0 G 0.8 w ' + f2(M + 4) + ' ' + f2(rowBot + (TRH - bs) / 2) + ' ' + f2(bs) + ' ' + f2(bs) + ' re S');
+      else c.push(rgb(r.col) + ' rg 0 G 0.8 w ' + f2(M + 4) + ' ' + f2(rowBot + (TRH - bs) / 2) + ' ' + f2(bs) + ' ' + f2(bs) + ' re B');
       txc(M + 4 + bs + 6, tb0, cut(r.name, Math.floor((c0W - bs - 14) / (fsT * 0.52))), false, fsT);
       txc(bnd[1] + 4, tb0, fmtD8(r.date), false, fsT);
       txc(bnd[2] + 4, tb0, r.ha ? fmtHa(r.ha) : '-', false, fsT);
@@ -1174,7 +1179,7 @@
     var corners = [[M, ya], [M, yb], [PW - M, yb], [PW - M, ya]], lp = [0, 0, 0, 1, 1, 1, 1, 0], gp = [];
     corners.forEach(function (q) { gp.push(latAt(q[1]).toFixed(7), lngAt(q[0]).toFixed(7)); });
     var vp = '/VP [ << /Type /Viewport /Name (Peta) /BBox [' + f2(M) + ' ' + f2(ya) + ' ' + f2(PW - M) + ' ' + f2(yb) + '] /Measure << /Type /Measure /Subtype /GEO /Bounds [0 0 0 1 1 1 1 0] /GPTS [' + gp.join(' ') + '] /LPTS [' + lp.join(' ') + '] /GCS << /Type /GEOGCS /WKT (GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]) /EPSG 4326 >> /PDU [/M /DEG /DEG] >> >> ]';
-    var pg = add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW) + ' ' + f2(PH) + '] /Resources ' + (function () { var res = res0 + ' /ExtGState << ' + Object.keys(usedGs).map(function (k) { return '/G' + k + ' ' + gsM[k] + ' 0 R'; }).join(' ') + ' >>' + (imN ? ' /XObject << /Im' + imN + ' ' + imN + ' 0 R >>' : '') + ' >>'; return res; })() + ' /Contents ' + cs + ' 0 R ' + vp + ' >>');
+    var pg = add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW) + ' ' + f2(PH) + '] /Resources ' + (function () { var res = res0 + ' /ExtGState << ' + Object.keys(usedGs).map(function (k) { return '/G' + k + ' ' + gsM[k] + ' 0 R'; }).join(' ') + ' >>' + (imN ? ' /XObject << /Im' + imN + ' ' + imN + ' 0 R >>' : '') + (Object.keys(usedPat).length ? ' /Pattern << ' + Object.keys(usedPat).map(function (k) { return '/P' + k + ' ' + patM[k] + ' 0 R'; }).join(' ') + ' >>' : '') + ' >>'; return res; })() + ' /Contents ' + cs + ' 0 R ' + vp + ' >>');
     return pg;
     }
     function sumPages() {

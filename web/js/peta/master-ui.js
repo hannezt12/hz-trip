@@ -297,10 +297,12 @@
     function stream(dict, data) { return '<< ' + dict + ' /Length ' + data.length + ' >>\nstream\n' + data + '\nendstream'; }
     var d = new Date(), p2 = function (n) { return (n < 10 ? '0' : '') + n; }, tgl = p2(d.getDate()) + '-' + p2(d.getMonth() + 1) + '-' + d.getFullYear();
     var cat = add(''), pages = add(''), f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'), f2o = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
-    var data = { hzblok: 1, app: 'HZ Trip', ver: ver, tgl: tgl, master: { name: m.name, pts: m.pts }, blocks: list.map(function (b) { return { id: b.id, name: b.name, src: b.src || 'manual', pts: b.pts, dir: b.dir == null ? null : b.dir, sp: b.sp == null ? null : b.sp, margin: b.margin || 0, conf: !!b.conf, note: b.note || '', guide: b.guide || null }; }) };
+    var data = { hzblok: 1, app: 'HZ Trip', ver: ver, tgl: tgl, master: { name: m.name, pts: m.pts }, blocks: list.map(function (b) { return { id: b.id, name: b.name, src: b.src || 'manual', pts: b.pts, dir: b.dir == null ? null : b.dir, sp: b.sp == null ? null : b.sp, margin: b.margin || 0, conf: !!b.conf, note: b.note || '', guide: b.guide || null, lblOff: b.lblOff || null }; }) };
     var js = jsonAscii(data), emb = add(stream('/Type /EmbeddedFile /Subtype /application#2Fjson /Params << /Size ' + js.length + ' >>', js));
     var fsp = add('<< /Type /Filespec /F (hzblok.json) /UF (hzblok.json) /EF << /F ' + emb + ' 0 R /UF ' + emb + ' 0 R >> /AFRelationship /Data /Desc (Data blok HZ Trip) >>');
     var gs1 = add('<< /Type /ExtGState /ca 0.4 /CA 1 >>'), kids = [], res = '<< /Font << /F1 ' + f1 + ' 0 R /F2 ' + f2o + ' 0 R >> /ExtGState << /GS1 ' + gs1 + ' 0 R >> >>', tot = haOf(list);
+    var ocgs = [], ocmap = {};
+    function L(name, str) { if (!opts.layers) return str; if (!ocmap[name]) { var o = add('<< /Type /OCG /Name (' + pe(name) + ') >>'); ocmap[name] = { n: o, k: 'L' + (ocgs.length + 1) }; ocgs.push(name); } return '/OC /' + ocmap[name].k + ' BDC ' + str + ' EMC'; }
     if (opts.map) {
       var allp = m.pts.slice(); list.forEach(function (b) { b.pts.forEach(function (p) { allp.push(p); }); });
       var mb = bbox(allp), latc = (mb[0] + mb[2]) / 2, kx = 111320 * Math.cos(latc * Math.PI / 180), ky = 111320;
@@ -313,17 +315,17 @@
       function rgb(hex) { var h = String(hex || '#888888').replace('#', ''); if (h.length !== 6) h = '888888'; return f2(parseInt(h.slice(0, 2), 16) / 255) + ' ' + f2(parseInt(h.slice(2, 4), 16) / 255) + ' ' + f2(parseInt(h.slice(4, 6), 16) / 255); }
       (opts.items || []).forEach(function (it) {
         var path = '', k; it.pts.forEach(function (p, i) { path += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); });
-        if (it.t === 'pt') { var px = X(it.pts[0][1]), py = Y(it.pts[0][0]); c.push('q ' + rgb(it.col) + ' rg ' + f2(px - 1.5) + ' ' + f2(py - 1.5) + ' 3 3 re f Q'); }
-        else if (it.t === 'ln') c.push('q ' + rgb(it.col) + ' RG ' + f2((it.w || 5) * 0.35) + ' w 1 J ' + path + 'S Q');
-        else if (it.gar) c.push('q ' + rgb(it.col) + ' RG ' + f2((it.w || 3) * 0.35) + ' w ' + path + 'h S Q');
-        else c.push('q /GS1 gs ' + rgb(it.col) + ' rg ' + path + 'h f Q');
+        if (it.t === 'pt') { var px = X(it.pts[0][1]), py = Y(it.pts[0][0]); c.push(L('Kategori: ' + (it.catName || 'tanda'), 'q ' + rgb(it.col) + ' rg ' + f2(px - 1.5) + ' ' + f2(py - 1.5) + ' 3 3 re f Q')); }
+        else if (it.t === 'ln') c.push(L('Kategori: ' + (it.catName || 'tanda'), 'q ' + rgb(it.col) + ' RG ' + f2((it.w || 5) * 0.35) + ' w 1 J ' + path + 'S Q'));
+        else if (it.gar) c.push(L('Kategori: ' + (it.catName || 'tanda'), 'q ' + rgb(it.col) + ' RG ' + f2((it.w || 3) * 0.35) + ' w ' + path + 'h S Q'));
+        else c.push(L('Kategori: ' + (it.catName || 'tanda'), 'q /GS1 gs ' + rgb(it.col) + ' rg ' + path + 'h f Q'));
       });
       c.push('0 0 0 RG 0 0 0 rg ' + f2(bwPt) + ' w');
       var ttl = asc(opts.title || m.name), tw = ttl.length * 13 * 0.56;
       c.push('BT /F2 13 Tf ' + f2(PW / 2 - tw / 2) + ' ' + f2(PH - 17) + ' Td (' + pe(ttl) + ') Tj ET');
       list.forEach(function (b) {
         var s = ''; b.pts.forEach(function (p, i) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); });
-        c.push(s + 'h S');
+        c.push(L('Batas blok', s + 'h S'));
         var q = bbox(b.pts), bw = (q[3] - q[1]) * kx * sc, bh = (q[2] - q[0]) * ky * sc, nm = asc(b.name);
         infos.push({ b: b, nm: nm, ar: fmtHa(HzBlok.areaHa(b.pts)) + ' ha', fit: Math.min(bw * 0.84 / (Math.max(3, nm.length) * 0.56), bh * (opts.luas === false ? 0.7 : 0.42)), x0: X(q[1]), x1: X(q[3]), y0: Y(q[0]), y1: Y(q[2]) });
       });
@@ -332,12 +334,12 @@
       infos.forEach(function (o) {
         var ip = (opts.pos === 't' ? poiBand(o.b.pts, kx, ky, 0.55, 0.95) : (opts.pos === 'b' ? poiBand(o.b.pts, kx, ky, 0.05, 0.45) : null)) || poi(o.b.pts, kx, ky);
         if (o.b.lblOff) ip = [ip[0] + o.b.lblOff[0], ip[1] + o.b.lblOff[1]];
-        var cx = X(ip[1]), cy = Y(ip[0]), ls = [];
-        if (opts.name !== false) ls.push(o.nm);
-        if (opts.luas !== false) ls.push(o.ar);
-        if (opts.lines) opts.lines(o.b).forEach(function (t) { ls.push(asc(t)); });
+        var cx = X(ip[1]), cy = Y(ip[0]), ls = [], lyr = [];
+        if (opts.name !== false) { ls.push(o.nm); lyr.push('No blok'); }
+        if (opts.luas !== false) { ls.push(o.ar); lyr.push('Luas blok'); }
+        if (opts.lines) opts.lines(o.b).forEach(function (t) { ls.push(asc(t.t != null ? t.t : t)); lyr.push(t.l || 'Tanggal dan luas kategori'); });
         var lh = fsU * 1.15, y0 = cy + (ls.length * lh) / 2 - fsU * 0.85;
-        ls.forEach(function (t, i) { c.push('BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - t.length * fsU * 0.52 / 2) + ' ' + f2(y0 - i * lh) + ' Td (' + pe(t) + ') Tj ET'); });
+        ls.forEach(function (t, i) { c.push(L(lyr[i], 'BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - t.length * fsU * 0.52 / 2) + ' ' + f2(y0 - i * lh) + ' Td (' + pe(t) + ') Tj ET')); });
       });
       // skala dan panah utara
       var L0 = [100, 200, 500, 1000, 2000, 5000].filter(function (v) { return v * sc < fw * 0.25; }).pop() || 100, bx = PW / 2 - L0 * sc / 2, by = M + 16;
@@ -353,6 +355,7 @@
       function overlap(cd) { var n = 0; infos.forEach(function (o) { if (o.x1 > cd[0] - 6 && o.x0 < cd[0] + LW + 6 && o.y1 > cd[1] - 6 && o.y0 < cd[1] + LH + 6) n++; }); return n; }
       var best = cands[0], bo = overlap(best); cands.forEach(function (cd) { var o = overlap(cd); if (o < bo) { bo = o; best = cd; } });
       var lx = best[0], ly = best[1];
+      var lgStart = c.length;
       if (opts.legend !== false) {
       c.push('1 g 0.5 w ' + f2(lx) + ' ' + f2(ly) + ' ' + f2(LW) + ' ' + f2(LH) + ' re f 0 g ' + f2(lx) + ' ' + f2(ly) + ' ' + f2(LW) + ' ' + f2(LH) + ' re S');
       rows.forEach(function (r, i) {
@@ -369,6 +372,8 @@
         c.push('BT /F1 8 Tf 0 g ' + f2(lx + 31) + ' ' + f2(ty + 4) + ' Td (' + pe(r.txt) + ') Tj ET');
       });
       }
+      if (opts.layers && opts.legend !== false && c.length > lgStart) { var lgs = c.splice(lgStart).join('\n'); c.push(L('Legenda', lgs)); }
+      if (ocgs.length) res = res.replace(/ >>$/, ' /Properties << ' + ocgs.map(function (nm) { return '/' + ocmap[nm].k + ' ' + ocmap[nm].n + ' 0 R'; }).join(' ') + ' >> >>');
       var cs = add(stream('', c.join('\n')));
       var corners = [[M, M], [M, PH - M], [PW - M, PH - M], [PW - M, M]], lp = [0, 0, 0, 1, 1, 1, 1, 0], gp = [];
       corners.forEach(function (q) { gp.push(latAt(q[1]).toFixed(7), lngAt(q[0]).toFixed(7)); });
@@ -393,7 +398,7 @@
         kids.push(add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 595.28 841.89] /Resources ' + res + ' /Contents ' + ts + ' 0 R >>'));
       }
     }
-    objs[cat - 1] = '<< /Type /Catalog /Pages ' + pages + ' 0 R /Names << /EmbeddedFiles << /Names [(hzblok.json) ' + fsp + ' 0 R] >> >> /AF [' + fsp + ' 0 R] >>';
+    objs[cat - 1] = '<< /Type /Catalog /Pages ' + pages + ' 0 R ' + (ocgs.length ? '/OCProperties << /OCGs [' + ocgs.map(function (nm) { return ocmap[nm].n + ' 0 R'; }).join(' ') + '] /D << /Order [' + ocgs.map(function (nm) { return ocmap[nm].n + ' 0 R'; }).join(' ') + '] /ON [' + ocgs.map(function (nm) { return ocmap[nm].n + ' 0 R'; }).join(' ') + '] >> >> ' : '') + '/Names << /EmbeddedFiles << /Names [(hzblok.json) ' + fsp + ' 0 R] >> >> /AF [' + fsp + ' 0 R] >>';
     objs[pages - 1] = '<< /Type /Pages /Count ' + kids.length + ' /Kids [' + kids.map(function (i) { return i + ' 0 R'; }).join(' ') + '] >>';
     var out = '%PDF-1.7\n%\xE2\xE3\xCF\xD3\n', offs = [];
     objs.forEach(function (b, i) { offs.push(out.length); out += (i + 1) + ' 0 obj\n' + b + '\nendobj\n'; });
@@ -420,6 +425,7 @@
       if (have[nk(b.name)]) { skip++; return; }
       var nb = { id: b.id, src: b.src || 'manual', name: String(b.name), pts: b.pts, ovId: null, dir: b.dir == null ? null : b.dir, sp: b.sp == null ? null : b.sp, margin: +b.margin || 0, conf: !!b.conf, note: b.note || '' };
       if (b.guide) nb.guide = b.guide;
+      if (b.lblOff) nb.lblOff = b.lblOff;
       if (nb.id == null || ids[String(nb.id)]) nb.id = Date.now() + (k++);
       ids[String(nb.id)] = 1; have[nk(nb.name)] = 1; blocks().push(nb); add++;
     });
