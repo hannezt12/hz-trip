@@ -644,7 +644,7 @@
         '<button class="btn pri" id="lgGo" style="width:100%;margin-top:10px;height:48px">Pilih berkas blok (.json)</button><input type="file" id="lgFile" accept=".json,application/json" style="display:none">' +
         '<div class="muted" style="margin-top:8px">Berkas dibuat oleh tombol Ekspor blok di Logbook.HZ (tab Peta). Peta PDF yang dipilih harus gambar peta yang sama dengan yang dipakai di Logbook.HZ. Blok ditampilkan dulu untuk diperiksa. Hanya blok baru yang ditambahkan. Blok yang namanya sudah ada di HZ Trip dilewati dan tidak diubah sama sekali.</div>'
         : '<div class="muted">Belum ada peta PDF yang dikalibrasi. Tambahkan di tab PDF.</div>') + '</div>' +
-      '<div class="h">IMPOR DATA BLOK (.hzblok)</div><div class="card"><button class="btn pri" id="hbGo" style="width:100%;height:48px">Pilih berkas data blok</button><input type="file" id="hbFile" accept=".hzblok,.json,application/json" style="display:none"><div class="muted" style="margin-top:8px">Berkas dibuat dari Cetak > Master > Data blok (satu berkas per master). Hanya blok baru yang ditambahkan; blok yang namanya sudah ada dilewati, tidak ditimpa.</div></div>' +
+      '<div class="h">BUKA DATA BLOK (.hzblok / .zip)</div><div class="card"><button class="btn pri" id="hbGo" style="width:100%;height:48px">Pilih berkas data blok</button><input type="file" id="hbFile" accept=".hzblok,.zip,.json,application/json,application/zip,*/*" style="display:none"><div class="muted" style="margin-top:8px">Berkas dibuat dari Cetak > Master > Data blok (satu berkas per master). Hanya blok baru yang ditambahkan; blok yang namanya sudah ada dilewati, tidak ditimpa.</div></div>' +
       '<div class="h">CEK DATA KETINGGIAN</div><div class="card"><div class="row" style="gap:6px"><input type="number" id="dcLa" step="any" placeholder="Lintang" style="flex:1"><input type="number" id="dcLo" step="any" placeholder="Bujur" style="flex:1"></div><div class="row" style="gap:8px;margin-top:8px"><button class="btn" id="dcMid" style="flex:1">Tengah peta</button><button class="btn pri" id="dcGo" style="flex:1">Cek</button></div><div id="dcOut" class="muted" style="margin-top:8px">Masukkan koordinat lalu Cek, untuk melihat kapan data ketinggian di titik itu dibuat.</div></div>' +
       '<div class="h">JARAK ROW BAWAAN</div><div class="card"><div class="row"><input type="number" id="rwSp" step="0.05" min="0.5" max="5" value="' + (S.settings.rowSp || 1.5) + '"><span class="muted" style="padding:0 8px">m</span></div>' +
       '<div class="muted" style="margin-top:8px">Batas kedalaman cekungan (m)</div><input type="number" id="depT" step="0.1" min="0.1" max="3" value="' + (S.settings.depThr || 0.3) + '">' +
@@ -670,7 +670,7 @@
       items: fl.slice(pg * PG, pg * PG + PG).map(function (b) { return { id: b.id, title: b.name, sub: nf(blkHa(b), 1) + ' ha · ' + (b.dir == null ? 'arah belum diatur' : 'arah ' + Math.round(b.dir) + '° · ' + nf(blkSp(b), 2) + ' m') + ' · ' + blkStatusText(b) }; }),
       onTap: function (id) { var b = blockById(id); if (b) needMap(b.pts, function () { HA.map.fitBounds(L.latLngBounds(b.pts), { padding: [50, 50], maxZoom: 19 }); openBlockPop(b); }); },
       onEdit: function (id) { var b = blockById(id); if (b) needMap(b.pts, function () { openBlockEdit(b); }); },
-      multi: [{ label: 'Geser', fn: function (ids) { var ok = ids.filter(function (i) { var b = blockById(i); return b && !b.conf; }); if (!ok.length) { toast('Blok terkonfirmasi tidak bisa digeser'); return; } if (ok.length < ids.length) toast((ids.length - ok.length) + ' blok terkonfirmasi dilewati'); HA.closeAll(); HA.shiftStart(ok); } }],
+      multi: [],
       delTitle: function (ids) { return ids.length === 1 ? 'Hapus blok ini?' : 'Hapus ' + ids.length + ' blok?'; },
       delMsg: function () { return 'Blok dihapus dari peta. Peta PDF tidak terpengaruh.'; },
       onDelete: function (ids) {
@@ -688,12 +688,7 @@
       $('hbGo').onclick = function () { $('hbFile').value = ''; $('hbFile').click(); };
       $('hbFile').onchange = function () {
         var f = this.files && this.files[0]; if (!f) return;
-        f.text().then(function (t) {
-          var d; try { d = JSON.parse(t); } catch (e) { throw new Error('Bukan berkas data blok'); }
-          if (!d || d.hzblok !== 1 || !Array.isArray(d.blocks)) throw new Error('Bukan berkas data blok HZ Trip');
-          var r = HA.restoreHzBlok(d); toast(r.added + ' blok baru' + (r.skipped ? ', ' + r.skipped + ' sudah ada (dilewati)' : '') + (r.master ? ', master ditambahkan' : ''));
-          if (typeof renderData === 'function') renderData();
-        }).catch(function (e) { toast('Impor gagal: ' + (e && e.message || e)); });
+        f.arrayBuffer().then(function (ab) { return HA.hzblokOpen(new Uint8Array(ab), f.name); });
       };
     }
     if ($('dcGo')) {

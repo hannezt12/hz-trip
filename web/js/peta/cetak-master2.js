@@ -90,7 +90,7 @@
         '<div class="muted" style="margin-top:4px">Draft hanya menyimpan pengaturan cetak. Data selalu yang terbaru.</div>' +
         '<button class="btn" id="pmPos" style="width:100%;margin-top:10px">Atur posisi teks blok</button>';
     }
-    h += '<button class="btn" id="pmAtur" style="width:100%;margin-top:6px">Atur blok perbatasan</button>' +
+    h += '<button class="btn" id="pmAtur" style="width:100%;margin-top:6px">Atur blok perbatasan</button><button class="btn" id="pmVer" style="width:100%;margin-top:6px">Versi simpanan master</button>' +
       (PS.fmt === 'pdf' ? '<button class="btn" id="pmPrev" style="width:100%;margin-top:8px">Preview</button>' : '') +
       '<button class="btn pri" id="pmGo" style="width:100%;margin-top:8px;height:52px">Cetak ' + (PS.fmt === 'pdf' ? 'PDF' : 'KML') + '</button></div><button class="btn" id="pmX" style="width:100%;margin-top:8px">Tutup</button>';
     HA.openSheet(h);
@@ -102,6 +102,7 @@
     $('pmX').onclick = HA.closeSheet; wireMode();
     sh.querySelectorAll('input[name=pmSel]').forEach(function (r) { r.onchange = function () { PS.sel = r.value; persist(); panel(); }; });
     $('pmFmt').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-f]'); if (b) { PS.fmt = b.getAttribute('data-f'); persist(); panel(); } };
+    $('pmVer').onclick = function () { if (HA.VM) HA.VM.open(m, panel); };
     $('pmAtur').onclick = function () { if (HA.masterAtur) HA.masterAtur(m, panel); };
     if (PS.fmt === 'data') {
       sh.querySelectorAll('.pmDs').forEach(function (e) { e.onchange = function () { (PS.dsel || (PS.dsel = {}))[e.getAttribute('data-id')] = e.checked; persist(); }; });
@@ -113,7 +114,7 @@
           if (!list.length) { toast(mm.name + ': belum ada blok Terkonfirmasi'); setTimeout(nx, 300); return; }
           var d = new Date(), p2 = function (n) { return (n < 10 ? '0' : '') + n; }, st = p2(d.getDate()) + p2(d.getMonth() + 1) + String(d.getFullYear()).slice(2);
           var data = { hzblok: 1, app: 'HZ Trip', tgl: p2(d.getDate()) + '-' + p2(d.getMonth() + 1) + '-' + d.getFullYear(), master: { name: mm.name, pts: mm.pts }, blocks: list.map(function (b) { return { id: b.id, name: b.name, src: b.src || 'manual', pts: b.pts, dir: b.dir == null ? null : b.dir, sp: b.sp == null ? null : b.sp, margin: b.margin || 0, conf: !!b.conf, note: b.note || '', guide: b.guide || null, lblOff: b.lblOff || null }; }) };
-          HA.saveFile('Master_' + String(mm.name).replace(/[^\w\-]+/g, '_') + '_' + st + '.hzblok', HA.textB64(JSON.stringify(data)), 'application/json');
+          HA.saveHzBlokZip('Master_' + String(mm.name).replace(/[^\w\-]+/g, '_') + '_' + st, JSON.stringify(data));
           setTimeout(nx, 900);
         })();
       };

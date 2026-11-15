@@ -143,7 +143,7 @@
     function tile(id, label, st, badge) { return '<button type="button" class="tile' + (st ? ' st' : '') + '" data-t="' + id + '">' + IC[id] + '<span>' + label + '</span>' + (badge ? '<i class="tbd" id="bd_' + id + '"></i>' : '') + '</button>'; }
     var TILES = [['search', 'Cari'], ['daftar', 'Daftar tanda'], ['isi', 'Ketuk isi', 1], ['contour', 'Kontur', 1], ['slopeLayer', 'Lereng', 1], ['hach', 'Arsiran', 1], ['v3d', '3D', 1], ['slopeTap', 'Info lereng', 1], ['prof', 'Profil', 1],
       ['useNas', 'DEMNAS', 1], ['useFree', 'DEM gratis', 1], ['blkOn', 'Blok', 1, 1], ['rowOn', 'Arah row', 1], ['wlOn', 'Water lock', 1], ['lakesOn', 'Danau & drainase', 1, 1], ['linesOn', 'Jalan bantu', 1], ['batDesa', 'Batas', 1], ['play', 'Putar', 1],
-      ['draw', 'Buat baru'], ['fill', 'Isi blok'], ['measure', 'Ukur'], ['shift', 'Geser blok']];
+      ['draw', 'Buat baru'], ['fill', 'Isi blok'], ['measure', 'Ukur']];
     var RARE = { v3d: 1, slopeLayer: 1, hach: 1, slopeTap: 1, prof: 1 };
     function tileShown(id) { var t = S.settings.tileShow || {}; if (t[id] != null) return !!t[id]; return !!(id === 'slopeLayer' ? S.settings.slopeLayer : id === 'hach' ? S.settings.hach : false); }
     HA.DM.rare = [['v3d', '3D'], ['slopeLayer', 'Kemiringan (Lereng)'], ['hach', 'Arsiran'], ['slopeTap', 'Info lereng'], ['prof', 'Profil']]; HA.DM.tileShown = tileShown;
@@ -250,7 +250,6 @@
       if (id === 'measure' || id === 'draw' || id === 'fill') { if (HA.KM) HA.KM.fillTap = false; }
       if (id === 'measure') { closeP(); HA.measureStart(); return; }
       if (id === 'fill') { closeP(); HA.fillStart(); return; }
-      if (id === 'shift') { closeP(); HA.shiftStart(); return; }
       if (id === 'draw') { if (HA.pbLocked('Tutup Putar dulu untuk menggambar')) return; closeP(); drawStart(); return; }
       if (id === 'detect') { closeP(); S.dpTab = 'blok'; go('data'); return; }
       if (id === 'blkOn') { S.settings.blkOn = S.settings.blkOn === false; saveSettings(); if (S.settings.blkOn === false) closeBlockPop(); drawBlocks(); sync(); return; }

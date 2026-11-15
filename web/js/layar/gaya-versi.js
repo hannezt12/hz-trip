@@ -1,4 +1,4 @@
-/* HZ Trip v0.16.4 - Panel gaya Ketuk isi, ubah gaya tanda (gaya asli tersimpan), versi simpanan per blok */
+/* HZ Trip v0.16.4 - Panel gaya Ketuk isi, ubah gaya tanda (gaya asli tersimpan), (versi simpanan kini per master di versi-master.js) */
 (function () {
   'use strict';
   var HA = window.HzApp;
@@ -24,11 +24,59 @@
       '<div class="fgR"><span>Cakupan</span><div class="seg" id="fgSc"><button data-v="blok"' + (!fgArea ? ' class="on"' : '') + '>Blok penuh</button><button data-v="area"' + (fgArea ? ' class="on"' : '') + '>Area gambar</button></div></div>' +
       '<div class="fgR"><span>Gaya</span><div class="seg" id="fgM"><button data-v=""' + (!g.m ? ' class="on"' : '') + '>Ikut kategori</button><button data-v="isi"' + (g.m === 'isi' ? ' class="on"' : '') + '>Isi</button><button data-v="tepi"' + (g.m === 'tepi' ? ' class="on"' : '') + '>Garis tepi</button></div></div>' +
       '<div class="fgR"><span>Tebal tepi</span><input type="number" id="fgW" min="1" max="12" step="1" value="' + (g.w || '') + '" placeholder="kategori"><span>Warna</span><input type="color" id="fgC" value="' + (g.col || base) + '"><button type="button" class="btn" id="fgC0">Ikut kategori</button></div>' +
-      (fgArea ? '<div class="muted fgT">Gambar area dengan tombol Ukur (Alat peta). Bagian di dalam blok jadi tanda dengan gaya ini.</div>' : '<div class="muted fgT">Ketuk blok untuk menandainya. Gaya bisa diganti kapan saja; tanda lama diubah lewat Riwayat blok.</div>');
+      (fgArea ? '<div class="muted fgT">Gambar area dengan tombol Ukur (Alat peta). Bagian di dalam blok jadi tanda dengan gaya ini.</div>' : '<div class="muted fgT">Ketuk blok (sementara), atur gaya, lalu Simpan. Ketuk lagi untuk melepas.</div>' + pendHtml());
+  }
+  // ---- tanda tertunda (pratinjau) : ketuk blok = sementara, Simpan(N)/Batal
+  var MAXP = 20, pend = { list: [], date: null, wk: null, wkSet: false, note: '' }, pvL = null;
+  function pdate() { return pend.date || KM.fillDate(); }
+  function pwk() { return pend.wkSet ? (pend.wk || '') : HA.wkAuto(pdate()); }
+  function pkey(b, ring) { return String(b.id) + '|' + (ring ? ring[0][0] + ',' + ring[0][1] : 'full'); }
+  function pvStyle() {
+    var g = cur(), br = HA.tandaBrush(), col = g.col || (br && br.color) || '#ff9800', m = g.m || (HA.tandaCatInfo && 0) || 'isi';
+    return { color: col, weight: g.w || 3, fill: m !== 'tepi', fillColor: col, fillOpacity: m === 'tepi' ? 0 : 0.4, dashArray: '6 4', interactive: false };
+  }
+  function pvDraw() {
+    if (!HA.map || typeof L === 'undefined') return;
+    if (pvL) { HA.map.removeLayer(pvL); pvL = null; }
+    if (!pend.list.length) return;
+    pvL = L.layerGroup(pend.list.map(function (z) { return L.polygon(z.pts, pvStyle()); })).addTo(HA.map);
+  }
+  function pendClear() { pend = { list: [], date: null, wk: null, wkSet: false, note: '' }; pvDraw(); sync(); }
+  KM.pendAdd = function (b, ring) {
+    if (!b || !b.conf) { HA.toast('Ketuk di dalam blok terkonfirmasi'); return false; }
+    var k = pkey(b, ring), i;
+    for (i = 0; i < pend.list.length; i++) if (pend.list[i].k === k) { pend.list.splice(i, 1); pvDraw(); sync(); return true; }
+    if (pend.list.length >= MAXP) { HA.toast('Maksimal ' + MAXP + ' blok sekali simpan'); return false; }
+    pend.list.push({ k: k, b: b, ring: ring || null, pts: ring || b.pts.map(function (p) { return [p[0], p[1]]; }) });
+    pvDraw(); sync(); return true;
+  };
+  KM.pendCount = function () { return pend.list.length; };
+  KM.pendClear = pendClear;
+  KM.pendSave = function () {
+    if (!pend.list.length) return;
+    var br = HA.tandaBrush(), dt = pdate(), wk = pwk(), note = (pend.note || '').trim(), U = HA.tandaU, items = HA.tandaData().items, dups = [], mk = [];
+    pend.list.forEach(function (z) {
+      var sig = z.ring ? z.ring[0][0] + ',' + z.ring[0][1] : 'full';
+      if (items.some(function (i) { return String(i.bid) === String(z.b.id) && i.cat === br.cat && (i.sub || null) === (br.sub || null) && U.dateOf(i) === dt && (i.fsig || 'full') === sig; })) dups.push(z.b.name);
+      mk.push({ id: HA.tandaNewId(), t: 'pg', pts: z.pts, cat: br.cat, sub: br.sub || null, name: String(z.b.name || ''), note: note, bid: z.b.id, full: !z.ring, fsig: sig, date: dt, wk: wk || undefined, ts: Date.now() });
+    });
+    function go() {
+      mk.forEach(function (it) { if (!it.wk) delete it.wk; HA.tandaAdd(it); });
+      HA.tandaSave(); HA.toast(mk.length + ' blok ditandai ' + br.name); pendClear(); if (KM.sync) KM.sync();
+    }
+    if (dups.length) HA.askConfirm('Sudah ada, tetap tambah?', 'Blok ' + dups.slice(0, 6).join(', ') + (dups.length > 6 ? ' dan ' + (dups.length - 6) + ' lainnya' : '') + ' sudah ditandai ' + br.name + ' pada ' + U.d8(dt) + '. Tambah sebagai kegiatan baru?', 'Tetap tambah', go);
+    else go();
+  };
+  function pendHtml() {
+    var n = pend.list.length, wk = pwk(), dt = pdate();
+    return '<div class="fgR"><span>Tanggal</span><input type="date" id="fgD" value="' + dt + '" max="' + S.today + '"><span>Waktu</span></div>' +
+      '<div class="fgR" id="fgWk">' + ['Pagi', 'Siang', 'Sore', 'Malam'].map(function (w) { return '<button type="button" class="btn' + (wk === w ? ' pri' : '') + '" data-w="' + w + '">' + w + '</button>'; }).join('') + '<button type="button" class="btn' + (!wk ? ' pri' : '') + '" data-w="">—</button></div>' +
+      '<div class="fgR"><input type="text" id="fgN" maxlength="120" placeholder="Catatan, mis. Urea 200 kg/ha" value="' + esc(pend.note) + '" style="flex:1"></div>' +
+      '<div class="fgR"><span id="fgCnt">' + n + '/' + MAXP + '</span><button type="button" class="btn" id="fgBt" style="flex:1">Batal</button><button type="button" class="btn pri" id="fgSv" style="flex:1"' + (n ? '' : ' disabled') + '>Simpan (' + n + ')</button></div>';
   }
   function sync() {
     var wrap = $('mapWrap') || document.body, e = $('fgPanel');
-    if (!visible()) { if (e) e.style.display = 'none'; return; }
+    if (!visible()) { if (e) e.style.display = 'none'; if (pend.list.length) { pend.list = []; pvDraw(); } return; }
     if (!e) { e = document.createElement('div'); e.id = 'fgPanel'; e.className = 'fgPanel'; wrap.appendChild(e); }
     e.style.display = 'block'; e.innerHTML = panelHtml(); wire(e);
   }
@@ -45,6 +93,14 @@
     $('fgW').onchange = function () { var v = Math.round(parseFloat(this.value)); g.w = isFinite(v) ? Math.max(1, Math.min(12, v)) : 0; HA.saveSettings(); sync(); };
     $('fgC').onchange = function () { g.col = this.value; HA.saveSettings(); };
     $('fgC0').onclick = function () { g.col = null; HA.saveSettings(); sync(); };
+    ['fgM', 'fgW', 'fgC', 'fgC0'].forEach(function (id) { var el = $(id); if (el) el.addEventListener(id === 'fgW' || id === 'fgC' ? 'change' : 'click', pvDraw); });
+    if ($('fgD')) {
+      $('fgD').onchange = function () { if (this.value) { pend.date = this.value; if (!pend.wkSet) pend.wk = null; sync(); } };
+      $('fgWk').onclick = function (ev) { var b = ev.target.closest('button[data-w]'); if (!b) return; pend.wk = b.getAttribute('data-w'); pend.wkSet = true; sync(); };
+      $('fgN').oninput = function () { pend.note = this.value; };
+      $('fgBt').onclick = pendClear;
+      $('fgSv').onclick = KM.pendSave;
+    }
   }
   var tg = KM.toggleFill;
   KM.toggleFill = function () { var r = tg.apply(this, arguments); if (!KM.fillTap) fgArea = false; sync(); return r; };
@@ -80,52 +136,6 @@
       };
     }
     function keep() { /* nilai disimpan di st sampai Terapkan */ }
-    draw();
-  };
-  // ---- versi simpanan per blok (maks 10 manual; hapus satu per satu)
-  function vers() { var d = HA.tandaData(); return d.vers || (d.vers = []); }
-  function snap(b, name, auto) {
-    var items = HA.BT.itemsOf(b).map(clone);
-    vers().push({ id: 'v' + Date.now() + Math.floor(Math.random() * 99), bid: String(b.id), bn: String(b.name || ''), name: name, ts: Date.now(), auto: !!auto, items: items });
-    HA.tandaSave();
-  }
-  BR.versi = function (b, back) {
-    function mine() { return vers().filter(function (v) { return v.bid === String(b.id); }).sort(function (x, y) { return y.ts - x.ts; }); }
-    function fmt(ts) { var d = new Date(ts), p = function (n) { return (n < 10 ? '0' : '') + n; }; return p(d.getDate()) + '-' + p(d.getMonth() + 1) + '-' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
-    function draw() {
-      var l = mine();
-      HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">VERSI · ' + esc(b.name) + '</div><button class="btn pri" id="vrOk">Kembali</button></div>' +
-        '<div class="muted" style="margin:4px 0 8px">Salinan tanda blok ini pada suatu saat (maks 10 manual). Pulihkan mengembalikan tanda blok ke versi itu; kondisi sekarang disimpan otomatis dulu.</div>' +
-        '<div class="rbL">' + (l.length ? l.map(function (v, i) { return '<div class="rbR vrR" data-i="' + i + '"><div class="rbT"><b>' + esc(v.name) + '</b><small>' + fmt(v.ts) + ' · ' + v.items.length + ' tanda' + (v.auto ? ' · otomatis' : '') + '</small></div><button class="btn" data-p="' + i + '">Pulihkan</button><button class="btn" data-d="' + i + '" style="color:var(--r)">Hapus</button></div>'; }).join('') : '<div class="muted" style="padding:10px 2px">Belum ada versi tersimpan.</div>') + '</div>' +
-        '<div class="row" style="gap:8px;margin-top:10px"><input type="text" id="vrN" maxlength="40" placeholder="Nama versi (mis. Sebelum geser)" style="flex:1"><button class="btn pri" id="vrS">Simpan versi</button></div>');
-      HA.onSheetClose = back || null;
-      $('vrOk').onclick = function () { HA.closeSheet(); };
-      $('vrS').onclick = function () {
-        var n = $('vrN').value.trim(); if (!n) { HA.toast('Isi nama versi'); return; }
-        if (mine().filter(function (v) { return !v.auto; }).length >= 10) { HA.toast('Sudah 10 versi, hapus satu dulu'); return; }
-        snap(b, n, false); var h = HA.onSheetClose; draw(); HA.onSheetClose = h; HA.toast('Versi tersimpan');
-      };
-      $('sheet').querySelectorAll('[data-p]').forEach(function (e) { e.onclick = function () {
-        var v = mine()[+e.getAttribute('data-p')]; if (!v) return;
-        var h = HA.onSheetClose; HA.onSheetClose = null;
-        HA.askConfirm('Pulihkan versi "' + v.name + '"?', 'Tanda blok ' + b.name + ' dikembalikan ke ' + v.items.length + ' tanda pada ' + fmt(v.ts) + '. Kondisi sekarang disimpan otomatis dulu.', 'Pulihkan', function () {
-          snap(b, 'Sebelum pulihkan ' + fmt(Date.now()), true);
-          var d = HA.tandaData(), cur0 = {}; HA.BT.itemsOf(b).forEach(function (it) { cur0[it.id] = 1; });
-          d.items = d.items.filter(function (it) { return !cur0[it.id]; });
-          v.items.forEach(function (it) { d.items.push(clone(it)); });
-          HA.tandaSave(); if (KM.sync) KM.sync(); HA.toast('Versi dipulihkan'); draw(); HA.onSheetClose = h;
-        });
-        var cn = $('cfNo'); if (cn) cn.onclick = function () { draw(); HA.onSheetClose = h; };
-      }; });
-      $('sheet').querySelectorAll('[data-d]').forEach(function (e) { e.onclick = function () {
-        var v = mine()[+e.getAttribute('data-d')]; if (!v) return;
-        var h = HA.onSheetClose; HA.onSheetClose = null;
-        HA.askConfirm('Hapus versi?', v.name + '. Hanya salinan ini yang dihapus, tanda blok tidak berubah.', 'Hapus', function () {
-          var d = HA.tandaData(); d.vers = (d.vers || []).filter(function (z) { return z.id !== v.id; }); HA.tandaSave(); draw(); HA.onSheetClose = h;
-        });
-        var cn = $('cfNo'); if (cn) cn.onclick = function () { draw(); HA.onSheetClose = h; };
-      }; });
-    }
     draw();
   };
 })();

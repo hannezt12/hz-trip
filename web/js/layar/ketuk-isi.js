@@ -6,6 +6,9 @@
   var KM = HA.KM, S = HA.S;
   function $(i) { return document.getElementById(i); }
   KM.fillTap = false;
+  var WKN = ['Pagi', 'Siang', 'Sore', 'Malam'];
+  HA.WK = WKN;
+  HA.wkAuto = function (date) { if (date !== S.today) return ''; var h = new Date().getHours(); return h >= 5 && h < 11 ? 'Pagi' : h >= 11 && h < 15 ? 'Siang' : h >= 15 && h < 18 ? 'Sore' : 'Malam'; };
   function fillDate() { return (!KM.range && !KM.all) ? (S.mapDay || S.today) : S.today; }
   function pip(x, y, r) { var ins = false, i, j; for (i = 0, j = r.length - 1; i < r.length; j = i++) { if (((r[i][1] > y) !== (r[j][1] > y)) && (x < (r[j][0] - r[i][0]) * (y - r[i][1]) / (r[j][1] - r[i][1]) + r[i][0])) ins = !ins; } return ins; }
   function area(r) { var a = 0, i, j; for (i = 0, j = r.length - 1; i < r.length; j = i++) a += (r[j][0] + r[i][0]) * (r[j][1] - r[i][1]); return Math.abs(a / 2); }
@@ -39,7 +42,7 @@
     var sig = ring ? ring[0][0] + ',' + ring[0][1] : 'full';
     var dup = HA.tandaData().items.filter(function (i) { return String(i.bid) === String(b.id) && i.cat === br.cat && (i.sub || null) === (br.sub || null) && HA.tandaU.dateOf(i) === dt && (i.fsig || 'full') === sig; })[0];
     if (dup) { HA.toast('Blok ' + b.name + ' sudah ditandai ' + br.name + ' pada ' + HA.tandaU.d8(dt)); return false; }
-    var it = { id: HA.tandaNewId(), t: 'pg', pts: pts, cat: br.cat, sub: br.sub || null, name: String(b.name || ''), note: '', bid: b.id, full: !ring, fsig: sig, date: dt, ts: Date.now() };
+    var it = { id: HA.tandaNewId(), t: 'pg', pts: pts, cat: br.cat, sub: br.sub || null, name: String(b.name || ''), note: '', bid: b.id, full: !ring, fsig: sig, date: dt, wk: HA.wkAuto(dt), ts: Date.now() };
     HA.tandaAdd(it); HA.tandaSave();
     var st = HA.tandaStat(it);
     HA.toast('Blok ' + b.name + ' · ' + br.name + ' · ' + HA.tandaU.ha(st.ha) + ' ha' + (ring ? ' (bagian)' : ''));
@@ -49,15 +52,16 @@
   function onClick(e) {
     if (!KM.fillTap || KM.mode !== 'kategori' || !HA.map) return;
     var mc = HA.map.getContainer(); if (!mc.contains(e.target)) return;
-    if (e.target.closest && e.target.closest('.leaflet-control, .toolpanel, .locbtn, .blkpop, #katSrch, button, .mzCard')) return;
+    if (e.target.closest && e.target.closest('.leaflet-control, .toolpanel, .locbtn, .blkpop, #katSrch, .fgPanel, button, .mzCard')) return;
     var pn = document.querySelector('.toolpanel'); if (pn && pn.style.display !== 'none') return;
     if (HA.DM && HA.DM.edit) return;
     e.stopPropagation(); e.preventDefault();
     var ll = HA.map.mouseEventToLatLng(e), b = HA.blockAt(ll);
     if (!b) { HA.toast('Tidak ada blok di titik itu'); return; }
-    KM.fillBlock(b, b.conf ? pieceAt(b, ll) : null);
+    if (KM.pendAdd) KM.pendAdd(b, b.conf ? pieceAt(b, ll) : null); else KM.fillBlock(b, b.conf ? pieceAt(b, ll) : null);
   }
   document.addEventListener('click', onClick, true);
+  KM.fillDate = fillDate;
   KM.toggleFill = function () {
     if (KM.mode !== 'kategori') { HA.toast('Ketuk isi hanya di mode Kategori'); return; }
     KM.fillTap = !KM.fillTap;

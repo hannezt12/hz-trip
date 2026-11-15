@@ -25,6 +25,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
+import android.util.Base64;
 import java.util.Arrays;
 import java.util.regex.Pattern;
 
@@ -46,8 +48,54 @@ public class HzTripPlugin extends Plugin {
     private static final Pattern DATE_RE = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
     private static final Pattern NAME_RE = Pattern.compile("^[a-z0-9_-]{1,40}$");
 
+    /** Berkas .hzblok yang dibuka dari luar aplikasi, menunggu diambil JS. */
+    static String pendBlokName = null, pendBlokB64 = null;
+    static HzTripPlugin inst = null;
+
+    /** Dipanggil MainActivity untuk intent VIEW/SEND. Baca isi (maks 30 MB), simpan, beri tahu JS. */
+    static void stashBlok(Context ctx, Intent it) {
+        try {
+            if (it == null) return;
+            String act = it.getAction();
+            Uri u = null;
+            if (Intent.ACTION_VIEW.equals(act)) u = it.getData();
+            else if (Intent.ACTION_SEND.equals(act)) u = (Uri) it.getParcelableExtra(Intent.EXTRA_STREAM);
+            if (u == null) return;
+            String nm = u.getLastPathSegment();
+            InputStream in = ctx.getContentResolver().openInputStream(u);
+            if (in == null) return;
+            ByteArrayOutputStream bo = new ByteArrayOutputStream();
+            byte[] buf = new byte[65536];
+            int n, tot = 0;
+            while ((n = in.read(buf)) > 0) {
+                tot += n;
+                if (tot > 30 * 1024 * 1024) { in.close(); return; }
+                bo.write(buf, 0, n);
+            }
+            in.close();
+            pendBlokName = nm == null ? "data" : nm;
+            pendBlokB64 = Base64.encodeToString(bo.toByteArray(), Base64.NO_WRAP);
+            it.setData(null);
+            if (inst != null) inst.notifyListeners("hzblok", new JSObject());
+        } catch (Throwable ignored) {
+        }
+    }
+
+    @PluginMethod
+    public void takePendingBlok(PluginCall call) {
+        JSObject o = new JSObject();
+        if (pendBlokB64 != null) {
+            o.put("name", pendBlokName);
+            o.put("b64", pendBlokB64);
+            pendBlokB64 = null;
+            pendBlokName = null;
+        }
+        call.resolve(o);
+    }
+
     @Override
     public void load() {
+        inst = this;
         TripService.listener = new TripService.Listener() {
             @Override
             public void onFix(long t, double lat, double lng, float speedMs, float acc, int count) {
@@ -70,6 +118,7 @@ public class HzTripPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
+        inst = null;
         TripService.listener = null;
     }
 

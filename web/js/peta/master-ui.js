@@ -121,12 +121,13 @@
     function draw() {
       var mem = members(m), rows = mem.pend.concat(mem.man, mem.skip).sort(nat), inc = idset(m.inc), exc = idset(m.exc);
       openSheet('<div class="grab"></div><div class="bth"><div class="st">PERBATASAN · ' + esc(m.name) + '</div><button class="btn pri" id="atX">Selesai</button></div>' +
-        '<div class="muted" style="margin:6px 0">Blok Terkonfirmasi yang sebagian keluar dari poligon. Pilih Masuk atau Tidak; ketuk lagi untuk membatalkan.</div>' +
+        '<button class="btn" id="atVr" style="width:100%">Versi simpanan master</button>' + '<div class="muted" style="margin:6px 0">Blok Terkonfirmasi yang sebagian keluar dari poligon. Pilih Masuk atau Tidak; ketuk lagi untuk membatalkan.</div>' +
         (rows.length ? rows.map(function (b) {
           var id = String(b.id), st = inc[id] ? 1 : exc[id] ? 2 : 0;
           return '<div class="lpi" style="gap:6px"><div class="nm"><b>' + esc(b.name) + '</b><small>' + fmtHa(HzBlok.areaHa(b.pts)) + ' ha' + (st ? '' : ' · belum diputuskan') + '</small></div>' +
             '<button class="btn sm' + (st === 1 ? ' pri' : '') + '" data-id="' + esc(id) + '" data-v="1">Masuk</button><button class="btn sm' + (st === 2 ? ' pri' : '') + '" data-id="' + esc(id) + '" data-v="2">Tidak</button></div>';
         }).join('') : '<div class="card muted">Tidak ada blok Terkonfirmasi di perbatasan master ini.</div>'));
+      $('atVr').onclick = function () { if (HA.VM) HA.VM.open(m, function () { aturSheet(m, back); }); };
       $('atX').onclick = function () { closeSheet(); if (back) { back(); return; } S.dpTab = 'master'; if (S.view === 'data') HA.renderData(); };
       $('sheet').querySelectorAll('button[data-v]').forEach(function (x) {
         x.onclick = function () {
@@ -437,4 +438,10 @@
     saveSettings(); if (HA.drawBlocks) HA.drawBlocks(); if (HA.drawRows) HA.drawRows();
     return { added: add, skipped: skip, master: mAdded };
   }
+  HA.previewHzBlok = function (d) {
+    var have = {}, add = 0, skip = 0;
+    blocks().forEach(function (b) { have[nk(b.name)] = 1; });
+    d.blocks.forEach(function (b) { if (!b || !b.pts || b.pts.length < 3 || !b.name) return; if (have[nk(b.name)]) { skip++; return; } have[nk(b.name)] = 1; add++; });
+    return { added: add, skipped: skip, master: !!(d.master && d.master.pts && d.master.pts.length >= 3 && !masters().some(function (m) { return nk(m.name) === nk(d.master.name); })) };
+  };
 })();

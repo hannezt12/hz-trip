@@ -210,10 +210,6 @@
     $('hidList').onclick = onHidden;
     $('miniX').onclick = function () { closeMini(); };
     $('dpTabs').onclick = function (e) { var t = e.target.getAttribute && e.target.getAttribute('data-tab'); if (t) { S.dpTab = t; renderData(); } };
-    $('blkDelAll').onclick = function () {
-      var n = blocksList().length; if (!n) { toast('Belum ada blok'); return; }
-      askConfirm('Hapus semua ' + n + ' blok?', 'Semua blok dihapus dari aplikasi. Peta PDF dan data lain tidak terpengaruh. Blok bisa diimpor lagi dari Logbook.HZ.', 'Hapus', function () { S.settings.blocks = []; HA.RC.rows = {}; HA.RC.dep = {}; HA.RC.guide = {}; HzBlok.cache.clear(); saveSettings(); closeBlockPop(); drawBlocks(); drawRows(); renderBlkInfo(); toast('Semua blok dihapus'); });
-    };
     $('ovGoData').onclick = function () { S.dpTab = 'pdf'; go('data'); };
     $('ovAdd').onclick = function () { $('ovFile').value = ''; $('ovFile').click(); };
     $('ovFile').onchange = function () { if (this.files && this.files[0]) importOv(this.files[0]); };

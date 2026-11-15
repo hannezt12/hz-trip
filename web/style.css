@@ -868,3 +868,6 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .fgH{display:flex;justify-content:space-between;align-items:center}.fgH button{background:none;border:0;color:inherit;font-size:18px;padding:4px 8px}
 .fgR{display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap}.fgR>span{font-size:12px;opacity:.75;min-width:64px}.fgR input[type=number]{width:70px}.fgR input[type=color]{width:38px;height:30px;padding:0}.fgT{font-size:11px;margin-top:6px}
 .vrR .btn{margin-left:6px;padding:6px 10px}
+
+#spLay{position:absolute;right:0.625rem;bottom:10.75rem;z-index:600;margin:0}
+#spMapWrap.tdon #spLay{display:none}

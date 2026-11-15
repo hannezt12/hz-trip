@@ -80,6 +80,7 @@
     function emit(n, o) { (L[n] || []).forEach(function (f) { f(o); }); }
     return {
       addListener: function (n, f) { (L[n] = L[n] || []).push(f); return Promise.resolve({ remove: function () {} }); },
+      takePendingBlok: function () { var r = window.__pendBlok || null; window.__pendBlok = null; return Promise.resolve(r || {}); },
       ensurePermissions: function () { return Promise.resolve({ granted: true }); },
       ensureBackground: function () { return Promise.resolve(st()); },
       ensureActivity: function () { return Promise.resolve(st()); },

@@ -1,6 +1,7 @@
 package com.hz.hztrip;
 
 import android.graphics.Color;
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
@@ -17,6 +18,14 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         blackStatusBar();
         lockTextZoom();
+        HzTripPlugin.stashBlok(this, getIntent());
+    }
+
+    /** Berkas .hzblok dibuka saat aplikasi sudah berjalan. */
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        HzTripPlugin.stashBlok(this, intent);
     }
 
     /** Ukuran teks WebView tidak ikut pengaturan font sistem; skala diatur CSS. */

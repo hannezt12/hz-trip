@@ -35,18 +35,36 @@
     }, 200);
   }
   function persist() { HA.tandaSave(); if (HA.KM && HA.KM.sync) HA.KM.sync(); }
+  // ---- waktu kegiatan, nomor kegiatan, dibuat/diubah
+  var WKI = { Pagi: 0, Siang: 1, Sore: 2, Malam: 3 };
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  function fmtTs(ts) { if (!ts) return '-'; var d = new Date(ts); return p2(d.getDate()) + '.' + p2(d.getMonth() + 1) + '.' + String(d.getFullYear()).slice(2) + ' ' + p2(d.getHours()) + '.' + p2(d.getMinutes()); }
+  function ordKey(it) { return HA.tandaU.dateOf(it) + (it.wk && WKI[it.wk] != null ? WKI[it.wk] : 9) + String(1e13 + (it.ts || 0)); }
+  BR.seq = function (it) {
+    if (it.bid == null || !it.cat) return null;
+    var same = HA.tandaData().items.filter(function (z) { return String(z.bid) === String(it.bid) && z.cat === it.cat; });
+    if (same.length < 2) return null;
+    same.sort(function (a, c) { var x = ordKey(a), y = ordKey(c); return x < y ? -1 : x > y ? 1 : 0; });
+    for (var i = 0; i < same.length; i++) if (same[i].id === it.id) return { n: i + 1, of: same.length };
+    return null;
+  };
+  BR.fmtTs = fmtTs; BR.ordKey = ordKey; BR.detail = function (it, back) { detail(it, back); };
+  function wkTxt(it) { return it.wk ? ' \u00B7 ' + it.wk : ''; }
+  function seqTxt(it) { var q = BR.seq(it); return q ? ' ke-' + q.n : ''; }
   // ---- detail satu tanda
   function detail(it, back) {
     var U = HA.tandaU, inf = HA.tandaCatInfo(it), sn = subName(it);
     HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TANDA · ' + esc(inf.name) + (sn ? ' / ' + esc(sn) : '') + '</div><button class="btn pri" id="rdOk">Kembali</button></div>' +
-      '<div class="muted" style="margin:4px 0 10px">' + U.d8(U.dateOf(it)) + ' · ' + statTxt(it) + '</div>' +
-      '<div class="rdG"><button class="btn" id="rdLh">Lihat di peta</button><button class="btn" id="rdKt">Ubah kategori</button>' + (it.t === 'pg' ? '<button class="btn" id="rdGy">Ubah gaya</button>' : '') + '<button class="btn" id="rdTg">Ubah tanggal</button><button class="btn" id="rdDl" style="color:var(--r)">Hapus tanda ini</button></div>');
+      '<div class="muted" style="margin:4px 0 4px">' + U.d8(U.dateOf(it)) + wkTxt(it) + ' · ' + statTxt(it) + seqTxt(it).replace(' ke-', ' · kegiatan ke-') + '</div>' + (it.note ? '<div style="margin:2px 0 4px">' + esc(it.note) + '</div>' : '') + '<div class="muted" style="font-size:11px;margin-bottom:10px">dibuat ' + fmtTs(it.ts) + (it.mod && it.mod !== it.ts ? ' \u00B7 diubah ' + fmtTs(it.mod) : '') + '</div>' +
+      '<div class="rdG"><button class="btn" id="rdLh">Lihat di peta</button><button class="btn" id="rdKt">Ubah kategori</button>' + (it.t === 'pg' ? '<button class="btn" id="rdGy">Ubah gaya</button>' : '') + '<button class="btn" id="rdTg">Ubah tanggal</button><button class="btn" id="rdWk">Ubah waktu</button><button class="btn" id="rdNt">Catatan</button><button class="btn" id="rdDl" style="color:var(--r)">Hapus tanda ini</button></div>');
     HA.onSheetClose = back;
     $('rdOk').onclick = function () { HA.closeSheet(); };
     $('rdLh').onclick = function () { lihat(it); };
     $('rdKt').onclick = function () { pickCat(it, function () { detail(it, back); }); };
     if ($('rdGy')) $('rdGy').onclick = function () { HA.BRiw.gaya(it, function () { detail(it, back); }); };
     $('rdTg').onclick = function () { pickDate(it, function () { detail(it, back); }); };
+    $('rdWk').onclick = function () { pickWk(it, function () { detail(it, back); }); };
+    $('rdNt').onclick = function () { pickNote(it, function () { detail(it, back); }); };
     $('rdDl').onclick = function () {
       HA.onSheetClose = null;
       HA.askConfirm('Hapus tanda ini?', inf.name + ' · ' + U.d8(U.dateOf(it)) + '. Hanya tanda ini yang dihapus.', 'Hapus', function () {
@@ -65,10 +83,32 @@
     $('pkX').onclick = function () { HA.closeSheet(); };
     $('sheet').querySelectorAll('[data-c]').forEach(function (e) {
       e.onclick = function () {
-        it.cat = e.getAttribute('data-c'); it.sub = e.getAttribute('data-s') || null; it.mod = Date.now();
-        persist(); HA.onSheetClose = null; back();
+        var nc = e.getAttribute('data-c'), ns = e.getAttribute('data-s') || null;
+        confirmChange('Kategori diubah ke ' + esc(catNm(nc, ns)) + '.', function () { it.cat = nc; it.sub = ns; it.mod = Date.now(); persist(); back(); }, function () { pickCat(it, back); });
       };
     });
+  }
+  function catNm(c, s) { var cc = HA.tandaCatOf(c), sub = cc && s ? (cc.subs || []).filter(function (z) { return z.id === s; })[0] : null; return (cc ? cc.name : 'Tanpa kategori') + (sub ? ' / ' + (sub.name || 'Sub') : ''); }
+  // konfirmasi sebelum perubahan pada tanda yang sudah ada
+  function confirmChange(txt, yes, no) {
+    HA.onSheetClose = null;
+    HA.askConfirm('Simpan perubahan?', txt, 'Simpan', yes);
+    var cn = $('cfNo'); if (cn) cn.onclick = no;
+  }
+  function pickWk(it, back) {
+    HA.openSheet('<div class="grab"></div><div class="st">UBAH WAKTU</div><div class="rbC" id="pwC" style="margin-top:10px">' + ['', 'Pagi', 'Siang', 'Sore', 'Malam'].map(function (w) { return '<button type="button" data-w="' + w + '"' + ((it.wk || '') === w ? ' class="on"' : '') + '>' + (w || 'Tanpa waktu') + '</button>'; }).join('') + '</div><div class="row" style="gap:8px;margin-top:12px"><button class="btn" id="pwX" style="flex:1">Batal</button></div>');
+    HA.onSheetClose = back;
+    $('pwX').onclick = function () { HA.closeSheet(); };
+    $('pwC').onclick = function (e) {
+      var w = e.target.getAttribute && e.target.getAttribute('data-w'); if (w == null) return;
+      confirmChange('Waktu diubah ke ' + (w || 'tanpa waktu') + '.', function () { if (w) it.wk = w; else delete it.wk; it.mod = Date.now(); persist(); back(); }, function () { pickWk(it, back); });
+    };
+  }
+  function pickNote(it, back) {
+    HA.openSheet('<div class="grab"></div><div class="st">CATATAN TANDA</div><input type="text" id="pnT" maxlength="120" placeholder="mis. Urea 200 kg/ha" value="' + esc(it.note || '') + '" style="width:100%;margin-top:10px"><div class="row" style="gap:8px;margin-top:12px"><button class="btn" id="pnX" style="flex:1">Batal</button><button class="btn pri" id="pnY" style="flex:1">Simpan</button></div>');
+    HA.onSheetClose = back;
+    $('pnX').onclick = function () { HA.closeSheet(); };
+    $('pnY').onclick = function () { var v = $('pnT').value.trim(); confirmChange(v ? 'Catatan: ' + esc(v) : 'Catatan dihapus.', function () { it.note = v; it.mod = Date.now(); persist(); back(); }, function () { pickNote(it, back); }); };
   }
   function pickDate(it, back) {
     var U = HA.tandaU;
@@ -77,7 +117,7 @@
     $('pdX').onclick = function () { HA.closeSheet(); };
     $('pdY').onclick = function () {
       var v = $('pdD').value; if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || v > HA.S.today) { HA.toast('Tanggal tidak valid'); return; }
-      it.date = v; it.mod = Date.now(); persist(); HA.onSheetClose = null; back();
+      confirmChange('Tanggal diubah ke ' + U.d8(v) + '.', function () { it.date = v; it.mod = Date.now(); persist(); back(); }, function () { pickDate(it, back); });
     };
   }
   // ---- daftar riwayat blok
@@ -85,7 +125,7 @@
     var key = String(b.id);
     function render() {
       var U = HA.tandaU, all = HA.BT.itemsOf(b).slice();
-      all.sort(function (x, y) { var a = U.dateOf(x), c = U.dateOf(y); return a < c ? 1 : a > c ? -1 : (y.ts || 0) - (x.ts || 0); });
+      all.sort(function (x, y) { var a = BR.ordKey(x), c = BR.ordKey(y); return a < c ? 1 : a > c ? -1 : 0; });
       var cats = {}, ord = [];
       all.forEach(function (it) { var k = HA.tandaCatKey(it); if (!cats[k]) { var inf = HA.tandaCatInfo(it); cats[k] = { k: k, name: inf.name, col: inf.col, n: 0, last: '' }; ord.push(cats[k]); } var c = cats[k]; c.n++; var d = U.dateOf(it); if (d > c.last) c.last = d; });
       if (filt[key] && !cats[filt[key]]) filt[key] = null;
@@ -94,18 +134,17 @@
       var chips = ord.length > 1 ? '<div class="rbC"><button type="button" data-k=""' + (!f ? ' class="on"' : '') + '>Semua</button>' + ord.map(function (c) { return '<button type="button" data-k="' + esc(c.k) + '"' + (f === c.k ? ' class="on"' : '') + '>' + esc(c.name) + '</button>'; }).join('') + '</div>' : '';
       var rows = list.map(function (it, i) {
         var inf = HA.tandaCatInfo(it), sn = subName(it);
-        return '<div class="rbR" data-i="' + i + '"><i style="background:' + inf.col + '"></i><div class="rbT"><b>' + esc(inf.name) + (sn ? ' / ' + esc(sn) : '') + '</b><small>' + U.d8(U.dateOf(it)) + ' · ' + statTxt(it) + '</small></div><span class="rbG" aria-hidden="true">›</span></div>';
+        return '<div class="rbR" data-i="' + i + '"><i style="background:' + inf.col + '"></i><div class="rbT"><b>' + esc(inf.name) + (sn ? ' / ' + esc(sn) : '') + seqTxt(it) + '</b><small>' + U.d8(U.dateOf(it)) + wkTxt(it) + ' · ' + statTxt(it) + (it.note ? ' · ' + esc(String(it.note).slice(0, 30)) : '') + '</small></div><span class="rbG" aria-hidden="true">›</span></div>';
       }).join('');
       HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">RIWAYAT · ' + esc(b.name) + '</div><button class="btn pri" id="rbOk">Tutup</button></div>' +
         (ord.length ? sum + chips + '<div class="rbL">' + rows + '</div>' : '<div class="muted" style="padding:12px 2px">Belum ada riwayat. Tanda yang disimpan di blok ini akan muncul di sini.</div>') +
-        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="rbFull" style="flex:1">Tandai blok penuh</button><button class="btn" id="rbVr" style="flex:1">Versi</button>' + (ord.length ? '<button class="btn" id="rbSh" style="flex:1">Bagikan blok (PDF)</button>' : '') + '</div>');
+        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="rbFull" style="flex:1">Tandai blok penuh</button>' + (ord.length ? '<button class="btn" id="rbSh" style="flex:1">Bagikan blok (PDF)</button>' : '') + '</div>');
       HA.onSheetClose = onClose || null;
       $('rbOk').onclick = function () { HA.closeSheet(); };
       $('rbFull').onclick = function () {
         if (!b.conf) { HA.toast('Hanya blok terkonfirmasi yang bisa ditandai'); return; }
         var h = HA.onSheetClose; if (HA.KM.fillBlock(b, null)) { render(); HA.onSheetClose = h; }
       };
-      if ($('rbVr')) $('rbVr').onclick = function () { var h = HA.onSheetClose; HA.BRiw.versi(b, function () { render(); HA.onSheetClose = h; }); };
       if ($('rbSh')) $('rbSh').onclick = function () {
         if (!b.conf) { HA.toast('Hanya blok terkonfirmasi yang bisa dibagikan'); return; }
         HA.onSheetClose = null; HA.closeSheet(); HA.BT.share([b]);
