@@ -170,7 +170,7 @@ jobs:
           grep -q 'SYSTEM_ALERT_WINDOW' "$MANIFEST"
           grep -q 'ACTIVITY_RECOGNITION' "$MANIFEST"
 
-      - name: Daftarkan HZ Trip sebagai pembuka berkas .hzblok
+      - name: Daftarkan HZ Trip sebagai pembuka .hzblok, KML, KMZ, GPX, GeoJSON
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           python3 - "$MANIFEST" << 'PY'
@@ -178,9 +178,13 @@ jobs:
           p = sys.argv[1]
           s = open(p, encoding="utf-8").read()
           flt = ""
-          for sch in ("content", "file"):
-              for pat in (r".*\\.hzblok", r".*\\..*\\.hzblok", r".*\\..*\\..*\\.hzblok"):
-                  flt += '            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="%s" android:host="*" android:mimeType="*/*" android:pathPattern="%s" />\n            </intent-filter>\n' % (sch, pat)
+          for ext in ("hzblok", "kml", "kmz", "gpx", "geojson"):
+              for sch in ("content", "file"):
+                  for pre in (r".*\\.", r".*\\..*\\.", r".*\\..*\\..*\\."):
+                      pat = pre + ext
+                      flt += '            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="%s" android:host="*" android:mimeType="*/*" android:pathPattern="%s" />\n            </intent-filter>\n' % (sch, pat)
+          for mt in ("application/vnd.google-earth.kml+xml", "application/vnd.google-earth.kmz", "application/gpx+xml", "application/geo+json"):
+              flt += '            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <data android:scheme="content" android:mimeType="%s" />\n                <data android:scheme="file" android:mimeType="%s" />\n            </intent-filter>\n' % (mt, mt)
           flt += '            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <data android:scheme="content" android:mimeType="application/x-hzblok" />\n                <data android:scheme="file" android:mimeType="application/x-hzblok" />\n            </intent-filter>\n'
           i = s.index("</activity>")
           s = s[:i] + flt + "        " + s[i:]

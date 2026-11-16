@@ -227,6 +227,28 @@
   }
   HA.layToGeoJson = toGeoJson; HA.layToKml = toKml;
   // ---------- kelola ----------
+  // simpan hasil parse sebagai lapisan baru
+  function store(name, objs) {
+    var id = 'ly' + Date.now(), nm = name.replace(/\.[^.]+$/, '').slice(0, 40);
+    return dbPut({ id: id, name: nm, ts: Date.now(), objs: objs }).then(function () {
+      MEM[id] = objs; var bb = objs.reduce(function (a, o) { return [Math.min(a[0], o.bb[0]), Math.min(a[1], o.bb[1]), Math.max(a[2], o.bb[2]), Math.max(a[3], o.bb[3])]; }, [90, 180, -90, -180]);
+      metas().push({ id: id, name: nm, n: objs.length, on: true, bb: bb }); HA.saveSettings();
+      if (HA.SP.map) HA.SP.map.fitBounds([[bb[0], bb[1]], [bb[2], bb[3]]], { padding: [30, 30], maxZoom: 19 });
+      redraw(); return objs.length;
+    });
+  }
+  // berkas dari luar aplikasi (ketuk KML dll): kartu Tambah/Batal
+  HA.layImport = function (name, u8) {
+    return HA.layParse(name, u8).then(function (objs) {
+      if (!objs.length) throw new Error('Tidak ada objek yang bisa ditampilkan');
+      if (objs.length > STOP_N) throw new Error(objs.length + ' objek, melebihi batas ' + STOP_N);
+      var full = metas().length >= MAXL, big = objs.length > WARN_N || u8.length > WARN_B;
+      HA.openSheet('<div class="grab"></div><div class="st">BERKAS PETA DITERIMA</div><div class="card" style="margin-top:10px"><b>' + esc(name) + '</b><div class="muted" style="margin-top:4px">' + objs.length + ' objek · ' + (u8.length / 1048576).toFixed(1) + ' MB' + (big ? ' · besar, bisa lambat' : '') + '</div><div class="muted" style="margin-top:4px">Ditambahkan sebagai lapisan lihat-saja di SpidoMap.' + (full ? ' Sudah ' + MAXL + ' lapisan, hapus satu dulu.' : '') + '</div></div>' +
+        '<div class="row" style="gap:8px;margin-top:12px"><button class="btn" id="liX" style="flex:1">Batal</button><button class="btn pri" id="liY" style="flex:1"' + (full ? ' disabled' : '') + '>Tambah</button></div>');
+      $('liX').onclick = function () { HA.closeSheet(); };
+      $('liY').onclick = function () { HA.closeSheet(); store(name, objs).then(function (n) { HA.toast(n + ' objek ditambahkan. Lihat di SpidoMap'); }).catch(function (e) { HA.toast('Gagal menyimpan: ' + (e && e.message || e)); }); };
+    }).catch(function (e) { HA.toast('Gagal membuka: ' + (e && e.message || e)); });
+  };
   function addFile(f) {
     var ml = metas();
     if (ml.length >= MAXL) { HA.toast('Maksimal ' + MAXL + ' lapisan, hapus satu dulu'); return; }

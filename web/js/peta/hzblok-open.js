@@ -71,7 +71,18 @@
       $('hoY').onclick = function () { var r = HA.restoreHzBlok(d); HA.closeSheet(); HA.toast(r.added + ' blok baru' + (r.skipped ? ', ' + r.skipped + ' dilewati' : '') + (r.master ? ', master ditambahkan' : '')); };
     }).catch(function (e) { HA.toast('Gagal membuka: ' + (e && e.message || e)); });
   };
-  HA.hzblokOpenB64 = function (name, b64) { return HA.hzblokOpen(b64u8(b64), name); };
+  // pintu masuk berkas dari luar: .hzblok / zip data blok, atau berkas peta (KML, KMZ, GPX, GeoJSON)
+  HA.openIncoming = function (name, u8) {
+    var ext = (/\.([a-z0-9]+)$/i.exec(name || '') || [])[1] || '', lc = ext.toLowerCase();
+    if (lc === 'hzblok') return HA.hzblokOpen(u8, name);
+    if (lc === 'kml' || lc === 'kmz' || lc === 'gpx' || lc === 'geojson') return HA.layImport(name, u8);
+    var isZip = u8.length > 3 && u8[0] === 0x50 && u8[1] === 0x4B;
+    if (isZip) return HA.zipRead(u8, /\.hzblok$/i).then(function (b) { return b ? HA.hzblokOpen(u8, name) : HA.layImport(name, u8); });
+    var head = new TextDecoder().decode(u8.subarray(0, 400));
+    if (/"hzblok"\s*:/.test(head)) return HA.hzblokOpen(u8, name);
+    return HA.layImport(name, u8);
+  };
+  HA.hzblokOpenB64 = function (name, b64) { return HA.openIncoming(name, b64u8(b64)); };
   // ---- dari Android: berkas yang dibuka lewat HZ Trip
   function take() { try { var P = HA.Plug; if (P && P.takePendingBlok) P.takePendingBlok().then(function (r) { if (r && r.b64) HA.hzblokOpenB64(r.name, r.b64); }).catch(function () {}); } catch (e) {} }
   try { if (HA.Plug && HA.Plug.addListener) HA.Plug.addListener('hzblok', take); } catch (e) {}

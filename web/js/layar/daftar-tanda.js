@@ -4,7 +4,7 @@
   var HA = window.HzApp, BT = HA && HA.BT; if (!BT) return;
   function $(i) { return document.getElementById(i); }
   function esc(s) { return HA.esc(s); }
-  var LS = { sel: {}, q: '', off: {}, back: false }, all = [], byKey = {};
+  var LS = { sel: {}, q: '', off: {}, back: false, fold: {}, init: false }, all = [], byKey = {};
   var coll = new Intl.Collator('id', { numeric: true }), HR = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
   function norm(s) { return String(s).toLowerCase().replace(/\s+/g, ''); }
   function dayName(iso) { var a = iso.split('-'); return HR[new Date(+a[0], +a[1] - 1, +a[2]).getDay()]; }
@@ -51,17 +51,28 @@
     var s = selData(), n = s.blks.length, nr = 0; Object.keys(LS.sel).forEach(function (k) { if (LS.sel[k]) nr++; });
     if ($('lsPv')) { $('lsPv').disabled = !n; $('lsPv').textContent = n ? 'Preview ' + n + ' blok' : 'Preview'; }
     if ($('lsGo')) { $('lsGo').disabled = !n; $('lsGo').textContent = n ? 'Bagikan ' + n + ' blok' : 'Bagikan'; }
+    if ($('lsDl')) { $('lsDl').disabled = !nr; $('lsDl').textContent = nr ? 'Hapus ' + nr : 'Hapus'; }
     var v = all.filter(vis), c = v.filter(function (r) { return LS.sel[r.key]; }).length;
     if ($('lsAll')) { $('lsAll').checked = !!v.length && c === v.length; $('lsAll').indeterminate = c > 0 && c < v.length; }
     if ($('lsCnt')) $('lsCnt').textContent = nr ? nr + ' baris dipilih' : v.length + ' baris';
   }
   function paint() {
-    var U = HA.tandaU, v = all.filter(vis), h = '', last = null, grp = [];
+    var U = HA.tandaU, v = all.filter(vis), h = '';
     if (!all.length) { $('lsBody').innerHTML = '<div class="card muted">Belum ada tanda di blok terkonfirmasi.</div>'; foot(); return; }
     if (!v.length) { $('lsBody').innerHTML = '<div class="card muted">Tidak ada yang cocok.</div>'; foot(); return; }
-    v.forEach(function (r) {
-      if (r.d !== last) { last = r.d; var cnt = v.filter(function (x) { return x.d === r.d; }), allOn = cnt.every(function (x) { return LS.sel[x.key]; }); h += '<label class="lsD"><input type="checkbox" data-d="' + r.d + '"' + (allOn ? ' checked' : '') + '><b>' + dayName(r.d) + ' ' + U.d8(r.d) + '</b><span class="muted">' + cnt.length + ' baris</span></label>'; }
-      h += '<label class="lsR"><input type="checkbox" data-k="' + esc(r.key) + '"' + (LS.sel[r.key] ? ' checked' : '') + '><i class="tdd" style="background:' + r.col + '"></i><span class="lsT"><b>' + esc(String(r.b.name)) + '</b> <span class="muted">' + esc(r.name) + '</span><br><span class="lsS">' + esc(line(r)) + '</span></span><button type="button" class="lsO" data-o="' + esc(r.key) + '" aria-label="Buka blok">›</button></label>';
+    var dates = [], by = {};
+    v.forEach(function (r) { if (!by[r.d]) { by[r.d] = []; dates.push(r.d); } by[r.d].push(r); });
+    if (!LS.init) { LS.init = true; dates.forEach(function (d, i) { LS.fold[d] = i !== 0; }); } // bawaan: hanya tanggal terbaru terbuka
+    var srch = !!norm(LS.q);
+    dates.forEach(function (d) {
+      var cnt = by[d], allOn = cnt.every(function (x) { return LS.sel[x.key]; }), nSel = cnt.filter(function (x) { return LS.sel[x.key]; }).length, cols = [], seen = {};
+      cnt.forEach(function (x) { if (!seen[x.k]) { seen[x.k] = 1; cols.push(x.col); } });
+      var shut = LS.fold[d] && !srch;
+      h += '<div class="lsD"><input type="checkbox" data-d="' + d + '"' + (allOn ? ' checked' : '') + ' aria-label="Pilih semua tanggal ini"><button type="button" class="lsF" data-f="' + d + '" aria-expanded="' + (shut ? 'false' : 'true') + '"><span class="lsAr">' + (shut ? '\u25B8' : '\u25BE') + '</span><b>' + dayName(d) + ' ' + U.d8(d) + '</b><span class="lsDots">' + cols.slice(0, 6).map(function (c) { return '<i class="tdd" style="background:' + c + '"></i>'; }).join('') + (cols.length > 6 ? '<small>+' + (cols.length - 6) + '</small>' : '') + '</span><span class="muted lsN">' + (nSel ? nSel + '/' : '') + cnt.length + '</span></button></div>';
+      if (shut) return;
+      cnt.forEach(function (r) {
+        h += '<label class="lsR"><input type="checkbox" data-k="' + esc(r.key) + '"' + (LS.sel[r.key] ? ' checked' : '') + '><i class="tdd" style="background:' + r.col + '"></i><span class="lsT"><b>' + esc(String(r.b.name)) + '</b> <span class="muted">' + esc(r.name) + '</span><br><span class="lsS">' + esc(line(r)) + '</span></span><button type="button" class="lsO" data-o="' + esc(r.key) + '" aria-label="Buka blok">\u203A</button></label>';
+      });
     });
     $('lsBody').innerHTML = h; foot();
   }
@@ -81,7 +92,7 @@
       '<div class="lsCh" id="lsCh">' + co.map(function (c) { return '<label class="lsC"><input type="checkbox" data-c="' + esc(c.k) + '"' + (LS.off[c.k] ? '' : ' checked') + '><i style="background:' + c.col + '"></i>' + esc(c.name) + '</label>'; }).join('') + '</div>' +
       '<label class="lsA"><input type="checkbox" id="lsAll"> Pilih semua yang tampil <span class="muted" id="lsCnt"></span></label></div>' +
       '<div id="lsBody"></div>' +
-      '<div class="lsFoot"><button class="btn" id="lsPv" disabled>Preview</button><button class="btn pri" id="lsGo" disabled>Bagikan</button></div>' +
+      '<div class="lsFoot"><button class="btn" id="lsPv" disabled>Preview</button><button class="btn pri" id="lsGo" disabled>Bagikan</button><button class="btn lsDel" id="lsDl" disabled>Hapus</button></div>' +
       '<button class="btn" id="lsX" style="width:100%;margin-top:8px">Tutup</button>');
     paint();
     $('lsQ').oninput = function () { LS.q = this.value; paint(); };
@@ -94,8 +105,20 @@
       else return;
       paint();
     };
-    $('lsBody').onclick = function (e) { var o = e.target.closest && e.target.closest('[data-o]'); if (!o) return; e.preventDefault(); var r = byKey[o.getAttribute('data-o')]; if (r) openBlock(r.b); };
+    $('lsBody').onclick = function (e) { var f = e.target.closest && e.target.closest('[data-f]'); if (f) { var d = f.getAttribute('data-f'); LS.fold[d] = !LS.fold[d]; paint(); return; } var o = e.target.closest && e.target.closest('[data-o]'); if (!o) return; e.preventDefault(); var r = byKey[o.getAttribute('data-o')]; if (r) openBlock(r.b); };
     $('lsPv').onclick = preview;
+    $('lsDl').onclick = function () {
+      var rs = all.filter(function (r) { return LS.sel[r.key]; }); if (!rs.length) return;
+      var want = {}, nt = 0, bl = {}, cats = {}, ds = {}; rs.forEach(function (r) { want[r.key] = r; });
+      var items = HA.tandaData().items, del = [];
+      rs.forEach(function (r) { BT.itemsOf(r.b).forEach(function (it) { if (HA.tandaCatKey(it) === r.k && HA.tandaU.dateOf(it) === r.d && del.indexOf(it.id) < 0) del.push(it.id); }); bl[r.b.id] = 1; cats[r.name] = 1; ds[r.d] = 1; });
+      var dl = Object.keys(ds).sort(), dtxt = dl.length === 1 ? HA.tandaU.d8(dl[0]) : dl.length + ' tanggal', ct = Object.keys(cats), ctxt = ct.slice(0, 3).join(', ') + (ct.length > 3 ? ' dan ' + (ct.length - 3) + ' lainnya' : '');
+      HA.askConfirm('Hapus ' + del.length + ' tanda?', del.length + ' tanda di ' + Object.keys(bl).length + ' blok (' + ctxt + ', ' + dtxt + ') akan dihapus. Tidak bisa dibatalkan.', 'Hapus', function () {
+        var d = HA.tandaData(); d.items = d.items.filter(function (it) { return del.indexOf(it.id) < 0; });
+        HA.tandaSave(); LS.sel = {}; HA.toast(del.length + ' tanda dihapus'); if (HA.KM && HA.KM.sync) HA.KM.sync(); if (HA.BT && HA.BT.refresh) HA.BT.refresh(); open();
+      });
+      var cn = $('cfNo'); if (cn) cn.onclick = function () { open(); };
+    };
     $('lsGo').onclick = function () { var s = selData(); if (!s.blks.length) return; BT.share(s.blks, s.pre); HA.onSheetClose = function () { setTimeout(open, 60); }; };
     $('lsX').onclick = HA.closeSheet;
   }
@@ -116,7 +139,7 @@
     }).catch(function () { HA.toast('Gagal menyusun preview'); });
   }
   BT.listOpen = open;
-  BT.onLeave = function () { LS.sel = {}; LS.q = ''; LS.off = {}; LS.back = false; };
+  BT.onLeave = function () { LS.sel = {}; LS.q = ''; LS.off = {}; LS.back = false; LS.fold = {}; LS.init = false; };
   BT.afterDeselect = function () {
     if (!LS.back) return;
     setTimeout(function () { if (!LS.back) return; LS.back = false; if (!BT.curBlock || !BT.curBlock()) open(); }, 120);

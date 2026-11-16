@@ -255,7 +255,10 @@
     var map = HA.map, box = map.getContainer(), g = L.layerGroup().addTo(map);
     var pts = [], closed = null, tail = null; // closed: {k:'t'} ditutup di titik awal | {k:'x', j, I, n} garis menyilang
     var ms = { last: 0, rapid: 0, snap: null, ign: 0 };
-    var cross = document.createElement('div'); cross.className = 'mzx'; cross.innerHTML = '<i></i><i></i>'; box.appendChild(cross);
+    var cross = document.createElement('div'); cross.className = 'mzx'; cross.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke-linecap="butt"><path d="M24 2V17M24 31V46M2 24H17M31 24H46" stroke="#06202B" stroke-width="5"/><circle cx="24" cy="24" r="4.5" stroke="#06202B" stroke-width="5"/><path d="M24 2V17M24 31V46M2 24H17M31 24H46" stroke="#FFD84D" stroke-width="2.4"/><circle cx="24" cy="24" r="4.5" stroke="#FFD84D" stroke-width="2.4"/></g></svg>'; box.appendChild(cross);
+    // bidik tepat di titik yang dipakai Leaflet (getCenter), bukan 50% CSS
+    function placeCross() { map.invalidateSize(false); var z = map.getSize(); cross.style.left = Math.round(z.x / 2) + 'px'; cross.style.top = Math.round(z.y / 2) + 'px'; }
+    placeCross(); map.on('resize', placeCross);
     var add = document.createElement('button'); add.type = 'button'; add.className = 'mzAdd'; add.setAttribute('aria-label', 'Tambah titik'); add.textContent = '+'; box.appendChild(add);
     L.DomEvent.disableClickPropagation(add); add.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
     var card = document.createElement('div'); card.className = 'mzR';
@@ -356,7 +359,7 @@
       hideTip(); clearTimeout(undoT);
       map.off('move', upd); window.removeEventListener('resize', place);
       map._lakeDraw = null; HA.ukurBack = null; map.removeLayer(g);
-      clearTimeout(imgT); imgSeq++; cross.remove(); add.remove(); card.remove(); img.remove(); sv.remove(); tip.remove(); undo.remove();
+      clearTimeout(imgT); imgSeq++; map.off('resize', placeCross); cross.remove(); add.remove(); card.remove(); img.remove(); sv.remove(); tip.remove(); undo.remove();
     }
     // tombol Back Android: 1x hapus titik terakhir, 3x cepat (jeda <= 300 ms) hapus semua, lagi = keluar
     HA.ukurBack = function () {
