@@ -242,6 +242,7 @@
 
   // Tombol back Android (dipanggil dari MainActivity): true = sudah ditangani di halaman.
   window.hzBack = function () {
+    if (HA.ED && HA.ED.isOpen && HA.ED.isOpen() && !$('sheet').classList.contains('on')) { HA.ED.back(); return true; }
     if ($('sheet').classList.contains('on')) { closeSheet(); return true; }
     if ($('drawer').classList.contains('on')) { $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); return true; }
     if (HA.mapBack && HA.mapBack()) return true;

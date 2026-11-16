@@ -30,14 +30,14 @@
     var doc = new DOMParser().parseFromString(text, 'text/xml'), err = doc.getElementsByTagName('parsererror')[0];
     if (err) throw new Error('KML tidak valid');
     var styles = {};
-    function stObj(st) { var ls = st.getElementsByTagName('LineStyle')[0], ps = st.getElementsByTagName('PolyStyle')[0], is = st.getElementsByTagName('IconStyle')[0], o = {}; if (ls) { var c = kc(txt(ls, 'color')); if (c) o.col = c.c; var w = parseFloat(txt(ls, 'width')); if (w) o.w = w; } if (ps) { var f = kc(txt(ps, 'color')); if (f) { o.fc = f.c; o.fo = f.o; } if (txt(ps, 'fill') === '0') o.nf = 1; if (txt(ps, 'outline') === '0') o.no = 1; } if (is) { var ic = kc(txt(is, 'color')); if (ic) o.ic = ic.c; } return o; }
+    function stObj(st) { var ls = st.getElementsByTagName('LineStyle')[0], ps = st.getElementsByTagName('PolyStyle')[0], is = st.getElementsByTagName('IconStyle')[0], o = {}; if (ls) { var c = kc(txt(ls, 'color')); if (c) o.col = c.c; var w = parseFloat(txt(ls, 'width')); if (w) o.w = w; } if (ps) { var f = kc(txt(ps, 'color')); if (f) { o.fc = f.c; o.fo = f.o; } if (txt(ps, 'fill') === '0') o.nf = 1; if (txt(ps, 'outline') === '0') o.no = 1; } if (is) { var ic = kc(txt(is, 'color')); if (ic) o.ic = ic.c; if (txt(is, 'scale').trim() !== '' && parseFloat(txt(is, 'scale')) === 0) o.tx = 1; } return o; }
     Array.prototype.forEach.call(doc.getElementsByTagName('Style'), function (st) { var id = st.getAttribute('id'); if (id) styles['#' + id] = stObj(st); });
     Array.prototype.forEach.call(doc.getElementsByTagName('StyleMap'), function (sm) { var id = sm.getAttribute('id'); if (!id) return; Array.prototype.forEach.call(sm.getElementsByTagName('Pair'), function (p) { if (txt(p, 'key') === 'normal') { var u = txt(p, 'styleUrl'); if (styles[u]) styles[id ? '#' + id : u] = styles[u]; else { var inl = p.getElementsByTagName('Style')[0]; if (inl) styles['#' + id] = stObj(inl); } } }); });
     var out = [];
     Array.prototype.forEach.call(doc.getElementsByTagName('Placemark'), function (pm) {
       var name = txt(pm, 'name').trim(), desc = txt(pm, 'description'), su = txt(pm, 'styleUrl').trim(), st = styles[su] || {};
       var ins = pm.getElementsByTagName('Style')[0]; if (ins && ins.parentNode === pm) st = stObj(ins);
-      function add(k, c) { out.push({ k: k, c: c, n: name, d: desc, col: k === 'p' ? st.ic : st.col, fc: st.fc, fo: st.fo, nf: st.nf, no: st.no, w: st.w }); }
+      function add(k, c) { out.push({ k: k, c: c, n: name, d: desc, tx: k === 'p' ? st.tx : 0, col: k === 'p' ? (st.ic || st.col) : st.col, fc: st.fc, fo: st.fo, nf: st.nf, no: st.no, w: st.w }); }
       Array.prototype.forEach.call(pm.getElementsByTagName('Point'), function (g) { var c = coords(txt(g, 'coordinates')); if (c[0]) add('p', c[0]); });
       Array.prototype.forEach.call(pm.getElementsByTagName('LineString'), function (g) { var c = coords(txt(g, 'coordinates')); if (c.length > 1) add('l', c); });
       Array.prototype.forEach.call(pm.getElementsByTagName('Polygon'), function (g) {
@@ -63,7 +63,7 @@
     function ll(c) { return [c[1], c[0]]; }
     function geom(g, pr) {
       if (!g) return; pr = pr || {};
-      var o = { n: pr.name || pr.Name || pr.NAME || '', d: pr.description || pr.desc || '', col: pr.stroke || pr.color, fc: pr.fill, fo: pr['fill-opacity'], w: pr['stroke-width'] };
+      var o = { tx: pr.tx ? 1 : 0, n: pr.name || pr.Name || pr.NAME || '', d: pr.description || pr.desc || '', col: pr.stroke || pr.color, fc: pr.fill, fo: pr['fill-opacity'], w: pr['stroke-width'] };
       if (!o.n) { var ks = Object.keys(pr); for (var i = 0; i < ks.length; i++) if (typeof pr[ks[i]] === 'string' && pr[ks[i]]) { o.n = pr[ks[i]]; break; } }
       function push(k, c) { var z = {}; for (var q in o) z[q] = o[q]; z.k = k; z.c = c; out.push(z); }
       var t = g.type, c = g.coordinates;
@@ -102,7 +102,8 @@
   function lc(o) { return o.col && /^#[0-9a-f]{6}$/i.test(o.col) ? o.col : '#ff4081'; }
   function drawObj(o) {
     var c = lc(o), l;
-    if (o.k === 'p') l = L.circleMarker(o.c, { radius: 5, color: '#fff', weight: 1, fillColor: c, fillOpacity: 0.95 });
+    if (o.k === 'p' && o.tx) l = L.marker(o.c, { icon: L.divIcon({ className: 'edTxW', html: '<div class="edTx" style="color:' + c + '">' + esc(o.n || '') + '</div>', iconSize: null }) });
+    else if (o.k === 'p') l = L.circleMarker(o.c, { radius: 5, color: '#fff', weight: 1, fillColor: c, fillOpacity: 0.95 });
     else if (o.k === 'l') l = L.polyline(o.c, { color: c, weight: Math.max(1, Math.min(6, o.w || 2)), opacity: 0.95 });
     else l = L.polygon(o.c, { color: o.no ? 'transparent' : c, weight: o.no ? 0 : Math.max(1, Math.min(6, o.w || 2)), fill: !o.nf, fillColor: o.fc || c, fillOpacity: o.nf ? 0 : (o.fo != null ? Math.max(0.05, o.fo) : 0.25) });
     l.on('click', function (e) { if (e.originalEvent) L.DomEvent.stopPropagation(e); show(o, e.latlng); });
@@ -209,10 +210,11 @@
     draw(T.cats[0].id, '');
   }
   // ---------- ekspor ----------
+  function closed(r) { var a = r[0], b = r[r.length - 1]; return a[0] === b[0] && a[1] === b[1] ? r : r.concat([[a[0], a[1]]]); }
   function toGeoJson(objs, name) {
     return JSON.stringify({ type: 'FeatureCollection', name: name, features: objs.map(function (o) {
-      var g = o.k === 'p' ? { type: 'Point', coordinates: [o.c[1], o.c[0]] } : o.k === 'l' ? { type: 'LineString', coordinates: o.c.map(function (p) { return [p[1], p[0]]; }) } : { type: 'Polygon', coordinates: o.c.map(function (r) { var q = r.map(function (p) { return [p[1], p[0]]; }); return q; }) };
-      var pr = { name: o.n || '' }; if (o.d) pr.description = o.d; if (o.col) pr.stroke = o.col; if (o.fc) pr.fill = o.fc;
+      var g = o.k === 'p' ? { type: 'Point', coordinates: [o.c[1], o.c[0]] } : o.k === 'l' ? { type: 'LineString', coordinates: o.c.map(function (p) { return [p[1], p[0]]; }) } : { type: 'Polygon', coordinates: o.c.map(function (r) { return closed(r).map(function (p) { return [p[1], p[0]]; }); }) };
+      var pr = { name: o.n || '' }; if (o.tx) pr.tx = 1; if (o.d) pr.description = o.d; if (o.col) pr.stroke = o.col; if (o.fc) pr.fill = o.fc;
       return { type: 'Feature', properties: pr, geometry: g };
     }) });
   }
@@ -220,8 +222,8 @@
     function cs(a) { return a.map(function (p) { return p[1].toFixed(7) + ',' + p[0].toFixed(7) + ',0'; }).join(' '); }
     function kcol(c) { return /^#[0-9a-f]{6}$/i.test(c || '') ? 'ff' + c.substr(5, 2) + c.substr(3, 2) + c.substr(1, 2) : 'ff8040ff'; }
     return '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>' + esc(name) + '</name>\n' + objs.map(function (o) {
-      var st = '<Style><LineStyle><color>' + kcol(o.col) + '</color><width>' + (o.w || 2) + '</width></LineStyle><PolyStyle><color>' + (o.fc ? '66' + kcol(o.fc).substr(2) : '66' + kcol(o.col).substr(2)) + '</color></PolyStyle><IconStyle><color>' + kcol(o.col) + '</color></IconStyle></Style>';
-      var g = o.k === 'p' ? '<Point><coordinates>' + cs([o.c]) + '</coordinates></Point>' : o.k === 'l' ? '<LineString><coordinates>' + cs(o.c) + '</coordinates></LineString>' : '<Polygon><outerBoundaryIs><LinearRing><coordinates>' + cs(o.c[0]) + '</coordinates></LinearRing></outerBoundaryIs>' + o.c.slice(1).map(function (r) { return '<innerBoundaryIs><LinearRing><coordinates>' + cs(r) + '</coordinates></LinearRing></innerBoundaryIs>'; }).join('') + '</Polygon>';
+      var st = '<Style><LineStyle><color>' + kcol(o.col) + '</color><width>' + (o.w || 2) + '</width></LineStyle><PolyStyle><color>' + (o.fc ? '66' + kcol(o.fc).substr(2) : '66' + kcol(o.col).substr(2)) + '</color></PolyStyle><IconStyle><color>' + kcol(o.col) + '</color>' + (o.tx ? '<scale>0</scale>' : '') + '</IconStyle>' + (o.tx ? '<LabelStyle><color>' + kcol(o.col) + '</color></LabelStyle>' : '') + '</Style>';
+      var g = o.k === 'p' ? '<Point><coordinates>' + cs([o.c]) + '</coordinates></Point>' : o.k === 'l' ? '<LineString><coordinates>' + cs(o.c) + '</coordinates></LineString>' : '<Polygon><outerBoundaryIs><LinearRing><coordinates>' + cs(closed(o.c[0])) + '</coordinates></LinearRing></outerBoundaryIs>' + o.c.slice(1).map(function (r) { return '<innerBoundaryIs><LinearRing><coordinates>' + cs(closed(r)) + '</coordinates></LinearRing></innerBoundaryIs>'; }).join('') + '</Polygon>';
       return '<Placemark><name>' + esc(o.n || '') + '</name>' + (o.d ? '<description>' + esc(plain(o.d)) + '</description>' : '') + st + g + '</Placemark>';
     }).join('\n') + '\n</Document></kml>';
   }
@@ -273,9 +275,10 @@
     var ml = metas();
     HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">LAPISAN BERKAS</div><button class="btn pri" id="lyOk">Selesai</button></div>' +
       '<div class="muted" style="margin:6px 0">Hanya untuk dilihat di SpidoMap. KML, KMZ, GPX, GeoJSON (' + ml.length + '/' + MAXL + ' lapisan).</div>' +
-      '<button class="btn pri" id="lyAdd" style="width:100%;height:48px">Tambah berkas</button><input type="file" id="lyF" accept=".kml,.kmz,.gpx,.geojson,.json,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,application/geo+json,application/json,*/*" style="display:none">' +
+      '<div class="row" style="gap:8px"><button class="btn pri" id="lyAdd" style="flex:1;height:48px">Tambah berkas</button><button class="btn" id="lyNew" style="flex:1;height:48px">Buat lapisan baru</button></div><input type="file" id="lyF" accept=".kml,.kmz,.gpx,.geojson,.json,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,application/geo+json,application/json,*/*" style="display:none">' +
       '<div class="rbL" style="margin-top:10px">' + (ml.length ? ml.map(function (x, i) { return '<div class="rbR" data-i="' + i + '"><div class="rbT"><b>' + esc(x.name) + '</b><small>' + x.n + ' objek</small></div><button class="btn sm' + (x.on ? ' pri' : '') + '" data-t="' + i + '">' + (x.on ? 'Tampil' : 'Sembunyi') + '</button><button class="btn sm" data-m="' + i + '">Lainnya</button></div>'; }).join('') : '<div class="muted" style="padding:10px 2px">Belum ada lapisan.</div>') + '</div>');
     $('lyOk').onclick = function () { HA.closeSheet(); };
+    $('lyNew').onclick = function () { if (metas().length >= MAXL) { HA.toast('Maksimal ' + MAXL + ' lapisan, hapus satu dulu'); return; } HA.closeSheet(); if (HA.ED) HA.ED.open(null); };
     $('lyAdd').onclick = function () { $('lyF').value = ''; $('lyF').click(); };
     $('lyF').onchange = function () { if (this.files && this.files[0]) { var f = this.files[0]; HA.closeSheet(); addFile(f); } };
     $('sheet').querySelectorAll('[data-t]').forEach(function (e) { e.onclick = function () { var x = ml[+e.getAttribute('data-t')]; x.on = !x.on; HA.saveSettings(); redraw(); panel(); }; });
@@ -284,12 +287,14 @@
   function more(x) {
     HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">' + esc(x.name) + '</div><button class="btn" id="lmX">Kembali</button></div>' +
       '<div class="muted" style="margin:6px 0">' + x.n + ' objek</div>' +
+      '<button class="btn pri" id="lmE" style="width:100%;margin-top:6px">Edit lapisan</button>' +
       '<button class="btn" id="lmZ" style="width:100%;margin-top:6px">Zoom ke lapisan</button>' +
       '<button class="btn" id="lmB" style="width:100%;margin-top:6px">Salin ke tanda per blok…</button>' +
       '<button class="btn" id="lmK" style="width:100%;margin-top:6px">Ekspor KML</button>' +
       '<button class="btn" id="lmG" style="width:100%;margin-top:6px">Ekspor GeoJSON</button>' +
       '<button class="btn" id="lmD" style="width:100%;margin-top:14px;color:var(--bad,#e57373)">Hapus lapisan ini</button>');
     $('lmX').onclick = panel;
+    $('lmE').onclick = function () { HA.closeSheet(); if (HA.ED) HA.ED.open(x.id); };
     $('lmZ').onclick = function () { HA.closeSheet(); if (x.bb && HA.SP.map) HA.SP.map.fitBounds([[x.bb[0], x.bb[1]], [x.bb[2], x.bb[3]]], { padding: [30, 30], maxZoom: 19 }); };
     $('lmK').onclick = function () { load(x.id).then(function (o) { HA.saveFile(x.name.replace(/[^\w\-]+/g, '_') + '.kml', HA.textB64(toKml(o, x.name)), 'application/vnd.google-earth.kml+xml'); }); };
     $('lmG').onclick = function () { load(x.id).then(function (o) { HA.saveFile(x.name.replace(/[^\w\-]+/g, '_') + '.geojson', HA.textB64(toGeoJson(o, x.name)), 'application/geo+json'); }); };
@@ -307,6 +312,18 @@
       $('sheet').querySelectorAll('button[data-b]').forEach(function (e) { e.onclick = function () { var b = bl[+e.getAttribute('data-b')]; load(x.id).then(function (o) { copyDlg(o, x.name, b); }); }; });
     };
   }
+  // untuk editor: simpan perubahan ke lapisan yang ada
+  function update(id, name, objs) {
+    objs.forEach(function (o) { o.bb = bboxOf(o); });
+    var mt = metas().filter(function (z) { return z.id === id; })[0]; if (!mt) return Promise.reject(new Error('Lapisan tidak ditemukan'));
+    return dbPut({ id: id, name: name, ts: Date.now(), objs: objs }).then(function () {
+      MEM[id] = objs; mt.name = name; mt.n = objs.length;
+      mt.bb = objs.reduce(function (a, o) { return [Math.min(a[0], o.bb[0]), Math.min(a[1], o.bb[1]), Math.max(a[2], o.bb[2]), Math.max(a[3], o.bb[3])]; }, [90, 180, -90, -180]);
+      HA.saveSettings(); redraw();
+    });
+  }
+  function storeNew(name, objs) { objs.forEach(function (o) { o.bb = bboxOf(o); }); return store(name, objs); }
+  HA.LY = { metas: metas, load: load, dbGet: dbGet, dbPut: dbPut, dbDel: dbDel, update: update, storeNew: storeNew, toKml: toKml, toGeoJson: toGeoJson, MAXL: MAXL };
   HA.layPanel = panel;
   // tombol di SpidoMap
   function mk() {

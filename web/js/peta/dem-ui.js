@@ -118,6 +118,7 @@
       v3d: ic('<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9"/>'),
       slopeTap: ic('<path d="M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z"/><path d="M12 8v4M12 14.5v.5"/>'),
       prof: ic('<path d="M3 20h18M4 16l4-5 3 3 4-7 5 6"/>'),
+      src: ic('<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>'),
       useNas: ic('<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>'),
       useFree: ic('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>'),
       linesOn: ic('<path d="M4 20 L10 4 M14 4 L20 20"/>'),
@@ -142,13 +143,13 @@
     };
     function tile(id, label, st, badge) { return '<button type="button" class="tile' + (st ? ' st' : '') + '" data-t="' + id + '">' + IC[id] + '<span>' + label + '</span>' + (badge ? '<i class="tbd" id="bd_' + id + '"></i>' : '') + '</button>'; }
     var TILES = [['search', 'Cari'], ['daftar', 'Daftar tanda'], ['isi', 'Ketuk isi', 1], ['contour', 'Kontur', 1], ['slopeLayer', 'Lereng', 1], ['hach', 'Arsiran', 1], ['v3d', '3D', 1], ['slopeTap', 'Info lereng', 1], ['prof', 'Profil', 1],
-      ['useNas', 'DEMNAS', 1], ['useFree', 'DEM gratis', 1], ['blkOn', 'Blok', 1, 1], ['rowOn', 'Arah row', 1], ['wlOn', 'Water lock', 1], ['lakesOn', 'Danau & drainase', 1, 1], ['linesOn', 'Jalan bantu', 1], ['batDesa', 'Batas', 1], ['play', 'Putar', 1],
+      ['src', 'Sumber DEM', 1], ['blkOn', 'Blok', 1, 1], ['rowOn', 'Arah row', 1], ['wlOn', 'Water lock', 1], ['lakesOn', 'Danau & drainase', 1, 1], ['linesOn', 'Jalan bantu', 1], ['batDesa', 'Batas', 1], ['play', 'Putar', 1],
       ['draw', 'Buat baru'], ['fill', 'Isi blok'], ['measure', 'Ukur']];
     var RARE = { v3d: 1, slopeLayer: 1, hach: 1, slopeTap: 1, prof: 1 };
     function tileShown(id) { var t = S.settings.tileShow || {}; if (t[id] != null) return !!t[id]; return !!(id === 'slopeLayer' ? S.settings.slopeLayer : id === 'hach' ? S.settings.hach : false); }
     HA.DM.rare = [['v3d', '3D'], ['slopeLayer', 'Kemiringan (Lereng)'], ['hach', 'Arsiran'], ['slopeTap', 'Info lereng'], ['prof', 'Profil']]; HA.DM.tileShown = tileShown;
     function orderedTiles() {
-      var saved = S.settings.tileOrder || [], byId = {}, out = [];
+      var saved = (S.settings.tileOrder || []).map(function (x) { return x === 'useNas' ? 'src' : x; }).filter(function (x) { return x !== 'useFree'; }), byId = {}, out = [];
       TILES.forEach(function (t) { byId[t[0]] = t; });
       saved.forEach(function (id) { if (byId[id]) { out.push(byId[id]); delete byId[id]; } });
       TILES.forEach(function (t) { if (byId[t[0]]) out.push(t); });
@@ -207,7 +208,9 @@
       grid.addEventListener('contextmenu', function (e) { e.preventDefault(); });
       HA.DM.arranging = function () { return !!arr || Date.now() < (HA.DM.tileSwallow || 0); };
     })();
+    function srcTxt() { var n = S.settings.useNas !== false, f = S.settings.useFree !== false; return n && f ? 'DEMNAS + gratis' : n ? 'DEMNAS' : 'DEM gratis'; }
     function state(id) {
+      if (id === 'src') return S.settings.useNas !== false && S.settings.useFree !== false;
       return id === 'contour' ? !!S.settings.contour : id === 'slopeLayer' ? !!S.settings.slopeLayer : id === 'hach' ? !!S.settings.hach : id === 'slopeTap' ? !!m._slopeOn :
         id === 'blkOn' ? S.settings.blkOn !== false : id === 'wlOn' ? !!(HA.wlOn && HA.wlOn()) : id === 'rowOn' ? !!S.settings.rowOn : id === 'isi' ? !!(HA.KM && HA.KM.fillTap) : id === 'shpOn' ? S.settings.shapesOn !== false : id === 'batDesa' ? !!(S.settings.bat && S.settings.bat.desa) : id === 'play' ? !!HA.PB.open : id === 'batKec' ? !!(S.settings.bat && S.settings.bat.kec) : id === 'v3d' ? HA.V3.on : id === 'useNas' ? S.settings.useNas !== false : id === 'useFree' ? S.settings.useFree !== false : id === 'lakesOn' ? S.settings.lakesOn !== false : id === 'linesOn' ? S.settings.linesOn !== false : !!S.profOpen;
     }
@@ -216,6 +219,7 @@
       var osmOnly = S.settings.mapMode !== 'osm';
       ['v3d'].forEach(function (t) { var e = panel.querySelector('[data-t=' + t + ']'); if (e) e.classList.toggle('dis', osmOnly); });
       panel.querySelectorAll('.tsw, .tile.st').forEach(function (b) { var on = state(b.getAttribute('data-t')); b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); if (on) any = true; });
+      var sp = panel.querySelector('[data-t=src] span'); if (sp) sp.textContent = srcTxt();
       var hs = S.settings.hachSmooth || 'detail';
       $('tHk').style.display = $('tHs').style.display = S.settings.hach ? '' : 'none';
       $('tRm').style.display = S.settings.rowOn ? '' : 'none';
@@ -245,7 +249,7 @@
       var id = b.getAttribute('data-t');
       if (id === 'play') { if (HA.PB.open) HA.pbClose(); else { closeP(); HA.pbOpen(); } sync(); return; }
       if (id === 'daftar') { closeP(); if (HA.BT && HA.BT.listOpen) HA.BT.listOpen(); return; }
-      if (id === 'isi') { if (HA.KM && HA.KM.toggleFill) HA.KM.toggleFill(); sync(); return; }
+      if (id === 'isi') { closeP(); if (HA.KM && HA.KM.toggleFill) HA.KM.toggleFill(); sync(); return; }
       if (id === 'search') { closeP(); if (HA.KM && HA.KM.openSearch) HA.KM.openSearch(); return; }
       if (id === 'measure' || id === 'draw' || id === 'fill') { if (HA.KM) HA.KM.fillTap = false; }
       if (id === 'measure') { closeP(); HA.measureStart(); return; }
@@ -265,17 +269,22 @@
       else if (id === 'hach') setHach(!S.settings.hach);
       else if (id === 'v3d') {
         if (S.settings.mapMode !== 'osm') { toast('3D hanya tersedia di mode Peta (bukan Satelit)'); return; }
-        if (HA.V3.on) close3d(); else open3d();
+        closeP(); if (HA.V3.on) close3d(); else open3d();
       }
-      else if (id === 'useNas') setSource('nas', S.settings.useNas === false);
-      else if (id === 'useFree') setSource('free', S.settings.useFree === false);
+      else if (id === 'src') {
+        var nas = S.settings.useNas !== false, fr = S.settings.useFree !== false;
+        if (nas && fr) setSource('free', false);                       // Keduanya -> DEMNAS saja
+        else if (nas) { setSource('free', true); setSource('nas', false); } // DEMNAS -> DEM gratis saja
+        else setSource('nas', true);                                    // gratis -> Keduanya
+        toast('Sumber DEM: ' + srcTxt());
+      }
       else if (id === 'linesOn') { S.settings.linesOn = S.settings.linesOn === false; saveSettings(); if (HA.drawLines) HA.drawLines(); sync(); }
       else if (id === 'lakesOn') { S.settings.lakesOn = S.settings.lakesOn === false; saveSettings(); applyLakes(); demRedraw(); if (HA.drawLines) HA.drawLines(); if (HA.RC) HA.RC.dep = {}; if (HA.drawWL) HA.drawWL(); sync(); }
       else if (id === 'wlOn') { S.settings.wlOn = !(HA.wlOn && HA.wlOn()); saveSettings(); if (HA.drawWL) HA.drawWL(true); sync(); }
       else if (id === 'slopeTap') {
-        m._slopeOn = !m._slopeOn; if (m._pinClear) m._pinClear();
+        closeP(); m._slopeOn = !m._slopeOn; if (m._pinClear) m._pinClear();
         toast(m._slopeOn ? 'Ketuk peta untuk info lereng' : 'Mode lereng mati');
-      } else if (id === 'prof') { S.profOpen = !S.profOpen; renderProfile(); }
+      } else if (id === 'prof') { closeP(); S.profOpen = !S.profOpen; renderProfile(); }
       sync();
     };
     var Ctl = L.Control.extend({

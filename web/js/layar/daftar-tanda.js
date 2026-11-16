@@ -88,13 +88,14 @@
     Object.keys(LS.sel).forEach(function (k) { if (!byKey[k]) delete LS.sel[k]; });
     var cs = {}, co = [];
     all.forEach(function (r) { if (!cs[r.k]) { cs[r.k] = { k: r.k, name: r.name, col: r.col, n: 0 }; co.push(cs[r.k]); } cs[r.k].n++; });
-    HA.openSheet('<div class="grab"></div><div class="lsTop"><div class="st">DAFTAR TANDA</div><input type="search" id="lsQ" placeholder="Cari no blok, kategori, tanggal" value="' + esc(LS.q) + '" autocomplete="off">' +
+    HA.openSheet('<div class="grab"></div><div class="lsTop"><div class="st">DAFTAR TANDA</div><div class="lsQr"><input type="search" id="lsQ" placeholder="Cari no blok, kategori, tanggal" value="' + esc(LS.q) + '" autocomplete="off"><button type="button" class="btn lsKt" id="lsKt" aria-label="Kelola kategori"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h12l-2 4 2 4H5"/></svg></button></div>' +
       '<div class="lsCh" id="lsCh">' + co.map(function (c) { return '<label class="lsC"><input type="checkbox" data-c="' + esc(c.k) + '"' + (LS.off[c.k] ? '' : ' checked') + '><i style="background:' + c.col + '"></i>' + esc(c.name) + '</label>'; }).join('') + '</div>' +
       '<label class="lsA"><input type="checkbox" id="lsAll"> Pilih semua yang tampil <span class="muted" id="lsCnt"></span></label></div>' +
       '<div id="lsBody"></div>' +
       '<div class="lsFoot"><button class="btn" id="lsPv" disabled>Preview</button><button class="btn pri" id="lsGo" disabled>Bagikan</button><button class="btn lsDel" id="lsDl" disabled>Hapus</button></div>' +
       '<button class="btn" id="lsX" style="width:100%;margin-top:8px">Tutup</button>');
     paint();
+    $('lsKt').onclick = function () { if (!HA.tandaCatPage) return; HA.tandaCatPage(); HA.onSheetClose = function () { setTimeout(open, 60); }; };
     $('lsQ').oninput = function () { LS.q = this.value; paint(); };
     $('lsCh').onchange = function (e) { var k = e.target.getAttribute('data-c'); if (k) { LS.off[k] = !e.target.checked; paint(); } };
     $('lsAll').onchange = function () { var on = this.checked; all.filter(vis).forEach(function (r) { LS.sel[r.key] = on; }); paint(); };
