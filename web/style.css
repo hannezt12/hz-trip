@@ -859,7 +859,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .rcK i{flex:0 0 1rem;height:1rem;border-radius:50%;display:inline-block}
 .rcS{display:flex;gap:0.4rem;flex-wrap:wrap;padding:0.2rem 0 0.2rem 1.6rem}
 .rcSb{border:0;border-radius:1rem;padding:0.35rem 0.8rem;font:inherit;color:#fff;text-shadow:0 0 2px #000}
-.pmCats{display:flex;flex-wrap:wrap;gap:6px 12px}.pmC i{display:inline-block;width:12px;height:12px;border-radius:3px;margin:0 4px;vertical-align:middle}
+.pmCats{display:flex;flex-direction:column;gap:6px}.pmC{display:flex;gap:6px;align-items:center}.pmC label{flex:1;min-width:0}.pmC .pmLt{flex:1.2;min-width:0}.pmMc{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}.pmMc label{display:flex;flex-direction:column;align-items:center;font-size:11px}.pmMc input{width:100%;height:34px;padding:0}.edTx{display:flex;gap:6px;padding:0 8px 8px}.edTx[hidden]{display:none}.edTx input{flex:1;min-width:0}.edLb{fill:#fff;stroke:#000;stroke-width:.5}.edLg text{fill:#000;pointer-events:none}.edLr{fill:rgba(0,0,0,.01);stroke:#000;stroke-width:.4}.edLg.sel .edLb{stroke:#06f;stroke-width:1.5}.pmC i{display:inline-block;width:12px;height:12px;border-radius:3px;margin:0 4px;vertical-align:middle}
 .pmL{display:flex;gap:4px;margin-top:4px;align-items:center}.pmL input[type=text]{flex:1;min-width:0}.pmL input[type=number]{width:46px}.pmL input[type=color]{width:36px;padding:0}
 .pmEd{position:fixed;inset:0;padding-top:calc(env(safe-area-inset-top,0px) + 34px);z-index:9999;background:var(--bg,#fff);display:flex;flex-direction:column}.pmEh{display:flex;gap:6px;align-items:center;padding:8px}.pmEh #edI{flex:1;font-size:12px}
 #edS{flex:1;width:100%;background:#f4f4f0}.edP{fill:rgba(255,200,0,.18);stroke:#c60}.edL text{fill:#000;pointer-events:none}.edH{fill:rgba(255,255,255,.01);stroke:none}.edL.sel .edH{stroke:#06f;stroke-width:1;fill:rgba(0,100,255,.08)}
@@ -910,3 +910,4 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .edCs{display:flex;gap:0.5rem;flex-wrap:wrap}
 .edC{width:2.25rem;height:2.25rem;border-radius:50%;border:2px solid var(--line);padding:0}
 .edC.on{border-color:#fff;box-shadow:0 0 0 2px #2F80FF}
+.pmEh{flex-wrap:wrap}.pmEh #edI{flex:1 1 100%;order:10}.pmEh .btn{padding-left:12px;padding-right:12px}
