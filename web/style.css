@@ -911,3 +911,6 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .edC{width:2.25rem;height:2.25rem;border-radius:50%;border:2px solid var(--line);padding:0}
 .edC.on{border-color:#fff;box-shadow:0 0 0 2px #2F80FF}
 .pmEh{flex-wrap:wrap}.pmEh #edI{flex:1 1 100%;order:10}.pmEh .btn{padding-left:12px;padding-right:12px}
+.pmSw{display:inline-block;width:12px;height:12px;border-radius:3px;margin:0 4px;vertical-align:middle}.pmOrd{margin-left:6px;background:#3E5C76;color:#fff;border-radius:9px;padding:0 7px;font-size:11px}
+.pmAc{margin-top:6px;border:1px solid var(--bd,#8884);border-radius:8px}.pmAh{display:flex;width:100%;align-items:center;gap:8px;padding:10px;background:none;border:0;color:inherit;font:inherit;text-align:left}.pmAh span{flex:0 0 auto;opacity:.75}.pmAh b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pmAb{padding:2px 10px 8px;display:flex;flex-direction:column;gap:6px}
+.edPg{fill:#fff;stroke:#999;stroke-width:.5;vector-effect:non-scaling-stroke}
