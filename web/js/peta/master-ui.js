@@ -224,7 +224,7 @@
         HA.saveFile(base + '.pdf', btoa(bytes), 'application/pdf'); return;
       }
       var b = list[i++];
-      if (b.dir != null) { try { var r = HzBlok.rowsStraight(b.pts, b.dir, +(b.sp || S.settings.rowSp || 1.5), +b.margin || 0, HA.cutsFor(b)); lj[b.id] = { n: r.n, total: r.total }; } catch (e) {} }
+      if (b.dir != null) { try { var r = HA.rowsFor(b, b.dir, +(b.sp || S.settings.rowSp || 1.5), +b.margin || 0); lj[b.id] = { n: r.n, total: r.total }; } catch (e) {} }
       if (i % 25 === 0) setTimeout(nx, 0); else nx();
     })();
   }

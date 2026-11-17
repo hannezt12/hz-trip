@@ -142,8 +142,8 @@
   }
   var rcache = {};
   function rowsOf(b) {
-    var k = [b.id, b.dir, b.sp, b.margin, b.pts.length, b.pts[0][0], b.pts[0][1], (HA.cutsFor ? (HA.cutsFor(b) || []).length : 0)].join('|');
-    if (!rcache[k]) { var ks = Object.keys(rcache); if (ks.length > 60) delete rcache[ks[0]]; try { rcache[k] = HzBlok.rowsStraight(b.pts, b.dir, +(b.sp || S.settings.rowSp || 1.5), +b.margin || 0, HA.cutsFor ? HA.cutsFor(b) : []); } catch (e) { rcache[k] = null; } }
+    var k = [b.id, b.dir, b.sp, b.margin, b.pts.length, b.pts[0][0], b.pts[0][1], (HA.cutsFor ? (HA.cutsFor(b) || []).length : 0), HA.pbKey ? HA.pbKey(b) : ''].join('|');
+    if (!rcache[k]) { var ks = Object.keys(rcache); if (ks.length > 60) delete rcache[ks[0]]; try { rcache[k] = HA.rowsFor(b, b.dir, +(b.sp || S.settings.rowSp || 1.5), +b.margin || 0); } catch (e) { rcache[k] = null; } }
     return rcache[k];
   }
   function blks() { try { return HA.blocksList() || []; } catch (e) { return []; } }
