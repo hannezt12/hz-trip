@@ -144,6 +144,25 @@
     var a = S.ov.arch && S.ov.arch[ymd];
     return S.settings.splitSec + '|' + JSON.stringify(S.ov.days[ymd] || 0) + '|' + JSON.stringify((S.ov.hidden || []).filter(function (h) { return h.day === ymd; })) + '|' + (a ? JSON.stringify(a) : '');
   }
+  // HM = total waktu bergerak (kecepatan >= 5 km/j) khusus trip berlabel Kerja, dalam detik; null bila tidak ada trip Kerja
+  function hmKerja(tr, pts) {
+    var sec = 0, nk = 0;
+    (tr || []).forEach(function (t) {
+      var v; try { v = tripView(t); } catch (e) { return; }
+      if (!v || v.label !== 'Kerja') return;
+      nk++;
+      var i, p, q, dt;
+      for (i = 1; i < (pts || []).length; i++) {
+        p = pts[i]; q = pts[i - 1];
+        if (p.t < t.start || p.t > t.end || q.t < t.start) continue;
+        dt = (p.t - q.t) / 1000;
+        if (dt > 0 && dt <= 10 && Math.max(p.v, q.v) >= 5) sec += dt;
+      }
+    });
+    return nk ? sec : null;
+  }
+  HA.hmKerja = hmKerja;
+  function hmTxt(sec) { return sec == null ? '–' : (Math.round(sec / 360) / 10).toFixed(1).replace('.', ','); }
   function daySumm(ymd) {
     var sig = sumSig(ymd), c = SUMC[ymd];
     if (c && c.sig === sig && ymd !== T.ymd(Date.now())) return Promise.resolve(c.v);
@@ -152,8 +171,9 @@
       var tr = edited(ymd, res);
       var km = 0, mx = 0, ws = 0, ds = 0;
       tr.forEach(function (t) { km += t.km; mx = Math.max(mx, t.max); ws += t.avg * t.durSec; ds += t.durSec; });
-      var v = { ymd: ymd, n: tr.length, km: km, max: mx, avg: ds ? ws / ds : 0, tr: tr, pts: res.points, sig: sig };
-      if (tr.length && ymd !== T.ymd(Date.now())) SUMC[ymd] = { sig: sig, v: { ymd: ymd, n: v.n, km: km, max: mx, avg: v.avg, tr: tr, sig: sig, climb: null } };
+      var hm = hmKerja(tr, res.points);
+      var v = { ymd: ymd, n: tr.length, km: km, max: mx, avg: ds ? ws / ds : 0, hm: hm, tr: tr, pts: res.points, sig: sig };
+      if (tr.length && ymd !== T.ymd(Date.now())) SUMC[ymd] = { sig: sig, v: { ymd: ymd, n: v.n, km: km, max: mx, avg: v.avg, hm: hm, tr: tr, sig: sig, climb: null } };
       return v;
     }).catch(function () { return { ymd: ymd, n: 0, km: 0, max: 0, avg: 0 }; });
   }
@@ -176,6 +196,7 @@
           '<div class="mc"><small>MAKS</small><b style="color:' + zc(r.max) + '">' + Math.round(r.max) + '</b></div>' +
           '<div class="mc"><small>RATA2</small><b>' + Math.round(r.avg) + '</b></div>' +
           '<div class="mc"><small>KM</small><b>' + T.km1(r.km) + '</b></div>' +
+          '<div class="mc hm"><small>HM</small><b>' + hmTxt(r.hm) + '</b></div>' +
           '<div class="mt">' + r.n + ' trip</div></button>';
       }).join('');
       $('monthView').innerHTML = html;

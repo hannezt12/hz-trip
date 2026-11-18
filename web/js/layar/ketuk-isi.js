@@ -30,14 +30,7 @@
       hp.push(hp[0]);
       try { geom = polygonClipping.intersection([ring], [hp]); } catch (e) { return null; }
     }
-    (cuts || []).forEach(function (c) {
-      var h = (c.w || 1) / 2;
-      for (var i = 0; i + 1 < c.pts.length; i++) {
-        var p = xy(c.pts[i]), q = xy(c.pts[i + 1]), dx = q[0] - p[0], dy = q[1] - p[1], L = Math.sqrt(dx * dx + dy * dy); if (L < 0.01) continue;
-        var nx = -dy / L * h, ny = dx / L * h;
-        clips.push([[[p[0] + nx, p[1] + ny], [q[0] + nx, q[1] + ny], [q[0] - nx, q[1] - ny], [p[0] - nx, p[1] - ny], [p[0] + nx, p[1] + ny]]]);
-      }
-    });
+    (cuts || []).forEach(function (c) { HA.cutTraps(c, xy).forEach(function (r) { clips.push([r]); }); });
     var mp; try { mp = clips.length ? polygonClipping.difference(geom, clips) : (pb ? geom : null); } catch (e) { return null; }
     if (!mp) return null;
     var parts = mp.filter(function (poly) { return poly[0] && poly[0].length >= 4 && area(poly[0]) > 20; });

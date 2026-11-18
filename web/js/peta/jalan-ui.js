@@ -20,10 +20,25 @@
   function colorOf(ln) { return ln.type === 'drain' ? (kontur() ? '#5EE0FF' : '#6F8296') : '#C2AD83'; }
   function mpp() { var z = HA.map.getZoom(), la = HA.map.getCenter().lat; return 156543.03 * Math.cos(la * Math.PI / 180) / Math.pow(2, z); }
   function wpx(w) { return Math.max(2, w / mpp()); }
+  function fmt(v) { return String(Math.round(v * 100) / 100).replace('.', ','); }
+  function ends(ln) { var m = +ln.w || 2; return [+ln.wa > 0 ? +ln.wa : m, +ln.wb > 0 ? +ln.wb : m]; }
+  // cincin poligon (lat,lng) untuk garis yang melebar/menyempit dari ujung A ke ujung B
+  function taperRing(ln) {
+    var e = ends(ln), P = ln.pts, k = Math.cos(P[0][0] * Math.PI / 180) * 111320, i, cum = [0], n = P.length, L1 = [], R1 = [];
+    var xy = P.map(function (p) { return [p[1] * k, p[0] * 111320]; });
+    for (i = 0; i + 1 < n; i++) cum.push(cum[i] + Math.hypot(xy[i + 1][0] - xy[i][0], xy[i + 1][1] - xy[i][1]));
+    var tot = cum[n - 1] || 1;
+    for (i = 0; i < n; i++) {
+      var a = xy[Math.max(0, i - 1)], b = xy[Math.min(n - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L, h = (e[0] + (e[1] - e[0]) * cum[i] / tot) / 2;
+      L1.push([(xy[i][1] + ny * h) / 111320, (xy[i][0] + nx * h) / k]); R1.push([(xy[i][1] - ny * h) / 111320, (xy[i][0] - nx * h) / k]);
+    }
+    return L1.concat(R1.reverse());
+  }
   function changed() {
     HA.CUTM = {}; saveSettings();
     if (HA.RC) { HA.RC.rows = {}; HA.RC.dep = {}; }
     if (HA.drawRows) HA.drawRows(true);
+    if (HA.map && !HA.map._lineEd) drawLines();
   }
 
   var layer = null, zbound = false, pop = null;
@@ -39,7 +54,9 @@
     lines().forEach(function (ln) {
       if (!ln.pts || ln.pts.length < 2) return;
       if (ln.type === 'drain' ? !showDrain : !showRoad) return;
-      L.polyline(ln.pts, { color: colorOf(ln), weight: wpx(+ln.w || 2), opacity: kontur() && ln.type === 'drain' ? .8 : .7, lineCap: 'butt', lineJoin: 'round', interactive: false }).addTo(g);
+      var ee = ends(ln), tp = Math.abs(ee[0] - ee[1]) > 0.05;
+      if (tp) { L.polygon(taperRing(ln), { stroke: false, fillColor: colorOf(ln), fillOpacity: kontur() && ln.type === 'drain' ? .8 : .7, interactive: false }).addTo(g); L.polyline(ln.pts, { color: colorOf(ln), weight: 1.5, opacity: .9, interactive: false }).addTo(g); }
+      else L.polyline(ln.pts, { color: colorOf(ln), weight: wpx(+ln.w || 2), opacity: kontur() && ln.type === 'drain' ? .8 : .7, lineCap: 'butt', lineJoin: 'round', interactive: false }).addTo(g);
       // area ketuk lebar (sekitar satu jari), garis dipilih lebih dulu daripada blok di bawahnya
       var hit = L.polyline(ln.pts, { color: '#000', weight: Math.max(wpx(+ln.w || 2), 30), opacity: 0, lineCap: 'round', bubblingMouseEvents: false, interactive: true }).addTo(g);
       hit.on('click', function (e) {
@@ -53,18 +70,42 @@
 
   function linePop(ln, ll) {
     HA.closeAll();
-    var d = document.createElement('div');
-    d.innerHTML = '<div style="font-weight:600;margin-bottom:6px">' + NAME[ln.type] + ' · ' + Math.round(lenM(ln.pts)) + ' m</div>' +
-      '<label class="lew" style="margin-bottom:8px">Lebar <input type="number" inputmode="decimal" step="0.1" min="0.5" max="30" value="' + ln.w + '"> m</label>' +
-      '<div style="display:flex;gap:6px"><button type="button" class="lpb" data-k="e">Edit</button><button type="button" class="lpb dng" data-k="d">Hapus</button></div>';
-    var inp = d.querySelector('input');
-    inp.onchange = function () { var v = parseFloat(String(inp.value).replace(',', '.')); if (v >= 0.5 && v <= 30) { ln.w = v; changed(); } else inp.value = ln.w; };
-    d.querySelector('[data-k=e]').onclick = function () { closeLinePop(); lineEdit(ln); };
-    d.querySelector('[data-k=d]').onclick = function () {
-      closeLinePop();
-      askConfirm('Hapus ' + NAME[ln.type].toLowerCase() + ' ini?', 'Row di blok yang dilewati dihitung ulang tanpa garis ini.', 'Hapus', function () { var i = lines().indexOf(ln); if (i >= 0) lines().splice(i, 1); changed(); });
-    };
-    pop = L.popup({ closeButton: true, autoPan: false, className: 'linepop', minWidth: 170 }).setLatLng(ll).setContent(d).openOn(HA.map);
+    var d = document.createElement('div'), sel = null;
+    function circ(k, lab, v) { return '<button type="button" class="lwc" data-k="' + k + '" style="width:3.4rem;height:3.4rem;border-radius:50%;border:1px solid var(--line);background:none;color:inherit;font:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;cursor:pointer"><small style="opacity:.7">' + lab + '</small><b>' + fmt(v) + '</b></button>'; }
+    function render() {
+      var e = ends(ln);
+      d.innerHTML = '<div style="font-weight:600;margin-bottom:6px">' + NAME[ln.type] + ' · ' + Math.round(lenM(ln.pts)) + ' m</div>' +
+        '<div style="display:flex;gap:8px;justify-content:center;margin-bottom:6px">' + circ('a', 'A', e[0]) + circ('t', 'Tengah', (e[0] + e[1]) / 2) + circ('b', 'B', e[1]) + '</div>' +
+        '<div class="muted" style="font-size:.75rem;text-align:center;margin-bottom:6px">Lebar (m). A = titik 1, B = titik 2. Ketuk lingkaran untuk mengubah.</div>' +
+        '<label class="lew" id="lwL" style="margin-bottom:8px;display:' + (sel ? '' : 'none') + '"><span id="lwT"></span> <input type="number" inputmode="decimal" step="0.1" min="0.5" max="30"> m</label>' +
+        '<div style="display:flex;gap:6px"><button type="button" class="lpb" data-k="e">Edit</button><button type="button" class="lpb dng" data-k="d">Hapus</button></div>';
+      d.querySelectorAll('.lwc').forEach(function (b) {
+        if (b.getAttribute('data-k') === sel) { b.style.borderColor = '#4DA3FF'; b.style.borderWidth = '2px'; }
+        b.onclick = function (ev) { ev.stopPropagation(); sel = b.getAttribute('data-k'); render(); var i = d.querySelector('input'); if (i) i.focus(); };
+      });
+      var inp = d.querySelector('input');
+      if (sel) {
+        var cur = sel === 'a' ? e[0] : sel === 'b' ? e[1] : (e[0] + e[1]) / 2;
+        d.querySelector('#lwT').textContent = sel === 'a' ? 'Lebar A' : sel === 'b' ? 'Lebar B' : 'Lebar semua (Tengah)'; inp.value = Math.round(cur * 100) / 100;
+        inp.onchange = function () {
+          var v = parseFloat(String(inp.value).replace(',', '.'));
+          if (!(v >= 0.5 && v <= 30)) { inp.value = cur; return; }
+          if (sel === 't') { ln.w = v; delete ln.wa; delete ln.wb; }
+          else {
+            var a2 = sel === 'a' ? v : e[0], b2 = sel === 'b' ? v : e[1];
+            if (Math.abs(a2 - b2) < 0.05) { ln.w = a2; delete ln.wa; delete ln.wb; } else { ln.wa = a2; ln.wb = b2; ln.w = Math.round((a2 + b2) / 2 * 100) / 100; }
+          }
+          changed(); render();
+        };
+      }
+      d.querySelector('[data-k=e]').onclick = function () { closeLinePop(); lineEdit(ln); };
+      d.querySelector('[data-k=d]').onclick = function () {
+        closeLinePop();
+        askConfirm('Hapus ' + NAME[ln.type].toLowerCase() + ' ini?', 'Row di blok yang dilewati dihitung ulang tanpa garis ini.', 'Hapus', function () { var i = lines().indexOf(ln); if (i >= 0) lines().splice(i, 1); changed(); });
+      };
+    }
+    render();
+    pop = L.popup({ closeButton: true, autoPan: false, className: 'linepop', minWidth: 210 }).setLatLng(ll).setContent(d).openOn(HA.map);
   }
 
   // editor: hanya 2 titik

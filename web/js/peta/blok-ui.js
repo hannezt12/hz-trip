@@ -112,7 +112,7 @@
       var q = lineBB(ln); if (q[2] < bb[0] - pad || q[0] > bb[2] + pad || q[3] < bb[1] - pad || q[1] > bb[3] + pad) return;
       var inside = false;
       sampleLine(ln, 3, function (la, lo) { if (!inside && llPip({ lat: la, lng: lo }, b.pts)) inside = true; });
-      if (inside) out.push({ id: ln.id, type: ln.type, w: +ln.w, pts: ln.pts });
+      if (inside) out.push({ id: ln.id, type: ln.type, w: +ln.w, wa: +ln.wa > 0 ? +ln.wa : undefined, wb: +ln.wb > 0 ? +ln.wb : undefined, pts: ln.pts });
     });
     // pembatas status 1,5: ikut memotong row, kecuali sudah tertutup jalan/drainase asli (garis teratas menentukan lebar)
     if (b.pb && b.pb.st > 0 && b.pb.a && b.pb.b) {
@@ -124,24 +124,31 @@
   }
   function cutSig(cuts) {
     if (!cuts || !cuts.length) return '';
-    return cuts.map(function (c) { return c.id + ':' + c.w + ':' + c.pts.length + ':' + c.pts.reduce(function (s0, p) { return s0 + p[0] * 1.1 + p[1] * 0.9; }, 0).toFixed(6); }).join(';');
+    return cuts.map(function (c) { return c.id + ':' + c.w + ':' + (c.wa || '') + ':' + (c.wb || '') + ':' + c.pts.length + ':' + c.pts.reduce(function (s0, p) { return s0 + p[0] * 1.1 + p[1] * 0.9; }, 0).toFixed(6); }).join(';');
   }
   function cutSuffix(b) { var sg = cutSig(cutsFor(b)); return (sg ? '|c' + sg : '') + pbKey(b); }
   // luas yang tertutup jalan/drainase di dalam blok (m2, perkiraan)
+  // kotak/trapesium tiap ruas garis (meter lokal via xy); lebar bisa berubah dari ujung A ke B
+  function cutTraps(c, xy) {
+    var q = c.pts.map(xy), out = [], i, cum = [0];
+    for (i = 0; i + 1 < q.length; i++) cum.push(cum[i] + Math.hypot(q[i + 1][0] - q[i][0], q[i + 1][1] - q[i][1]));
+    var tot = cum[cum.length - 1] || 1, wa = +c.wa > 0 ? +c.wa : +c.w || 0, wb = +c.wb > 0 ? +c.wb : +c.w || 0;
+    for (i = 0; i + 1 < q.length; i++) {
+      var h0 = (wa + (wb - wa) * cum[i] / tot) / 2, h1 = (wa + (wb - wa) * cum[i + 1] / tot) / 2; if (h0 <= 0 || h1 <= 0) continue;
+      var dx = q[i + 1][0] - q[i][0], dy = q[i + 1][1] - q[i][1], L = Math.hypot(dx, dy); if (L < 0.01) continue;
+      var ux = dx / L, uy = dy / L, nx = -uy, ny = ux, ax = q[i][0] - ux * h0, ay = q[i][1] - uy * h0, bx = q[i + 1][0] + ux * h1, by = q[i + 1][1] + uy * h1;
+      out.push([[ax + nx * h0, ay + ny * h0], [bx + nx * h1, by + ny * h1], [bx - nx * h1, by - ny * h1], [ax - nx * h0, ay - ny * h0], [ax + nx * h0, ay + ny * h0]]);
+    }
+    return out;
+  }
+  HA.cutTraps = cutTraps;
   function cutArea(b, cuts) {
     if (!cuts || !cuts.length) return 0;
     if (typeof polygonClipping !== 'undefined') {
       try {
         var ref = b.pts[0], kx = 111320 * Math.cos(ref[0] * Math.PI / 180), ky = 110540;
         var xy = function (p) { return [(p[1] - ref[1]) * kx, (p[0] - ref[0]) * ky]; }, quads = [];
-        cuts.forEach(function (c) {
-          var h = (+c.w || 0) / 2, i; if (h <= 0) return;
-          for (i = 0; i + 1 < c.pts.length; i++) {
-            var p = xy(c.pts[i]), q = xy(c.pts[i + 1]), dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy); if (L < 0.01) continue;
-            var ux = dx / L, uy = dy / L, nx = -uy * h, ny = ux * h, a0 = [p[0] - ux * h, p[1] - uy * h], b0 = [q[0] + ux * h, q[1] + uy * h];
-            quads.push([[[a0[0] + nx, a0[1] + ny], [b0[0] + nx, b0[1] + ny], [b0[0] - nx, b0[1] - ny], [a0[0] - nx, a0[1] - ny], [a0[0] + nx, a0[1] + ny]]]);
-          }
-        });
+        cuts.forEach(function (c) { cutTraps(c, xy).forEach(function (r) { quads.push([r]); }); });
         if (quads.length) {
           var ring = b.pts.map(xy); ring.push(ring[0]);
           var un = polygonClipping.union.apply(null, quads), it = polygonClipping.intersection([ring], un), tot = 0;
@@ -687,7 +694,7 @@
     return r && r.d < 4 && r.d < e.d + 3 ? r.p : e.p;
   }
   function pbClear() { if (HA.DM.pbLayer && HA.map) { try { HA.map.removeLayer(HA.DM.pbLayer); } catch (x) {} } HA.DM.pbLayer = null; }
-  function pbDraw(b, onMove) {
+  function pbDraw(b, onMove, ro) {
     pbClear(); var q = b.pb; if (!q || !q.a || !q.b || !HA.map) return;
     var g = L.layerGroup(), ln = L.polyline([q.a, q.b], { color: '#FFB020', weight: 3, dashArray: '7 5', interactive: false }).addTo(g), lab = [];
     function labs() {
@@ -700,7 +707,7 @@
       });
     }
     labs();
-    ['a', 'b'].forEach(function (key) {
+    if (!ro) ['a', 'b'].forEach(function (key) {
       var mk = L.marker(q[key], { draggable: !b.conf, zIndexOffset: 800, icon: L.divIcon({ className: '', html: '<div style="width:22px;height:22px;border-radius:50%;background:#FFB020;border:2px solid #fff;box-shadow:0 0 4px #000"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }) }).addTo(g);
       mk.on('drag', function (e) { var c = e.target.getLatLng(); ln.setLatLngs(key === 'a' ? [[c.lat, c.lng], q.b] : [q.a, [c.lat, c.lng]]); });
       mk.on('dragend', function (e) {
@@ -709,6 +716,42 @@
       });
     });
     g.addTo(HA.map); HA.DM.pbLayer = g;
+  }
+  // mode "Atur garis": panel Edit Blok ditutup, ujung digeser di peta, lebar + jenis di bilah bawah; Simpan / Batal
+  function pbEdit(b, back) {
+    var q = b.pb; if (!q || !HA.map) { back(b); return; }
+    var W = { a: q.a.slice(), b: q.b.slice(), w: +q.w || 1.5, type: q.type === 'drain' ? 'drain' : 'jalan' }, g = L.layerGroup().addTo(HA.map), ln = null, lab = [], bar = document.createElement('div'), cut = q.st > 0;
+    HA.DM.pdir = true; closeBlockPop(true); HA.DM.popId = b.id;
+    bar.className = 'lkbar bot';
+    bar.innerHTML = '<span id="peT"></span>' + (cut ? '<label style="flex:1 1 45%;display:flex;align-items:center;gap:6px">Lebar <input type="number" id="peW" step="0.1" min="0.5" max="8" style="width:4.5rem" value="' + W.w + '"> m</label><button type="button" id="peJ" class="' + (W.type !== 'drain' ? 'on' : '') + '">Jalan bantu</button><button type="button" id="peD" class="' + (W.type === 'drain' ? 'on' : '') + '">Drainase</button>' : '') +
+      '<button type="button" id="peC">Batal</button><button type="button" class="pri" id="peOk">Simpan</button>';
+    HA.map.getContainer().appendChild(bar); L.DomEvent.disableClickPropagation(bar);
+    function draw() {
+      if (ln) g.removeLayer(ln); lab.forEach(function (m) { g.removeLayer(m); }); lab = [];
+      ln = L.polyline([W.a, W.b], { color: '#FFB020', weight: 3, dashArray: '7 5', interactive: false }).addTo(g);
+      var k = Math.cos(W.a[0] * Math.PI / 180) * 111320, ux = (W.b[1] - W.a[1]) * k, uy = (W.b[0] - W.a[0]) * 111320, L0 = Math.hypot(ux, uy) || 1, mx = (W.a[0] + W.b[0]) / 2, my = (W.a[1] + W.b[1]) / 2, off = Math.min(12, L0 / 4);
+      [['A', 1], ['B', -1]].forEach(function (z) {
+        lab.push(L.marker([mx + (ux / L0) * z[1] * off / 111320, my + (-uy / L0) * z[1] * off / k], { interactive: false, icon: L.divIcon({ className: '', html: '<div style="font:700 15px system-ui;color:#FFB020;text-shadow:0 0 3px #000,0 0 3px #000">' + z[0] + '</div>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(g));
+      });
+      var t = $('peT'); if (t) t.textContent = 'Pembatas · ' + Math.round(L0) + ' m · geser titik 1 dan 2 (menempel ke tepi blok atau jalan/drainase)';
+    }
+    ['a', 'b'].forEach(function (key, i) {
+      var mk = L.marker(W[key], { draggable: true, zIndexOffset: 900, icon: L.divIcon({ className: '', html: '<div class="tpm"><b>' + (i + 1) + '</b><div class="d"></div><div class="h"></div></div>', iconSize: [56, 80], iconAnchor: [28, 24] }) }).addTo(g);
+      mk.on('drag', function (e) { var c = e.target.getLatLng(); W[key] = [c.lat, c.lng]; draw(); });
+      mk.on('dragend', function (e) { var sn = pbSnap(b, e.target.getLatLng()); W[key] = [+sn[0].toFixed(7), +sn[1].toFixed(7)]; e.target.setLatLng(W[key]); draw(); });
+    });
+    function end() { HA.DM.pdir = false; HA.map.removeLayer(g); bar.remove(); }
+    if (cut) {
+      $('peW').onchange = function () { var v = +String($('peW').value).replace(',', '.'); W.w = v >= 0.5 && v <= 8 ? Math.round(v * 10) / 10 : W.w; $('peW').value = W.w; };
+      $('peJ').onclick = function () { W.type = 'jalan'; $('peJ').classList.add('on'); $('peD').classList.remove('on'); };
+      $('peD').onclick = function () { W.type = 'drain'; $('peD').classList.add('on'); $('peJ').classList.remove('on'); };
+    }
+    $('peC').onclick = function () { end(); back(b); };
+    $('peOk').onclick = function () {
+      end(); q.a = W.a; q.b = W.b; if (cut) { q.w = W.w; q.type = W.type; }
+      saveSettings(); drawBlocks(); if (S.settings.rowOn) drawRows(); openBlockPop(b); back(b);
+    };
+    draw();
   }
   function openBlockEdit(b) {
     HA.pbStopForEdit(); if (HA.DM.closePanel) HA.DM.closePanel(); if (HA.closeLinePop) HA.closeLinePop();
@@ -728,7 +771,7 @@
       '<button class="btn" id="beHi" style="width:100%;margin-top:8px">Riwayat blok</button>' +
       '<button class="btn" id="beMo" style="width:100%;margin-top:8px">Lainnya ▾</button>' +
       '<div class="bmore" id="beMore"><div class="row" style="margin-top:10px;gap:8px"><div style="flex:1"><div class="muted">Jarak row (m)</div><input type="number" id="beJ" step="0.05" min="0.5" max="5" value="' + blkSp(b) + '"></div><div style="flex:1"><div class="muted">Kurangi tepi (m)</div><input type="number" id="beM" step="1" min="0" max="50" value="' + (+b.margin || 0) + '"></div></div>' +
-      '<button class="btn" id="bePb" style="width:100%;margin-top:10px">Pembatas: –</button><div class="muted" id="bePbI" style="margin-top:4px"></div>' +
+      '<div class="row" style="margin-top:10px;gap:6px"><button class="btn" id="bePb" style="flex:1">Pembatas: –</button><button class="btn" id="bePbE" style="flex:1;display:none">Atur garis</button></div><div class="muted" id="bePbI" style="margin-top:4px"></div>' +
       '<div class="row" id="bePbR" style="margin-top:6px;gap:6px;display:none"><button class="btn" id="bePbD" style="flex:1">Arah sisi B</button><button class="btn" id="bePbS" style="flex:1">Samakan arah</button></div>' +
       '<textarea id="beT" rows="2" maxlength="200" placeholder="Catatan (varietas, R&D, dll.)" style="margin-top:8px;width:100%">' + esc(b.note || '') + '</textarea>' +
       '<div class="row" style="margin-top:10px;gap:6px"><button class="btn" id="beD2" style="flex:1;color:var(--r)">Hapus</button></div></div>');
@@ -742,41 +785,26 @@
       if (!q) inf = 'Belum ada. Ketuk untuk membuat garis pembatas.';
       else if (!(q.st > 0)) inf = 'Membagi blok menjadi sisi A dan B untuk kategori. Row dan luas tidak berubah.';
       else { var cs = cutsFor(b) || [], ia = cutArea(b, cs) / 10000; inf = 'Memotong row seperti ' + (q.type === 'drain' ? 'drainase' : 'jalan bantu') + ' lebar ' + String(+q.w || 1.5).replace('.', ',') + ' m. Luas tanam ' + nf(Math.max(0, blkHa(b) - ia), 2) + ' ha. Tahan tombol untuk lebar dan jenis.'; }
-      if (q && inMap) inf += ' Geser dua titik oranye di tepi blok. A = kiri garis dari titik 1 ke 2 · B = kanan.';
+      if (q) inf += ' A = kiri garis dari titik 1 ke 2 · B = kanan. Ketuk Atur garis untuk menggeser ujung' + (q.st > 0 ? ', lebar, dan jenis.' : '.');
       $('bePbI').textContent = inf;
       $('bePbR').style.display = q && q.st > 0 ? '' : 'none';
       $('bePbS').style.display = b.dirB != null ? '' : 'none';
       $('bePbD').textContent = b.dirB != null ? 'Arah sisi B ' + Math.round(b.dirB) + '°' : 'Arah sisi B (sama)';
       $('beDt').textContent = dtText();
-      if (inMap) pbDraw(b, function () { live(); pbRefresh(); });
+      $('bePbE').style.display = q ? '' : 'none';
+      if (inMap) pbDraw(b, null, true);
     }
-    (function () {
-      var tm = null, fired = false, btn = $('bePb');
-      btn.addEventListener('pointerdown', function () { fired = false; clearTimeout(tm); tm = setTimeout(function () { fired = true; pbOpts(); }, 650); });
-      ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { btn.addEventListener(ev, function () { clearTimeout(tm); }); });
-      btn.onclick = function () {
-        if (fired) { fired = false; return; }
-        var q = b.pb;
-        if (!q) {
-          var d = pbDefault(b); if (!d) { toast('Blok terlalu kecil untuk pembatas'); return; }
-          b.pb = { st: 0, a: [+d.a[0].toFixed(7), +d.a[1].toFixed(7)], b: [+d.b[0].toFixed(7), +d.b[1].toFixed(7)], w: 1.5, type: 'jalan' }; delete b.dirB; live(); pbRefresh();
-        } else if (!(q.st > 0)) { q.st = 1.5; live(); pbRefresh(); }
-        else {
-          askConfirm('Hapus pembatas?', 'Garis pembatas dihapus' + (b.dirB != null ? ', arah sisi B ikut hilang' : '') + ' dan row kembali utuh. Tanda yang sudah ada tidak berubah.', 'Hapus', function () { delete b.pb; delete b.dirB; pbClear(); live(); pbRefresh(); });
-        }
-      };
-      function pbOpts() {
-        var q = b.pb; if (!q || !(q.st > 0)) { toast('Lebar dan jenis hanya untuk status 1,5'); return; }
-        HA.onSheetClose = null; pbClear();
-        openSheet('<div class="grab"></div><div class="bth"><div class="st">PEMBATAS</div><button class="btn pri" id="pbX">Selesai</button></div>' +
-          '<div class="muted" style="margin-top:8px">Lebar garis (m)</div><input type="number" id="pbW" step="0.1" min="0.5" max="8" value="' + (+q.w || 1.5) + '">' +
-          '<div class="muted" style="margin-top:10px">Jenis (warna hanya terlihat di Kontur)</div><div class="row" style="gap:6px"><button class="btn' + (q.type !== 'drain' ? ' pri' : '') + '" id="pbJ" style="flex:1">Jalan bantu</button><button class="btn' + (q.type === 'drain' ? ' pri' : '') + '" id="pbD" style="flex:1">Drainase</button></div>');
-        $('pbW').onchange = function () { var v = +$('pbW').value; q.w = v >= 0.5 && v <= 8 ? Math.round(v * 10) / 10 : 1.5; $('pbW').value = q.w; live(); };
-        $('pbJ').onclick = function () { q.type = 'jalan'; $('pbJ').classList.add('pri'); $('pbD').classList.remove('pri'); live(); };
-        $('pbD').onclick = function () { q.type = 'drain'; $('pbD').classList.add('pri'); $('pbJ').classList.remove('pri'); live(); };
-        $('pbX').onclick = function () { openBlockEdit(b); };
+    $('bePb').onclick = function () {
+      var q = b.pb;
+      if (!q) {
+        var d = pbDefault(b); if (!d) { toast('Blok terlalu kecil untuk pembatas'); return; }
+        b.pb = { st: 0, a: [+d.a[0].toFixed(7), +d.a[1].toFixed(7)], b: [+d.b[0].toFixed(7), +d.b[1].toFixed(7)], w: 1.5, type: 'jalan' }; delete b.dirB; live(); pbRefresh();
+      } else if (!(q.st > 0)) { q.st = 1.5; live(); pbRefresh(); }
+      else {
+        askConfirm('Hapus pembatas?', 'Garis pembatas dihapus' + (b.dirB != null ? ', arah sisi B ikut hilang' : '') + ' dan row kembali utuh. Tanda yang sudah ada tidak berubah.', 'Hapus', function () { delete b.pb; delete b.dirB; pbClear(); live(); pbRefresh(); });
       }
-    })();
+    };
+    $('bePbE').onclick = function () { if (b.pb) { HA.onSheetClose = null; HA.DM.bpFold = false; pbClear(); closeSheet(); needMap(b.pts, function () { pbEdit(b, openBlockEdit); }); } };
     $('bePbD').onclick = function () { HA.onSheetClose = null; pbClear(); closeSheet(); needMap(b.pts, function () { tapDir(b, 'dirB'); }); };
     $('bePbS').onclick = function () { delete b.dirB; live(); pbRefresh(); };
     $('beN').onchange = function () { b.name = $('beN').value.trim() || b.name; live(); };
@@ -784,7 +812,7 @@
     $('beM').onchange = function () { b.margin = Math.max(0, +$('beM').value || 0); live(); };
     function applyLock() {
       var lk = !!b.conf;
-      ['beN', 'beP', 'beB', 'beJ', 'beM', 'beT', 'beD2', 'bePb', 'bePbD', 'bePbS'].forEach(function (id) { var e = $(id); if (e) e.disabled = lk; });
+      ['beN', 'beP', 'beB', 'beJ', 'beM', 'beT', 'beD2', 'bePb', 'bePbE', 'bePbD', 'bePbS'].forEach(function (id) { var e = $(id); if (e) e.disabled = lk; });
       $('beLk').style.display = lk ? '' : 'none';
     }
     $('beC').onchange = function () { if ($('beC').checked && b.dir == null) { $('beC').checked = false; toast('Atur arah row dulu'); return; } b.conf = $('beC').checked; live(); applyLock(); };

@@ -56,12 +56,17 @@
   function cutQuads(cuts, P) {
     var out = [];
     (cuts || []).forEach(function (c) {
-      var q = (c.pts || []).map(P.xy), h = (+c.w || 0) / 2, i;
-      if (h <= 0 || q.length < 2) return;
+      var q = (c.pts || []).map(P.xy), i, cum = [0], tot;
+      if (q.length < 2) return;
+      for (i = 0; i + 1 < q.length; i++) cum.push(cum[i] + Math.hypot(q[i + 1][0] - q[i][0], q[i + 1][1] - q[i][1]));
+      tot = cum[cum.length - 1] || 1;
+      var wa = +c.wa > 0 ? +c.wa : +c.w || 0, wb = +c.wb > 0 ? +c.wb : +c.w || 0;
       for (i = 0; i + 1 < q.length; i++) {
+        var h0 = (wa + (wb - wa) * cum[i] / tot) / 2, h1 = (wa + (wb - wa) * cum[i + 1] / tot) / 2;
+        if (h0 <= 0 || h1 <= 0) continue;
         var dx = q[i + 1][0] - q[i][0], dy = q[i + 1][1] - q[i][1], L = Math.hypot(dx, dy); if (L < 0.01) continue;
-        var ux = dx / L, uy = dy / L, nx = -uy, ny = ux, ax = q[i][0] - ux * h, ay = q[i][1] - uy * h, bx = q[i + 1][0] + ux * h, by = q[i + 1][1] + uy * h;
-        var p = [[ax + nx * h, ay + ny * h], [bx + nx * h, by + ny * h], [bx - nx * h, by - ny * h], [ax - nx * h, ay - ny * h]];
+        var ux = dx / L, uy = dy / L, nx = -uy, ny = ux, ax = q[i][0] - ux * h0, ay = q[i][1] - uy * h0, bx = q[i + 1][0] + ux * h1, by = q[i + 1][1] + uy * h1;
+        var p = [[ax + nx * h0, ay + ny * h0], [bx + nx * h1, by + ny * h1], [bx - nx * h1, by - ny * h1], [ax - nx * h0, ay - ny * h0]];
         out.push({ p: p, x0: Math.min(p[0][0], p[1][0], p[2][0], p[3][0]), x1: Math.max(p[0][0], p[1][0], p[2][0], p[3][0]), y0: Math.min(p[0][1], p[1][1], p[2][1], p[3][1]), y1: Math.max(p[0][1], p[1][1], p[2][1], p[3][1]) });
       }
     });
