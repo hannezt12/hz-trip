@@ -90,7 +90,7 @@
       HA.saveSettings(); if (KM.sync) KM.sync(); sync();
     };
     $('fgM').onclick = function (ev) { var b = ev.target.closest('button[data-v]'); if (!b) return; g.m = b.getAttribute('data-v') || null; HA.saveSettings(); sync(); };
-    $('fgW').onchange = function () { var v = Math.round(parseFloat(this.value)); g.w = isFinite(v) ? Math.max(1, Math.min(12, v)) : 0; HA.saveSettings(); sync(); };
+    $('fgW').onchange = function () { var v = Math.round(parseFloat(this.value)); g.w = isFinite(v) ? Math.max(1, Math.min(12, v)) : 0; if (g.w) S.settings.gyLastW = g.w; HA.saveSettings(); sync(); };
     $('fgC').onchange = function () { g.col = this.value; HA.saveSettings(); };
     $('fgC0').onclick = function () { g.col = null; HA.saveSettings(); sync(); };
     ['fgM', 'fgW', 'fgC', 'fgC0'].forEach(function (id) { var el = $(id); if (el) el.addEventListener(id === 'fgW' || id === 'fgC' ? 'change' : 'click', pvDraw); });
@@ -108,7 +108,8 @@
   var sm = KM.setMode; if (sm) KM.setMode = function () { var r = sm.apply(this, arguments); if (KM.mode !== 'kategori') fgArea = false; sync(); return r; };
   // ---- ubah gaya satu tanda (+ kembalikan gaya asli)
   BR.gaya = function (it, back) {
-    var g0 = it.gy ? clone(it.gy) : {}, cc = it.cat ? HA.tandaCatOf(it.cat) : null, st = { m: g0.m || '', w: g0.w || 0, col: g0.col || '' };
+    var g0 = it.gy ? clone(it.gy) : {}, cc = it.cat ? HA.tandaCatOf(it.cat) : null, st = { m: g0.m || '', w: g0.w || 0, col: g0.col || '' }, lastW = +S.settings.gyLastW || 0;
+    if (!st.w && lastW) st.w = lastW; // tebal tepi terakhir yang dipakai terisi otomatis (berlaku setelah Terapkan)
     function html() {
       var e = HA.gyOf(it);
       return '<div class="grab"></div><div class="bth"><div class="st">GAYA TANDA</div><button class="btn" id="gyX">Batal</button></div>' +
@@ -129,7 +130,7 @@
         it.mod = Date.now(); HA.tandaSave(); if (KM.sync) KM.sync(); HA.onSheetClose = null; HA.toast('Gaya asli dikembalikan'); back();
       };
       $('gyY').onclick = function () {
-        var o = {}; if (st.m) o.m = st.m; if (st.w) o.w = st.w; if (st.col) o.col = st.col;
+        var o = {}; if (st.m) o.m = st.m; if (st.w) { o.w = st.w; S.settings.gyLastW = st.w; HA.saveSettings(); } if (st.col) o.col = st.col;
         if (it.gy0 === undefined) it.gy0 = it.gy ? clone(it.gy) : null; // simpan keadaan sebelum diubah pertama kali
         if (o.m || o.w || o.col) it.gy = o; else delete it.gy;
         it.mod = Date.now(); HA.tandaSave(); if (KM.sync) KM.sync(); HA.onSheetClose = null; back();
