@@ -418,7 +418,7 @@
   };
 
   // ---------- bagikan: PDF atau KML untuk satu atau beberapa blok ----------
-  var SH = { fmt: 'pdf', title: '', nama: true, nilai: true, fs: 'a', colMap: {}, latar: (S.settings.shLatar || 'sat'), gaya: (S.settings.shGaya || 'warna') };
+  var SH = { fmt: 'pdf', title: '', nama: true, nilai: true, fs: 'a', colMap: {}, latar: (S.settings.shLatar || 'sat'), gaya: (S.settings.shGaya || 'warna'), rinci: S.settings.shRinci !== false, dates: {} };
   function stamp() { var t = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return t.getFullYear() + p(t.getMonth() + 1) + p(t.getDate()); }
   function share(list, pre) {
     var many = list.length > 1, n = 0, warned = false, seq = 0, tmr = null, miss = [], total = 0;
@@ -439,18 +439,25 @@
       if (best) lastK[best.k] = 1;
     });
     SH.cats = {}; cats.forEach(function (c) { SH.cats[c.k] = pre ? true : !!lastK[c.k]; });
+    var dts = [], seenD = {};
+    list.forEach(function (b) { selItems(b, pre).forEach(function (it) { var d = HA.tandaU.dateOf(it); if (!seenD[d]) { seenD[d] = { d: d, n: 0 }; dts.push(seenD[d]); } seenD[d].n++; }); });
+    dts.sort(function (a, c) { return a.d < c.d ? 1 : (a.d > c.d ? -1 : 0); });
+    SH.dates = {}; dts.forEach(function (x) { SH.dates[x.d] = true; });
+    function dateRows() { return dts.map(function (x) { return '<label><input type="checkbox" data-d="' + x.d + '"' + (SH.dates[x.d] ? ' checked' : '') + '>' + esc(HA.tandaU.d8(x.d)) + ' <span class="muted">(' + x.n + ')</span></label>'; }).join(''); }
     function catRows() {
       if (!cats.length) return '<div class="muted">Belum ada tanda.</div>';
       return cats.map(function (c) { return '<label><input type="checkbox" data-k="' + c.k + '"' + (SH.cats[c.k] ? ' checked' : '') + '><i class="tdd" style="background:' + c.col + '"></i>' + esc(c.name) + ' <span class="muted">(' + c.n + ')</span></label>'; }).join('');
     }
-    function noCat() { return n > 0 && !cats.some(function (c) { return SH.cats[c.k]; }); }
+    function noCat() { return n > 0 && (!cats.some(function (c) { return SH.cats[c.k]; }) || !dts.some(function (x) { return SH.dates[x.d]; })); }
     openSheet('<div class="grab"></div><div class="st">BAGIKAN ' + (many ? list.length + ' BLOK' : 'BLOK ' + esc(String(list[0].name)).toUpperCase()) + '</div>' +
       '<div class="muted" style="margin-bottom:8px">' + n + ' tanda' + (n ? '' : ' · blok akan dicetak tanpa tanda') + (nNoCat ? ' · ' + nNoCat + ' tanpa kategori tidak ikut PDF' : '') + '</div><div class="muted" style="margin-bottom:8px">PDF: satu halaman per kategori di tiap blok</div>' +
       '<div id="shPvw"><canvas id="shCv"></canvas><div id="shPm" class="muted">Menyusun preview…</div></div><div class="muted" id="shHint" style="text-align:center;margin:4px 0 0">Ketuk gambar untuk mengubah tampilan</div>' +
       '<div id="shW" style="display:none"></div>' +
-      '<div class="h" style="margin-top:10px">FORMAT (PILIH SATU)</div><div class="seg" id="shF"><button data-v="pdf"' + (SH.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-v="kml"' + (SH.fmt === 'kml' ? ' class="on"' : '') + '>KML</button></div>' +
+      '<div class="h" style="margin-top:10px">FORMAT (PILIH SATU)</div><div class="seg" id="shF"><button data-v="pdf"' + (SH.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-v="kml"' + (SH.fmt === 'kml' ? ' class="on"' : '') + '>KML</button><button data-v="geojson"' + (SH.fmt === 'geojson' ? ' class="on"' : '') + '>GeoJSON</button></div>' +
+      '<label id="shRw" class="plist" style="margin-top:8px;display:' + (SH.fmt === 'pdf' ? 'block' : 'none') + '"><input type="checkbox" id="shRc"' + (SH.rinci ? ' checked' : '') + '> Sertakan rincian (tabel kategori, tanggal, luas)</label>' +
       '<div class="h" style="margin-top:10px">JUDUL TAMBAHAN (BOLEH KOSONG)</div><input type="text" id="shT" maxlength="60" placeholder="Kosong = hanya nama blok" value="' + esc(SH.title) + '" style="width:100%">' +
       '<div class="h" style="margin-top:10px">KATEGORI YANG DIBAGIKAN</div><div class="plist" id="shCats">' + catRows() + '</div>' +
+      '<div class="h" style="margin-top:10px">TANGGAL YANG DIBAGIKAN</div><div class="plist" id="shDts">' + (dts.length ? dateRows() : '<div class="muted">Belum ada tanggal.</div>') + '</div>' +
       '<div id="shLt"><div class="h" style="margin-top:10px">LATAR PDF</div><div class="seg" id="shL"><button data-v="sat"' + (SH.latar !== 'sk' ? ' class="on"' : '') + '>Satelit</button><button data-v="sk"' + (SH.latar === 'sk' ? ' class="on"' : '') + '>Sketsa</button></div><div id="shGy" style="display:' + (SH.latar === 'sk' ? 'block' : 'none') + '"><div class="h" style="margin-top:8px">TANDA DI SKETSA</div><div class="seg" id="shG"><button data-v="warna"' + (SH.gaya !== 'arsir' ? ' class="on"' : '') + '>Warna</button><button data-v="arsir"' + (SH.gaya === 'arsir' ? ' class="on"' : '') + '>Arsiran</button></div></div></div>' +
       '<div id="shEd" style="display:none">' +
       '<div id="shP"><div class="h" style="margin-top:10px">SEKELILING BLOK DI PDF</div><div class="seg" id="shB">' + [10, 15, 20].map(function (v) { return '<button data-v="' + v + '"' + (HA.tandaBufM() === v ? ' class="on"' : '') + '>' + v + ' m</button>'; }).join('') + '</div>' +
@@ -460,9 +467,9 @@
       '<button class="btn" id="shPv" style="width:100%;margin-top:12px">Preview layar penuh</button><button class="btn pri" id="shGo" style="width:100%;margin-top:8px;height:52px">Kirim</button><button class="btn" id="shX" style="width:100%;margin-top:8px">Tutup</button>');
     function seg(id, f) { $(id).onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-v]'); if (!b) return; f(b.getAttribute('data-v')); $(id).querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); }; }
     function grab() { SH.title = $('shT').value.trim(); SH.nama = $('shN').checked; SH.nilai = $('shV').checked; }
-    function pitems(b) { return selItems(b, pre).filter(function (it) { return SH.cats[HA.tandaCatKey(it)]; }); }
+    function pitems(b) { return selItems(b, pre).filter(function (it) { return SH.cats[HA.tandaCatKey(it)] && SH.dates[HA.tandaU.dateOf(it)]; }); }
     function groupsOf(ls) { return ls.map(function (b) { return { title: SH.title, items: pitems(b), blk: b }; }); }
-    function opts() { return { nama: SH.nama, nilai: SH.nilai, fs: SH.fs, sketsa: SH.latar === 'sk', hatch: SH.latar === 'sk' && SH.gaya === 'arsir' }; }
+    function opts() { return { rincian: SH.rinci, nama: SH.nama, nilai: SH.nilai, fs: SH.fs, sketsa: SH.latar === 'sk', hatch: SH.latar === 'sk' && SH.gaya === 'arsir' }; }
     function pdfBytes() { grab(); return BT.buildPdf(groupsOf(list), opts()); }
     // preview mini: halaman pertama saja
     function thumb() {
@@ -496,13 +503,15 @@
         };
       });
     }
-    function sync() { $('shLt').style.display = SH.fmt === 'pdf' ? '' : 'none'; $('shEd').querySelector('#shP').style.display = SH.fmt === 'pdf' ? '' : 'none'; $('shK').style.display = SH.fmt === 'kml' ? '' : 'none'; $('shPv').style.display = SH.fmt === 'pdf' ? '' : 'none'; $('shPvw').style.display = $('shHint').style.display = SH.fmt === 'pdf' ? '' : 'none'; if (SH.fmt !== 'pdf') $('shEd').style.display = 'none'; }
+    function sync() { $('shLt').style.display = SH.fmt === 'pdf' ? '' : 'none'; $('shEd').querySelector('#shP').style.display = SH.fmt === 'pdf' ? '' : 'none'; $('shK').style.display = SH.fmt !== 'pdf' ? '' : 'none'; $('shK').textContent = SH.fmt === 'geojson' ? 'GeoJSON berisi batas blok dan semua tanda yang dipilih (titik, garis, area) lengkap dengan keterangan: kategori, sub, tanggal, waktu, catatan, luas atau panjang.' : 'KML berisi batas blok dan tanda persis di dalam blok, tanpa tambahan sekeliling.'; $('shRw').style.display = SH.fmt === 'pdf' ? 'block' : 'none'; $('shPv').style.display = SH.fmt === 'pdf' ? '' : 'none'; $('shPvw').style.display = $('shHint').style.display = SH.fmt === 'pdf' ? '' : 'none'; if (SH.fmt !== 'pdf') $('shEd').style.display = 'none'; }
     seg('shF', function (v) { SH.fmt = v; sync(); warn(); thumb(); });
     seg('shB', function (v) { S.settings.tdBuf = +v; HA.saveSettings(); warned = false; warn(); thumb(); });
     seg('shS', function (v) { SH.fs = v; thumb(); });
     seg('shL', function (v) { SH.latar = v; S.settings.shLatar = v; HA.saveSettings(); $('shGy').style.display = v === 'sk' ? 'block' : 'none'; warned = false; warn(); thumb(); });
     seg('shG', function (v) { SH.gaya = v; S.settings.shGaya = v; HA.saveSettings(); thumb(); });
     $('shN').onchange = $('shV').onchange = thumb;
+    $('shRc').onchange = function () { SH.rinci = this.checked; S.settings.shRinci = SH.rinci; HA.saveSettings(); thumb(); };
+    $('shDts').onchange = function (e) { var d = e.target.getAttribute && e.target.getAttribute('data-d'); if (d) { SH.dates[d] = e.target.checked; thumb(); } };
     $('shT').oninput = lazyThumb;
     $('shCats').onchange = function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-k'); if (k) { SH.cats[k] = e.target.checked; thumb(); } };
     $('shPvw').onclick = function () { var ed = $('shEd'), open = ed.style.display === 'none'; ed.style.display = open ? '' : 'none'; $('shHint').textContent = open ? 'Ketuk gambar lagi untuk menutup pengaturan' : 'Ketuk gambar untuk mengubah tampilan'; if (open) { try { ed.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (x) {} } };
@@ -514,10 +523,27 @@
       var all = []; groups.forEach(function (g) { g.items.forEach(function (i) { all.push(i); }); });
       return HA.tandaKml(all, SH.title || def, groups);
     }
+    function geoText() {
+      grab(); var feats = [];
+      list.forEach(function (b) {
+        var rg = b.pts.map(function (p) { return [+(+p[1]).toFixed(7), +(+p[0]).toFixed(7)]; }); rg.push(rg[0]);
+        feats.push({ type: 'Feature', properties: { jenis: 'batas_blok', blok: String(b.name), luas_ha: +HzBlok.areaHa(b.pts).toFixed(3) }, geometry: { type: 'Polygon', coordinates: [rg] } });
+        pitems(b).forEach(function (it) {
+          if (!it.pts || !it.pts.length) return;
+          var inf = HA.tandaCatInfo(it), st = HA.tandaStat(it) || {}, cc = it.pts.map(function (p) { return [+(+p[1]).toFixed(7), +(+p[0]).toFixed(7)]; });
+          var pr = { jenis: 'tanda', blok: String(b.name), kategori: inf.name, sub: (function () { var t = (HA.tandaTabName && HA.tandaTabName(it)) || '', i = t.indexOf(' / '); return i >= 0 ? t.slice(i + 3) : ''; })(), tanggal: HA.tandaU.dateOf(it), waktu: it.wk || '', catatan: it.note || '', warna: inf.col, tipe: it.t === 'pt' ? 'titik' : (it.t === 'ln' ? 'garis' : 'area') };
+          if (it.t === 'pg') pr.luas_ha = +(+st.ha || 0).toFixed(3); else if (it.t === 'ln') pr.panjang_m = Math.round(+st.m || 0);
+          var g = it.t === 'pt' ? { type: 'Point', coordinates: cc[0] } : (it.t === 'ln' ? { type: 'LineString', coordinates: cc } : { type: 'Polygon', coordinates: [cc.concat([cc[0]])] });
+          feats.push({ type: 'Feature', properties: pr, geometry: g });
+        });
+      });
+      return JSON.stringify({ type: 'FeatureCollection', name: SH.title || def, features: feats });
+    }
     $('shX').onclick = function () { clearTimeout(tmr); seq++; closeSheet(); };
-    $('shPv').onclick = function () { if (noCat()) { toast('Centang minimal satu kategori'); return; } var bt = $('shPv'); bt.disabled = true; pdfBytes().then(function (b) { bt.disabled = false; HA.pdfPreview(b, function () { HA.saveFile(fname('pdf', true), btoa(b), 'application/pdf'); }); }).catch(function () { bt.disabled = false; toast('Gagal menyusun PDF'); }); };
+    $('shPv').onclick = function () { if (noCat()) { toast('Centang minimal satu kategori dan satu tanggal'); return; } var bt = $('shPv'); bt.disabled = true; pdfBytes().then(function (b) { bt.disabled = false; HA.pdfPreview(b, function () { HA.saveFile(fname('pdf', true), btoa(b), 'application/pdf'); }); }).catch(function () { bt.disabled = false; toast('Gagal menyusun PDF'); }); };
     $('shGo').onclick = function () {
-      if (noCat()) { toast('Centang minimal satu kategori'); return; }
+      if (noCat()) { toast('Centang minimal satu kategori dan satu tanggal'); return; }
+      if (SH.fmt === 'geojson') { HA.saveFile(fname('geojson', true), HA.textB64(geoText()), 'application/geo+json'); return; }
       if (SH.fmt !== 'pdf') { HA.saveFile(fname('kml', true), HA.textB64(kmlText()), 'application/vnd.google-earth.kml+xml'); return; }
       if (miss.length && !warned && SH.latar !== 'sk') { warned = true; toast('Citra belum lengkap. Unduh dulu, atau ketuk Bagikan lagi untuk lanjut'); return; }
       var bt = $('shGo'); bt.disabled = true; bt.textContent = 'Menyusun PDF…';

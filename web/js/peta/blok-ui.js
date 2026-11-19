@@ -504,16 +504,20 @@
     var mode = S.settings.rowMode || 'datar', id = HA.DM.popSeq, el = document.createElement('div');
     el.className = 'blkpop' + (HA.DM.bpFold ? ' fold' : ''); HA.map.getContainer().appendChild(el); HA.DM.pop = el; L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);
     var PEN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16 5l3 3L8 19z"/></svg>';
-    el.innerHTML = '<div class="bh"><b>' + esc(b.name) + '<small class="bha"> · ' + nf(blkHa(b), 2) + ' ha</small></b><button type="button" class="ib2" id="bpE" aria-label="Edit blok">' + PEN + '</button>' + '' + '<button type="button" class="ib2" id="bpHi" aria-label="Riwayat blok"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></button>' + '<button type="button" class="ib2" id="bpT" aria-label="Lipat atau buka panel" aria-expanded="' + (HA.DM.bpFold ? 'false' : 'true') + '"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button><button type="button" class="ib2" id="bpX" aria-label="Tutup">✕</button></div>' +
+    el.innerHTML = '<div class="bh"><b>' + esc(b.name) + '<small class="bha"> · ' + nf(blkHa(b), 2) + ' ha</small></b><button type="button" class="ib2" id="bpE" aria-label="Edit blok">' + PEN + '</button>' + '' + '<button type="button" class="ib2" id="bpHi" aria-label="Riwayat blok"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></button>' + '<button type="button" class="ib2" id="bpSh" aria-label="Bagikan blok"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></button><button type="button" class="ib2" id="bpX" aria-label="Tutup">✕</button></div>' +
       '<div class="bs" id="bpS"></div><div id="bpBody">' +
       '<div class="bl">' + nf(blkHa(b), 2) + ' ha' + (b.luasCat ? ' (tercatat ' + nf(+b.luasCat, 2) + ')' : '') + ' · ' + (b.dir == null ? 'arah row belum diatur' : 'arah ' + Math.round(b.dir) + '° · jarak ' + nf(blkSp(b), 2) + ' m') + ' · <small>' + blkStatusText(b) + '</small></div>' +
       '<div class="bl" id="bpR">Menghitung…</div>' + (mode === 'kontur' ? '<div class="bl" id="bpA"></div><div class="bl" id="bpD"></div><div class="bl" id="bpH"></div><div class="bl" id="bpL"></div>' : '') + (b.note ? '<div class="bl"><small>' + esc(b.note) + '</small></div>' : '') +
       (mode === 'kontur' ? '<div class="tseg" id="bpK"><button type="button" data-k="1">Rapat</button><button type="button" data-k="2">Sedang</button><button type="button" data-k="3">Jarang</button></div><div class="tseg"><button type="button" id="bpG">Edit garis pedoman</button>' + (b.guide ? '<button type="button" id="bpG0">Atur ulang pedoman</button>' : '') + '</div>' : '') + '</div>';
     $('bpX').onclick = function () { closeBlockPop(); };
-    $('bpT').onclick = function () { HA.DM.bpFold = !HA.DM.bpFold; applyFold(); };
+    function foldOpen(fn) { HA.DM.bpFold = true; applyFold(); fn(); var h = HA.onSheetClose; HA.onSheetClose = function () { HA.DM.bpFold = false; applyFold(); if (h) h(); }; }
+    $('bpSh').onclick = function () {
+      if (!b.conf) { toast('Hanya blok terkonfirmasi yang bisa dibagikan'); return; }
+      foldOpen(function () { if (HA.BT && HA.BT.share) HA.BT.share([b]); });
+    };
     function updSum() { var e = $('bpS'); if (e) e.textContent = [sumR, sumD].filter(Boolean).join(' · '); }
     $('bpE').onclick = function () { openBlockEdit(b); };
-    $('bpHi').onclick = function () { if (HA.BRiw) HA.BRiw.open(b); };
+    $('bpHi').onclick = function () { if (HA.BRiw) foldOpen(function () { HA.BRiw.open(b); }); };
     if ($('bpK')) {
       $('bpK').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', +x.getAttribute('data-k') === kDens()); });
       $('bpK').onclick = function (e) { var k = +(e.target.getAttribute && e.target.getAttribute('data-k')); if (!k) return; S.settings.kDens = k; saveSettings(); drawRows(); openBlockPop(b); };
@@ -557,14 +561,14 @@
   }
   // penyunting titik poligon / garis
   HA.NEON = '#00D4FF';
-  function editPoly(pts, closed, done) {
-    var work = pts.map(function (p) { return p.slice(); }), mode = 'geser', g = L.layerGroup().addTo(HA.map), bar = document.createElement('div'), under = null, shape = null, min = closed ? 3 : 2;
+  function editPoly(pts, closed, done, opt) {
+    var work = pts.map(function (p) { return p.slice(); }), mode = 'geser', g = L.layerGroup().addTo(HA.map), bar = document.createElement('div'), under = null, shape = null, min = closed ? 3 : 2, curve = !!(closed && !(opt && opt.noCurve)), sel = {}, rad = 10, hist = [];
     if (HA.DM.closePanel) HA.DM.closePanel(); if (HA.closeLinePop) HA.closeLinePop(); if ($('sheet').classList.contains('on')) { HA.onSheetClose = null; closeSheet(); }
     HA.DM.edit = true; HA.drawRows(); bar.className = 'lkbar bot';
-    bar.innerHTML = '<span id="epT"></span><div class="tseg" style="flex:1 1 100%;margin:0"><button type="button" data-m="geser">Geser</button><button type="button" data-m="tambah">+ Titik</button><button type="button" data-m="hapus">− Titik</button></div><button type="button" id="epNo">Batal</button><button type="button" id="epOk" class="pri">Simpan</button>';
+    bar.innerHTML = '<span id="epT"></span><div class="tseg" style="flex:1 1 100%;margin:0"><button type="button" data-m="geser">Geser</button><button type="button" data-m="tambah">+ Titik</button><button type="button" data-m="hapus">− Titik</button>'+(curve?'<button type="button" data-m="lengkung">Lengkung</button>':'')+'</div><div id="epLk" style="display:none;flex:1 1 100%;gap:6px;align-items:center;flex-wrap:wrap"><button type="button" data-r="5">5 m</button><button type="button" data-r="10">10 m</button><button type="button" data-r="20">20 m</button><input type="number" id="epR" min="1" max="200" value="10" style="width:64px"> m <button type="button" id="epAp" class="pri">Terapkan</button><button type="button" id="epUn">Urung</button></div><button type="button" id="epNo">Batal</button><button type="button" id="epOk" class="pri">Simpan</button>';
     HA.map.getContainer().appendChild(bar); L.DomEvent.disableClickPropagation(bar);
-    var hint = { geser: 'Seret titik untuk menggeser posisinya', tambah: 'Ketuk dekat sisi untuk menambah titik', hapus: 'Ketuk sebuah titik untuk menghapusnya' };
-    function info() { $('epT').textContent = work.length + ' titik · ' + hint[mode]; bar.querySelectorAll('.tseg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-m') === mode); }); }
+    var hint = { geser: 'Seret titik untuk menggeser posisinya', tambah: 'Ketuk dekat sisi untuk menambah titik', hapus: 'Ketuk sebuah titik untuk menghapusnya', lengkung: 'Ketuk sudut yang mau dilengkungkan, atur jari-jari, lalu Terapkan' };
+    function info() { var nsel = Object.keys(sel).length; $('epT').textContent = work.length + ' titik · ' + hint[mode] + (mode === 'lengkung' ? ' (' + nsel + ' dipilih)' : ''); $('epLk').style.display = mode === 'lengkung' ? 'flex' : 'none'; bar.querySelectorAll('.tseg button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-m') === mode); }); }
     function ico() { return L.divIcon({ className: '', html: '<div class="vx"></div>', iconSize: [26, 26] }); }
     function rebuild() {
       g.clearLayers();
@@ -573,9 +577,11 @@
       shape = (closed ? L.polygon(work, o2) : L.polyline(work, o2)).addTo(g);
       work.forEach(function (p, i) {
         var mk = L.marker(p, { draggable: mode === 'geser', icon: ico(), zIndexOffset: 500 }).addTo(g);
+        if (mode === 'lengkung' && sel[i]) { var el = mk.getElement && mk.getElement(); if (el) el.firstChild.style.background = '#FFB020'; else mk.on('add', function () { mk.getElement().firstChild.style.background = '#FFB020'; }); }
         mk.on('drag', function (e) { var ll = e.target.getLatLng(); work[i] = [ll.lat, ll.lng]; shape.setLatLngs(work); under.setLatLngs(work); });
         mk.on('click', function (e) {
           L.DomEvent.stop(e);
+          if (mode === 'lengkung') { if (sel[i]) delete sel[i]; else sel[i] = 1; rebuild(); return; }
           if (mode !== 'hapus') return;
           if (work.length <= min) { toast('Minimal ' + min + ' titik, tidak bisa dihapus lagi'); return; }
           work.splice(i, 1); rebuild();
@@ -594,8 +600,37 @@
       if (best < 0) return;
       work.splice(best + 1, 0, [e.latlng.lat, e.latlng.lng]); rebuild();
     }
+    function fillet() {
+      var n = work.length, ref = work[0], kx = 111320 * Math.cos(ref[0] * Math.PI / 180), ky = 110540;
+      function xy(p) { return [(p[1] - ref[1]) * kx, (p[0] - ref[0]) * ky]; }
+      function ll(v) { return [ref[0] + v[1] / ky, ref[1] + v[0] / kx]; }
+      var out = [], cnt = 0;
+      work.forEach(function (p, i) {
+        if (!sel[i]) { out.push(p); return; }
+        var a = xy(work[(i + n - 1) % n]), c = xy(p), d = xy(work[(i + 1) % n]);
+        var u = [a[0] - c[0], a[1] - c[1]], v = [d[0] - c[0], d[1] - c[1]], lu = Math.hypot(u[0], u[1]), lv = Math.hypot(v[0], v[1]);
+        if (lu < 0.5 || lv < 0.5) { out.push(p); return; }
+        var cs = (u[0] * v[0] + u[1] * v[1]) / (lu * lv), th = Math.acos(Math.max(-1, Math.min(1, cs)));
+        if (th > 3.1) { out.push(p); return; }
+        var t = Math.min(rad / Math.tan(th / 2), lu * 0.45, lv * 0.45), p1 = [c[0] + u[0] / lu * t, c[1] + u[1] / lu * t], p2 = [c[0] + v[0] / lv * t, c[1] + v[1] / lv * t], k, N = 7;
+        for (k = 0; k <= N; k++) { var s1 = k / N, q = [(1 - s1) * (1 - s1) * p1[0] + 2 * (1 - s1) * s1 * c[0] + s1 * s1 * p2[0], (1 - s1) * (1 - s1) * p1[1] + 2 * (1 - s1) * s1 * c[1] + s1 * s1 * p2[1]]; out.push(ll(q)); }
+        cnt++;
+      });
+      return cnt ? out : null;
+    }
+    bar.querySelector('#epLk').onclick = function (e) {
+      var r = e.target.getAttribute && e.target.getAttribute('data-r');
+      if (r) { rad = +r; $('epR').value = r; return; }
+      if (e.target.id === 'epUn') { if (hist.length) { work = hist.pop(); sel = {}; rebuild(); } else toast('Tidak ada yang diurungkan'); return; }
+      if (e.target.id === 'epAp') {
+        rad = Math.max(1, Math.min(200, +$('epR').value || 10));
+        if (!Object.keys(sel).length) { toast('Pilih sudut dulu'); return; }
+        var res = fillet(); if (!res) { toast('Sudut terlalu lurus / pendek'); return; }
+        hist.push(work.map(function (p) { return p.slice(); })); work = res; sel = {}; rebuild();
+      }
+    };
     HA.map.on('click', onClick);
-    bar.querySelector('.tseg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-m'); if (m) { mode = m; rebuild(); } };
+    bar.querySelector('.tseg').onclick = function (e) { var m = e.target.getAttribute && e.target.getAttribute('data-m'); if (m) { mode = m; sel = {}; rebuild(); } };
     function end(res) { HA.map.off('click', onClick); g.remove(); bar.remove(); HA.DM.edit = false; done(res); HA.drawRows(); }
     $('epOk').onclick = function () { end(work.map(function (p) { return [+p[0].toFixed(6), +p[1].toFixed(6)]; })); };
     $('epNo').onclick = function () { end(null); };

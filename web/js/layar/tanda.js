@@ -1082,7 +1082,7 @@
     });
     tord.sort(function (a, b) { var p = trow[a], q = trow[b]; return (p.ord - q.ord) || (p.name < q.name ? -1 : (p.name > q.name ? 1 : 0)) || (p.date < q.date ? -1 : (p.date > q.date ? 1 : 0)); });
     var custom = asc((ttlText || '').trim()), ttl = blk ? 'Blok ' + asc(blk.name) : (custom || 'Marking HZ Trip'), subT = blk ? [asc(catName || ''), custom].filter(Boolean).join(' \u00B7 ') : '';
-    var HH = subT ? 40 : 26, TRH = Math.max(14, Math.min(26, 330 / (tord.length + 1))), TH = TRH * (tord.length + 1) + 16;
+    var HH = subT ? 40 : 26, TRH = Math.max(14, Math.min(26, 330 / (tord.length + 1))), noTbl = o.rincian === false, TH = noTbl ? 16 : TRH * (tord.length + 1) + 16;
     var ya = M + TH + 10, yb = PH - M - HH, fw = PW - 2 * M, fh = yb - ya, sc = Math.min(fw / (mw * 1.1), fh / (mh * 1.1)), offx = (fw - mw * sc) / 2, offy = (fh - mh * sc) / 2;
     var X = function (lng) { return M + offx + (lng - mb[1]) * kx * sc; }, Y = function (lat) { return ya + offy + (lat - mb[0]) * ky * sc; };
     var lngAt = function (x) { return mb[1] + (x - M - offx) / (kx * sc); }, latAt = function (y) { return mb[0] + (y - ya - offy) / (ky * sc); };
@@ -1155,6 +1155,7 @@
     var fsT = Math.min(10, TRH * 0.5 + 1.5), i2;
     function cut(t, n) { t = asc(t); return t.length > n ? t.slice(0, Math.max(1, n - 1)) + '.' : t; }
     function txc(x, yb0, t, bold, fz) { c.push('0 g BT /' + (bold ? 'F2' : 'F1') + ' ' + f2(fz) + ' Tf ' + f2(x) + ' ' + f2(yb0) + ' Td (' + pe(t) + ') Tj ET'); }
+    if (!noTbl) {
     c.push('1 g ' + f2(M) + ' ' + f2(M) + ' ' + f2(W) + ' ' + f2(TH) + ' re f');
     c.push('0.9 g ' + f2(M) + ' ' + f2(ty0 - TRH) + ' ' + f2(W) + ' ' + f2(TRH) + ' re f');
     c.push('0 G 0.7 w ' + f2(M) + ' ' + f2(ty0 - TRH * ncR) + ' ' + f2(W) + ' ' + f2(TRH * ncR) + ' re S');
@@ -1174,6 +1175,7 @@
       txc(bnd[4] + 4, tb0, r.lm ? ribu(r.lm) : '-', false, fsT);
       if (anyPL) txc(bnd[5] + 4, tb0, cut((r.pt ? r.pt + ' titik' : '') + (r.pt && r.m ? ', ' : '') + (r.m ? fmtM(r.m) : '') || '-', 16), false, fsT);
     });
+    }
     txc(M, M + 5, 'Dicetak ' + tgl + ' | HZ Trip ' + ver, false, 8);
     var cs = add(stream('', c.join('\n')));
     var corners = [[M, ya], [M, yb], [PW - M, yb], [PW - M, ya]], lp = [0, 0, 0, 1, 1, 1, 1, 0], gp = [];
@@ -1227,7 +1229,7 @@
       if (o.meta) o.meta.sumPages = np;
       return ids;
     }
-    var kids = (o.summary && groups.length > 1 ? sumPages() : []).concat(groups.map(function (g) { return page(g.items, g.title, g.blk, g.img, g.cat); }));
+    var kids = (o.summary && groups.length > 1 && o.rincian !== false ? sumPages() : []).concat(groups.map(function (g) { return page(g.items, g.title, g.blk, g.img, g.cat); }));
     objs[cat - 1] = '<< /Type /Catalog /Pages ' + pages + ' 0 R >>';
     objs[pages - 1] = '<< /Type /Pages /Count ' + kids.length + ' /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] >>';
     var out = '%PDF-1.7\n%\xE2\xE3\xCF\xD3\n', offs = [];
