@@ -130,6 +130,7 @@
       search: ic('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>'),
       daftar: ic('<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>'),
       isi: ic('<path d="M5 3l7 7-6 9-3-3 9-13z"/><path d="M19 14c1.5 2 2 3 2 4a2 2 0 01-4 0c0-1 .5-2 2-4z"/>'),
+      walk: ic('<path d="M13.5 5.5a2 2 0 100-4 2 2 0 000 4zM9.8 8.9L7 23M10.5 14l2.5 2.5V23M14 9l3 4 3 .5M9.8 8.9l3.2-1"/>'),
       measure: ic('<path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/>'),
       batDesa: ic('<path d="M4 7l5-3 6 3 5-2v12l-5 2-6-3-5 3z"/><path d="M9 4v13M15 7v13"/>'),
       batKec: ic('<path d="M3 5h18v14H3z"/><path d="M3 12h18M12 5v14"/>'),
@@ -144,7 +145,7 @@
     function tile(id, label, st, badge) { return '<button type="button" class="tile' + (st ? ' st' : '') + '" data-t="' + id + '">' + IC[id] + '<span>' + label + '</span>' + (badge ? '<i class="tbd" id="bd_' + id + '"></i>' : '') + '</button>'; }
     var TILES = [['search', 'Cari'], ['daftar', 'Daftar tanda'], ['isi', 'Ketuk isi', 1], ['contour', 'Kontur', 1], ['slopeLayer', 'Lereng', 1], ['hach', 'Arsiran', 1], ['v3d', '3D', 1], ['slopeTap', 'Info lereng', 1], ['prof', 'Profil', 1],
       ['src', 'Sumber DEM', 1], ['blkOn', 'Blok', 1, 1], ['rowOn', 'Arah row', 1], ['wlOn', 'Water lock', 1], ['lakesOn', 'Danau & drainase', 1, 1], ['linesOn', 'Jalan bantu', 1], ['batDesa', 'Batas', 1], ['play', 'Putar', 1],
-      ['draw', 'Buat baru'], ['fill', 'Isi blok'], ['measure', 'Ukur']];
+      ['draw', 'Buat baru'], ['fill', 'Isi blok'], ['measure', 'Ukur'], ['walk', 'Walking']];
     var RARE = { v3d: 1, slopeLayer: 1, hach: 1, slopeTap: 1, prof: 1 };
     function tileShown(id) { var t = S.settings.tileShow || {}; if (t[id] != null) return !!t[id]; return !!(id === 'slopeLayer' ? S.settings.slopeLayer : id === 'hach' ? S.settings.hach : false); }
     HA.DM.rare = [['v3d', '3D'], ['slopeLayer', 'Kemiringan (Lereng)'], ['hach', 'Arsiran'], ['slopeTap', 'Info lereng'], ['prof', 'Profil']]; HA.DM.tileShown = tileShown;
@@ -157,7 +158,7 @@
       if (!(HA.KM && HA.KM.mode === 'kategori')) out = out.filter(function (t) { return t[0] !== 'isi'; });
       var si = -1; out.forEach(function (t, i) { if (t[0] === 'search') si = i; }); if (si > 0) out.unshift(out.splice(si, 1)[0]);
       if (HA.KM && HA.KM.mode === 'kategori') { // mode Kategori: Cari lalu alat tanda di depan
-        var fr = ['search', 'daftar', 'isi', 'measure', 'draw', 'fill'], front = [], rest = [];
+        var fr = ['search', 'daftar', 'isi', 'measure', 'walk', 'draw', 'fill'], front = [], rest = [];
         out.forEach(function (t) { (fr.indexOf(t[0]) >= 0 ? front : rest).push(t); });
         front.sort(function (a, b) { return fr.indexOf(a[0]) - fr.indexOf(b[0]); });
         out = front.concat(rest);
@@ -253,6 +254,7 @@
       if (id === 'search') { closeP(); if (HA.KM && HA.KM.openSearch) HA.KM.openSearch(); return; }
       if (id === 'measure' || id === 'draw' || id === 'fill') { if (HA.KM) HA.KM.fillTap = false; }
       if (id === 'measure') { closeP(); HA.measureStart(); return; }
+      if (id === 'walk') { closeP(); HA.walkStart(); return; }
       if (id === 'fill') { closeP(); HA.fillStart(); return; }
       if (id === 'draw') { if (HA.pbLocked('Tutup Putar dulu untuk menggambar')) return; closeP(); drawStart(); return; }
       if (id === 'detect') { closeP(); S.dpTab = 'blok'; go('data'); return; }
