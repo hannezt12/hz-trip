@@ -536,6 +536,9 @@
           var g = it.t === 'pt' ? { type: 'Point', coordinates: cc[0] } : (it.t === 'ln' ? { type: 'LineString', coordinates: cc } : { type: 'Polygon', coordinates: [cc.concat([cc[0]])] });
           feats.push({ type: 'Feature', properties: pr, geometry: g });
         });
+        (HA.titikOf ? HA.titikOf(b.id) : []).forEach(function (t) {
+          feats.push({ type: 'Feature', properties: { jenis: 'tanda_titik', blok: String(b.name), label: t.h + '.' + t.no, pola: t.p, warna: t.c, catatan: t.note || '', tanggal: t.date, jarak_tepi_m: t.je }, geometry: { type: 'Point', coordinates: [+t.ll[1].toFixed(7), +t.ll[0].toFixed(7)] } });
+        });
       });
       return JSON.stringify({ type: 'FeatureCollection', name: SH.title || def, features: feats });
     }

@@ -63,8 +63,9 @@
     var a = document.createElement('div'); a.className = 'wkAcc'; a.innerHTML = '<b id="wkA">Akurasi …</b><small id="wkI"></small>';
     map.getContainer().appendChild(a); WK.acc = a;
     var bar = document.createElement('div'); bar.className = 'lkbar bot';
-    bar.innerHTML = '<span id="nbT"></span><button type="button" id="wkP">Jeda</button><button type="button" id="wkU">Urung 10 m</button><button type="button" id="wkS">Layar</button><button type="button" class="pri" id="wkOk">Selesai</button>';
+    bar.innerHTML = '<span id="nbT"></span>' + (HA.titikActive && HA.titikActive() ? '<button type="button" id="wkT">+ Tanda</button>' : '') + '<button type="button" id="wkP">Jeda</button><button type="button" id="wkU">Urung 10 m</button><button type="button" id="wkS">Layar</button><button type="button" class="pri" id="wkOk">Selesai</button>';
     map.getContainer().appendChild(bar); L.DomEvent.disableClickPropagation(bar); WK.bar = bar;
+    if ($('wkT')) $('wkT').onclick = function () { var c = WK.cur; if (!c) { toast('Posisi belum didapat'); return; } if (c.acc > 30) toast('Akurasi ±' + Math.round(c.acc) + ' m kurang baik'); if (HA.titikAdd([c.lat, c.lng])) WK.tk = (WK.tk || 0) + 1; };
     $('wkP').onclick = function () { if (WK.w.isPaused()) { WK.w.resume(); this.textContent = 'Jeda'; } else { WK.w.pause(); this.textContent = 'Lanjut'; } draw(); };
     $('wkU').onclick = function () { WK.w.undo(10); draw(); };
     $('wkS').onclick = function () { WK.screen = !WK.screen; this.classList.toggle('on', WK.screen); HA.Plug.keepScreen({ on: WK.screen }).catch(function () {}); toast(WK.screen ? 'Layar tetap menyala' : 'Layar boleh mati (hemat baterai)'); };
@@ -152,7 +153,8 @@
   // ---------- selesai: baca konteks ----------
   function finish() {
     var P = WK.w.points().map(function (p) { return [+p.lat.toFixed(6), +p.lng.toFixed(6)]; });
-    if (P.length < 2) { toast('Jalur masih terlalu pendek'); return; }
+    var tk = WK.tk || 0;
+    if (P.length < 2) { if (tk) { cleanup(); toast('Walking selesai · ' + tk + ' tanda titik'); return; } toast('Jalur masih terlalu pendek'); return; }
     cleanup();
     var A = P[0], Z = P[P.length - 1], pr = prj(A), dAZ = Math.hypot.apply(null, [pr.xy(Z)[0], pr.xy(Z)[1]]);
     // 1. tertutup (kembali ke awal)
@@ -165,6 +167,7 @@
       if (edgeDist(b, A) <= TOL && edgeDist(b, Z) <= TOL && dAZ > TOL && (pip(mid, b.pts) || pip(P[Math.floor(P.length / 3)], b.pts))) hit = b;
     });
     if (hit) { splitCase(hit, P); return; }
+    if (tk) { toast('Walking selesai · ' + tk + ' tanda titik'); return; }
     pointCase(P, null);
   }
   function closedCase(P) {
@@ -272,7 +275,7 @@
   function drafList() {
     var a = drafs();
     pvShow(a.map(function (x) { return { ring: x.ring, label: x.label, draf: true }; }));
-    openSheet('<div class="grab"></div><div class="st">Draf Walking (' + a.length + ')</div><div id="wkDl"></div><div class="row" style="margin-top:10px"><button class="btn" id="wkDx" style="flex:1;height:48px">Tutup</button><button class="btn pri" id="wkDn" style="flex:1;height:48px">Mulai Walking</button></div>');
+    openSheet('<div class="grab"></div>' + (HA.listTabs ? HA.listTabs('drf') : '') + '<div class="st">Draf Walking (' + a.length + ')</div><div id="wkDl"></div><div class="row" style="margin-top:10px"><button class="btn" id="wkDx" style="flex:1;height:48px">Tutup</button><button class="btn pri" id="wkDn" style="flex:1;height:48px">Mulai Walking</button></div>');
     HA.onSheetClose = pvClear;
     $('wkDx').onclick = function () { HA.onSheetClose = null; pvClear(); closeSheet(); };
     $('wkDn').onclick = function () { HA.onSheetClose = null; pvClear(); closeSheet(); start(); };
@@ -301,7 +304,8 @@
     };
   }
 
-  HA.walkStart = function () { if (drafs().length && !WK) drafList(); else start(); };
+  HA.walkStart = function () { start(); };
+  HA.drafOpen = drafList; HA.walkPvClear = pvClear;
   HA.walkActive = function () { return !!WK; };
   HA._wk = { analyze: function (P) { return { closed: P.length >= 4 && Math.hypot.apply(null, prj(P[0]).xy(P[P.length - 1])) <= TOL }; }, finishWith: function (P) { WK = { w: { points: function () { return P.map(function (p) { return { lat: p[0], lng: p[1] }; }); } }, timer: null, g: L.layerGroup(), acc: null, bar: null }; finish(); } };
 })();

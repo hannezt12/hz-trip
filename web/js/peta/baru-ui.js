@@ -172,7 +172,7 @@
     if (HA.map._lakeDraw) { toast('Selesaikan dulu yang sedang digambar'); return; }
     var map = HA.map, box = map.getContainer(), g = L.layerGroup().addTo(map);
     var pts = [], closed = null, tail = null; // closed: {k:'t'} ditutup di titik awal | {k:'x', j, I, n} garis menyilang
-    var ms = { last: 0, rapid: 0, snap: null, ign: 0 };
+    var ms = { last: 0, rapid: 0, snap: null, ign: 0 }, TK = !!(HA.titikActive && HA.titikActive()), tkLast = [];
     var cross = document.createElement('div'); cross.className = 'mzx'; cross.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke-linecap="butt"><path d="M24 2V17M24 31V46M2 24H17M31 24H46" stroke="#06202B" stroke-width="5"/><circle cx="24" cy="24" r="4.5" stroke="#06202B" stroke-width="5"/><path d="M24 2V17M24 31V46M2 24H17M31 24H46" stroke="#FFD84D" stroke-width="2.4"/><circle cx="24" cy="24" r="4.5" stroke="#FFD84D" stroke-width="2.4"/></g></svg>'; box.appendChild(cross);
     // bidik tepat di titik yang dipakai Leaflet (getCenter), bukan 50% CSS
     function placeCross() { map.invalidateSize(false); var z = map.getSize(); cross.style.left = Math.round(z.x / 2) + 'px'; cross.style.top = Math.round(z.y / 2) + 'px'; }
@@ -246,12 +246,13 @@
       var empty = !pts.length;
       card.style.display = empty ? 'none' : ''; img.style.display = empty ? 'block' : 'none';
       if (empty) imgUpd(); else { clearTimeout(imgT); imgSeq++; img.textContent = ''; }
-      sv.style.display = (closed || pts.length >= 1) ? '' : 'none';
+      sv.style.display = (!TK && (closed || pts.length >= 1)) ? '' : 'none';
       card.classList.toggle('shut', !!closed);
       sv.style.top = (card.offsetTop + card.offsetHeight + 8) + 'px'; undo.style.top = (card.offsetTop + card.offsetHeight + 8) + 'px';
     }
     function setClosed(c) { var was = !!closed; closed = c; if (c && !was) toast('Poligon tertutup. Tekan Simpan'); }
     function addPt() {
+      if (TK) { var c0 = map.getCenter(), it0 = HA.titikAdd([c0.lat, c0.lng]); if (it0) tkLast.push(it0.id); return; }
       if (closed) { toast('Poligon sudah tertutup. Tekan Back untuk membukanya lagi'); return; }
       if (nearFirst()) { setClosed({ k: 't' }); upd(); return; }
       var c = map.getCenter(), p = [c.lat, c.lng]; pts.push(p);
@@ -283,6 +284,7 @@
     HA.ukurBack = function () {
       var now = Date.now();
       if (now < ms.ign) return true;
+      if (TK) { var lid = tkLast.pop(); if (lid) { HA.titikDel(lid); toast('Tanda terakhir dibatalkan'); } else end(); return true; }
       if (now - ms.last <= 300) ms.rapid++; else { ms.rapid = 1; ms.snap = pts.map(function (p) { return p.slice(); }); }
       ms.last = now;
       if (ms.rapid >= 3) {
@@ -399,7 +401,7 @@
     map.on('move', upd); window.addEventListener('resize', place);
     add.onclick = addPt; sv.onclick = doSave;
     place(); setTimeout(place, 300); upd();
-    toast('Geser peta, ketuk + untuk titik. Back = urung titik');
+    toast(TK ? 'Mode tanda: geser peta, ketuk + untuk simpan tanda titik. Back = batalkan tanda terakhir' : 'Geser peta, ketuk + untuk titik. Back = urung titik');
   }
 
   // ---------- daftar biasa: ketuk = lihat, tekan lama = Edit / Hapus / Pilih banyak ----------
