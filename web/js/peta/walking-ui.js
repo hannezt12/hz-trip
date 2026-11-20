@@ -63,14 +63,15 @@
     var a = document.createElement('div'); a.className = 'wkAcc'; a.innerHTML = '<b id="wkA">Akurasi …</b><small id="wkI"></small>';
     map.getContainer().appendChild(a); WK.acc = a;
     var bar = document.createElement('div'); bar.className = 'lkbar bot';
-    bar.innerHTML = '<span id="nbT"></span>' + (HA.titikActive && HA.titikActive() ? '<button type="button" id="wkT">+ Tanda</button>' : '') + '<button type="button" id="wkP">Jeda</button><button type="button" id="wkU">Urung 10 m</button><button type="button" id="wkS">Layar</button><button type="button" class="pri" id="wkOk">Selesai</button>';
+    bar.innerHTML = '<span id="nbT"></span>' + '<button type="button" id="wkT" style="display:none">+ Tanda</button>' + '<button type="button" id="wkP">Jeda</button><button type="button" id="wkU">Urung 10 m</button><button type="button" id="wkS">Layar</button><button type="button" class="pri" id="wkOk">Selesai</button>';
     map.getContainer().appendChild(bar); L.DomEvent.disableClickPropagation(bar); WK.bar = bar;
-    if ($('wkT')) $('wkT').onclick = function () { var c = WK.cur; if (!c) { toast('Posisi belum didapat'); return; } if (c.acc > 30) toast('Akurasi ±' + Math.round(c.acc) + ' m kurang baik'); if (HA.titikAdd([c.lat, c.lng])) WK.tk = (WK.tk || 0) + 1; };
+    WK.tkc = HA.titikCtl ? HA.titikCtl(map, { onChange: function (on) { if ($('wkT')) $('wkT').style.display = on ? '' : 'none'; } }) : null;
+    $('wkT').onclick = function () { var c = WK.cur; if (!c) { toast('Posisi belum didapat'); return; } if (c.acc > 30) toast('Akurasi ±' + Math.round(c.acc) + ' m kurang baik'); if (WK.tkc.add([c.lat, c.lng])) WK.tk = (WK.tk || 0) + 1; };
     $('wkP').onclick = function () { if (WK.w.isPaused()) { WK.w.resume(); this.textContent = 'Jeda'; } else { WK.w.pause(); this.textContent = 'Lanjut'; } draw(); };
     $('wkU').onclick = function () { WK.w.undo(10); draw(); };
     $('wkS').onclick = function () { WK.screen = !WK.screen; this.classList.toggle('on', WK.screen); HA.Plug.keepScreen({ on: WK.screen }).catch(function () {}); toast(WK.screen ? 'Layar tetap menyala' : 'Layar boleh mati (hemat baterai)'); };
     $('wkOk').onclick = finish;
-    HA.ukurBack = function () { askConfirm('Hentikan Walking?', 'Rekaman jalur dibuang.', 'Buang', function () { cleanup(); }); return true; };
+    HA.ukurBack = function () { askConfirm('Hentikan Walking?', 'Rekaman jalur dibuang. Tanda titik yang sudah disimpan tetap aman.', 'Buang', function () { cleanup(); }); return true; };
     HA.Plug.walkStart().then(function () {
       WK.timer = setInterval(poll, 1000);
       WK.vis = function () { if (!document.hidden) poll(); };
@@ -117,6 +118,7 @@
     if (!WK) return;
     clearInterval(WK.timer); if (WK.vis) document.removeEventListener('visibilitychange', WK.vis);
     try { HA.Plug.walkStop().catch(function () {}); HA.Plug.keepScreen({ on: false }).catch(function () {}); } catch (e) {}
+    if (WK.tkc) WK.tkc.destroy();
     if (WK.acc) WK.acc.remove(); if (WK.bar) WK.bar.remove();
     HA.map.removeLayer(WK.g); WK = null; HA.ukurBack = null;
   }

@@ -35,7 +35,37 @@
   function nextNo(bid, i) { var m = 0; arr().forEach(function (t) { if (t.bid === bid && t.p === i.p && t.c === i.c && t.h === i.h && t.no > m) m = t.no; }); return m + 1; }
   function save() { HA.saveSettings(); draw(); }
 
-  HA.titikActive = function () { return !!ik().on; };
+  HA._tkOn = false;
+  HA.titikActive = function () { return !!HA._tkOn; };
+  // tombol Tanda di pojok kanan atas peta (dipakai Ukur dan Walking). Mulai abu-abu tiap kali dibuka.
+  HA.titikCtl = function (map, o) {
+    o = o || {}; HA._tkOn = false;
+    var box = map.getContainer(), ids = [], tmr = null, lp = false;
+    var w = document.createElement('div'); w.className = 'tkCtl';
+    w.style.cssText = 'position:absolute;top:calc(env(safe-area-inset-top,0px) + 118px);right:10px;z-index:1000;display:flex;flex-direction:column;align-items:center;gap:6px';
+    w.innerHTML = '<button type="button" class="tkB" aria-label="Tanda titik" style="width:52px;height:52px;border-radius:50%;border:2px solid rgba(255,255,255,.6);background:rgba(30,40,46,.88);display:flex;align-items:center;justify-content:center;padding:0"></button>' +
+      '<button type="button" class="tkU" style="display:none;height:32px;padding:0 10px;border-radius:16px;border:1px solid rgba(255,255,255,.5);background:rgba(30,40,46,.88);color:#fff;font-size:12px">Urung</button><span class="tkN" style="display:none;font-size:11px;font-weight:700;background:rgba(30,40,46,.88);color:#fff;border-radius:10px;padding:1px 8px"></span>';
+    box.appendChild(w); L.DomEvent.disableClickPropagation(w); L.DomEvent.disableScrollPropagation(w);
+    var B = w.querySelector('.tkB'), U = w.querySelector('.tkU'), N = w.querySelector('.tkN');
+    function paint() {
+      var i = ik(), on = HA._tkOn;
+      B.innerHTML = on ? svg(i.p, i.c, i.h || 'A', 38) : '<span style="opacity:.55;filter:grayscale(1)">' + svg(i.p, '#9AA5AA', i.h || 'A', 38) + '</span>';
+      B.style.borderColor = on ? '#fff' : 'rgba(255,255,255,.35)';
+      U.style.display = ids.length ? '' : 'none'; N.style.display = ids.length ? '' : 'none'; N.textContent = ids.length + ' tanda';
+      if (o.onChange) o.onChange(on);
+    }
+    B.addEventListener('pointerdown', function () { lp = false; clearTimeout(tmr); tmr = setTimeout(function () { lp = true; ikonSheet(paint); }, 550); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { B.addEventListener(ev, function () { clearTimeout(tmr); }); });
+    B.addEventListener('click', function () { if (lp) { lp = false; return; } HA._tkOn = !HA._tkOn; toast(HA._tkOn ? 'Tanda aktif: ketuk untuk simpan titik. Tekan lama = ganti ikon' : 'Tanda mati'); paint(); });
+    U.addEventListener('click', function () { var id = ids.pop(); if (id) { HA.titikDel(id); toast('Tanda terakhir dibatalkan'); } paint(); });
+    var ctl = {
+      add: function (ll) { var it = HA.titikAdd(ll); if (it) { ids.push(it.id); paint(); } return it; },
+      count: function () { return ids.length; },
+      destroy: function () { clearTimeout(tmr); HA._tkOn = false; w.remove(); },
+      paint: paint
+    };
+    paint(); return ctl;
+  };
   HA.titikOf = function (bid) { return arr().filter(function (t) { return t.bid === bid; }); };
   HA.titikAdd = function (ll, o) {
     o = o || {}; var i = ik(), b = HA.blockAt(L.latLng(ll[0], ll[1]));
@@ -66,7 +96,6 @@
     var i = ik();
     function body() {
       return '<div class="grab"></div><div class="st">Ikon tanda titik</div>' +
-        '<label class="lsA" style="margin:8px 0"><input type="checkbox" id="ikOn"' + (i.on ? ' checked' : '') + '> Ikon aktif: Ukur dan Walking langsung menyimpan tanda titik</label>' +
         '<div style="text-align:center;margin:6px 0" id="ikPv">' + svg(i.p, i.c, (i.h || 'A') + '.1', 64) + '</div>' +
         '<div class="h">POLA</div><div class="row" style="gap:6px;flex-wrap:wrap" id="ikP">' + PATS.map(function (q) { return '<button type="button" class="btn' + (i.p === q[0] ? ' pri' : '') + '" data-p="' + q[0] + '" style="padding:4px 8px">' + svg(q[0], i.c, '', 30) + '</button>'; }).join('') + '</div>' +
         '<div class="h" style="margin-top:8px">WARNA</div><div class="row" style="gap:6px;flex-wrap:wrap" id="ikC">' + CLRS.map(function (c) { return '<button type="button" data-c="' + c + '" aria-label="' + c + '" style="width:36px;height:36px;border-radius:50%;background:' + c + ';border:3px solid ' + (i.c === c ? 'var(--tx)' : 'rgba(128,128,128,.5)') + '"></button>'; }).join('') + '<input type="color" id="ikCc" value="' + i.c + '" style="width:44px;height:36px"></div>' +
@@ -77,7 +106,6 @@
     function combo() { return i.p + '|' + i.c; }
     function newCombo() { var k = combo(); i.h = hm()[k] || (hm()[k] = unusedLetter(k)); HA.saveSettings(); refresh(); }
     function bind() {
-      $('ikOn').onchange = function () { i.on = this.checked; HA.saveSettings(); if (HA.renderSetMenu && !S.setPage) HA.renderSetMenu(); toast(i.on ? 'Ikon aktif. Ukur dan Walking menyimpan tanda titik' : 'Ikon mati. Ukur dan Walking seperti biasa'); };
       $('ikP').onclick = function (e) { var b = e.target.closest && e.target.closest('[data-p]'); if (!b) return; i.p = b.getAttribute('data-p'); newCombo(); };
       $('ikC').onclick = function (e) { var b = e.target.closest && e.target.closest('[data-c]'); if (!b) return; i.c = b.getAttribute('data-c'); newCombo(); };
       $('ikCc').onchange = function () { i.c = this.value.toUpperCase(); newCombo(); };
@@ -119,7 +147,7 @@
   }
   function tndOpen() {
     var q = Q.toLowerCase().replace(/\s+/g, ''), items = sorted().filter(function (t) { return !q || (t.bn + lab(t) + t.note + t.date).toLowerCase().replace(/\s+/g, '').indexOf(q) >= 0; }), ic = ik();
-    openSheet('<div class="grab"></div>' + HA.listTabs('tnd') + '<div class="lsQr" style="display:flex;gap:6px"><input type="search" id="tkQ" placeholder="Cari blok, label, catatan" value="' + esc(Q) + '" autocomplete="off" style="flex:1"><button type="button" class="btn" id="tkIk" style="padding:0 8px">' + svg(ic.p, ic.c, ic.h || 'A', 28) + ' <small>' + (ic.on ? 'Aktif' : 'Mati') + '</small></button></div>' +
+    openSheet('<div class="grab"></div>' + HA.listTabs('tnd') + '<div class="lsQr" style="display:flex;gap:6px"><input type="search" id="tkQ" placeholder="Cari blok, label, catatan" value="' + esc(Q) + '" autocomplete="off" style="flex:1"><button type="button" class="btn" id="tkIk" style="padding:0 8px">' + svg(ic.p, ic.c, ic.h || 'A', 28) + ' <small>Ikon</small></button></div>' +
       '<div id="tkL" style="margin-top:8px"></div><div class="row" style="margin-top:10px"><button class="btn" id="tkNu" style="flex:1;height:46px">Susun ulang nomor</button><button class="btn" id="tkXx" style="flex:1;height:46px">Tutup</button></div>');
     $('tkXx').onclick = closeSheet;
     $('tkIk').onclick = function () { ikonSheet(tndOpen); };
