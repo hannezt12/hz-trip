@@ -284,6 +284,7 @@
     HA.lpList($('wkDl'), 'wkdraf', {
       items: a.map(function (x) { return { id: x.id, title: (x.bn || 'Area') + ' · bagian ' + x.label, sub: ha(areaLL(x.ring)) + ' · ' + x.date }; }),
       empty: 'Belum ada draf.',
+      reopen: drafList,
       onTap: function (id) { var x = a.filter(function (q) { return q.id === id; })[0]; if (x) drafOne(x); },
       delTitle: function (ids) { return 'Hapus ' + ids.length + ' draf?'; },
       delMsg: function () { return 'Draf dihapus dari aplikasi.'; },

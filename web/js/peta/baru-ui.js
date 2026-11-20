@@ -428,6 +428,7 @@
     }
     function delIds(ids) {
       askConfirm(o.delTitle ? o.delTitle(ids) : 'Hapus ' + ids.length + ' data?', o.delMsg ? o.delMsg(ids) : 'Data dihapus dari aplikasi.', 'Hapus', function () { SEL[key] = null; o.onDelete(ids); });
+      var cn = $('cfNo'); if (cn && o.reopen) cn.onclick = function () { o.reopen(); };
     }
     function menu(id) {
       var it = o.items.filter(function (x) { return String(x.id) === id; })[0]; if (!it) return;
@@ -438,11 +439,11 @@
         '<button class="btn" id="lmP" style="width:100%;margin-top:8px;height:48px">Pilih banyak</button>' +
         '<button class="btn" id="lmD" style="width:100%;margin-top:8px;height:48px;color:var(--r)">Hapus</button>' +
         '<button class="btn" id="lmX" style="width:100%;margin-top:8px">Tutup</button>');
-      $('lmX').onclick = closeSheet;
+      $('lmX').onclick = function () { if (o.reopen) o.reopen(); else closeSheet(); };
       if (o.onEdit) $('lmE').onclick = function () { closeSheet(); o.onEdit(id); };
       $('sheet').querySelectorAll('[data-a]').forEach(function (b) { b.onclick = function () { var a = acts[+b.getAttribute('data-a')]; closeSheet(); a.fn(id); }; });
-      $('lmP').onclick = function () { closeSheet(); SEL[key] = [id]; draw(); };
-      $('lmD').onclick = function () { closeSheet(); delIds([id]); };
+      $('lmP').onclick = function () { SEL[key] = [id]; if (o.reopen) o.reopen(); else { closeSheet(); draw(); } };
+      $('lmD').onclick = function () { if (!o.reopen) closeSheet(); delIds([id]); };
     }
     draw();
     var timer = null, fired = false, sx = 0, sy = 0;

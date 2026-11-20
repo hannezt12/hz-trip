@@ -156,6 +156,7 @@
     HA.lpList($('tkL'), 'titik', {
       items: items.map(function (t) { return { id: t.id, title: t.bn + ' · ' + lab(t), sub: (t.note ? t.note + ' · ' : '') + t.date + ' · ' + t.je + ' m dari tepi' }; }),
       empty: 'Belum ada tanda titik. Aktifkan ikon, lalu pakai Ukur atau Walking.',
+      reopen: tndOpen,
       onTap: function (id) { var t = byId(id); if (t) edit(t, tndOpen); },
       onEdit: function (id) { var t = byId(id); if (t) edit(t, tndOpen); },
       actions: function () { return [{ label: 'Lihat di peta', fn: function (id) { var t = byId(id); if (!t) return; closeSheet(); go(t); } }]; },
