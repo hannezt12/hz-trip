@@ -329,6 +329,18 @@
     $('edFm').onclick = function () { fsz(-0.5); }; $('edFp').onclick = function () { fsz(0.5); };
     $('edC').onclick = function () { if (LGS) { o.lg.x = null; o.lg.y = null; o.persist(); drawLg(); head(); return; } if (!sel) return; var oo = info[sel]; delete oo.b.lblOff; oo.cx = oo.c0[0]; oo.cy = oo.c0[1]; oo.g.setAttribute('transform', 'translate(' + oo.cx + ',' + oo.cy + ')'); HA.saveSettings(); head(); };
     $('edX').onclick = closeEd;
+    // umpan balik ketukan: tombol menyala sesaat + keterangan singkat di layar
+    var bdT = null;
+    function bdg(t) { var e = $('edB'); if (!e) { e = document.createElement('div'); e.id = 'edB'; e.className = 'edB'; el.appendChild(e); } e.textContent = t; e.style.opacity = '1'; clearTimeout(bdT); bdT = setTimeout(function () { e.style.opacity = '0'; }, 1600); }
+    el.querySelector('.pmEh').addEventListener('click', function (ev) {
+      var b = ev.target.closest && ev.target.closest('button'); if (!b || b.disabled) return; var id = b.id;
+      b.classList.add('flash'); setTimeout(function () { b.classList.remove('flash'); }, 220);
+      setTimeout(function () {
+        if (id === 'edZp') bdg('Diperbesar'); else if (id === 'edZm') bdg('Diperkecil');
+        else if (id === 'edFm' || id === 'edFp') bdg('Ukuran teks legenda ' + String(o.lg.fs || 8).replace('.', ',') + ' pt');
+        else if (id === 'edC') bdg(LGS ? 'Legenda dikembalikan ke posisi awal' : 'Teks dikembalikan ke tengah blok');
+      }, 0);
+    });
     fit(); head();
     ED.test = { info: info, svg: svg, kx: kx, ky: ky };
     HA.pmEdTest = ED.test;

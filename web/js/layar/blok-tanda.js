@@ -393,6 +393,7 @@
     var buf = HA.tandaBufM(), ex = [], skipped = 0, cats = HA.tandaData().cats.map(function (c) { return c.id; });
     groups.forEach(function (g) {
       if (!g.blk || opts.catSplit === false) { ex.push(g); return; }
+      var tkFirst = g.tk || [];
       var by = {}, ord = [];
       g.items.forEach(function (it) {
         var valid = it.cat && HA.tandaCatInfo(it).name !== 'Tanpa kategori' && it.pts && it.pts.length >= (it.t === 'pg' ? 3 : (it.t === 'ln' ? 2 : 1));
@@ -400,9 +401,9 @@
         if (!by[it.cat]) { by[it.cat] = { id: it.cat, cat: HA.tandaCatInfo(it).name, items: [] }; ord.push(by[it.cat]); }
         by[it.cat].items.push(it);
       });
-      if (!ord.length) { ex.push({ title: g.title, items: [], blk: g.blk, cat: '' }); return; }
+      if (!ord.length) { ex.push({ title: g.title, items: [], blk: g.blk, cat: '', tk: tkFirst }); return; }
       ord.sort(function (x, y) { return cats.indexOf(x.id) - cats.indexOf(y.id); });
-      ord.forEach(function (o) { ex.push({ title: g.title, items: o.items, blk: g.blk, cat: o.cat }); });
+      ord.forEach(function (o, oi) { ex.push({ title: g.title, items: o.items, blk: g.blk, cat: o.cat, tk: oi === 0 ? tkFirst : [] }); });
     });
     if (opts.meta) opts.meta.pages = ex.map(function (g) { return { blk: g.blk, cat: g.cat || '' }; });
     BT._skipped = skipped;
@@ -411,14 +412,14 @@
       if (opts.sketsa) return null;
       return satImage(g.blk, HA.tandaPageBox(g.items, g.blk, { buf: buf }), buf);
     })).then(function (imgs) {
-      var gs = ex.map(function (g, i) { return { title: g.title, items: g.items, blk: g.blk, img: imgs[i], cat: g.cat }; });
+      var gs = ex.map(function (g, i) { return { title: g.title, items: g.items, blk: g.blk, img: imgs[i], cat: g.cat, tk: g.tk }; });
       BT._noImg = opts.sketsa ? 0 : gs.filter(function (g) { return g.blk && !g.img; }).length;
       return HA.tandaBuildPdf([], Object.assign({ blk: true, pos: 'c' }, opts, { buf: buf, groups: gs, sketsa: !!opts.sketsa, hatch: !!opts.hatch }));
     });
   };
 
   // ---------- bagikan: PDF atau KML untuk satu atau beberapa blok ----------
-  var SH = { fmt: 'pdf', title: '', nama: true, nilai: true, fs: 'a', colMap: {}, latar: (S.settings.shLatar || 'sat'), gaya: (S.settings.shGaya || 'warna'), rinci: S.settings.shRinci !== false, dates: {} };
+  var SH = { fmt: 'pdf', title: '', nama: true, nilai: true, fs: 'a', colMap: {}, latar: (S.settings.shLatar || 'sat'), gaya: (S.settings.shGaya || 'warna'), rinci: S.settings.shRinci !== false, dates: {}, tkOn: true, tkSel: {}, tkFold: {} };
   function stamp() { var t = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return t.getFullYear() + p(t.getMonth() + 1) + p(t.getDate()); }
   function share(list, pre) {
     var many = list.length > 1, n = 0, warned = false, seq = 0, tmr = null, miss = [], total = 0;
@@ -443,12 +444,27 @@
     list.forEach(function (b) { selItems(b, pre).forEach(function (it) { var d = HA.tandaU.dateOf(it); if (!seenD[d]) { seenD[d] = { d: d, n: 0 }; dts.push(seenD[d]); } seenD[d].n++; }); });
     dts.sort(function (a, c) { return a.d < c.d ? 1 : (a.d > c.d ? -1 : 0); });
     SH.dates = {}; dts.forEach(function (x) { SH.dates[x.d] = true; });
+    // tanda titik pada blok-blok ini (tersendiri dari kategori), dikelompokkan per tanggal
+    var tks = [], tkD = [], tkSeen = {};
+    list.forEach(function (b) { (HA.titikOf ? HA.titikOf(b.id) : []).forEach(function (t) { tks.push(t); if (!tkSeen[t.date]) { tkSeen[t.date] = 1; tkD.push(t.date); } }); });
+    tkD.sort().reverse();
+    SH.tkOn = true; SH.tkSel = {}; SH.tkFold = {}; tks.forEach(function (t) { SH.tkSel[t.id] = true; }); tkD.forEach(function (d, i) { SH.tkFold[d] = i !== 0; });
+    function tkIcon(t) { return '<svg width="22" height="22" viewBox="0 0 32 32" style="vertical-align:middle">' + ({ bulat: '<circle cx="16" cy="16" r="13"', kotak: '<rect x="4" y="4" width="24" height="24" rx="4"', segitiga: '<polygon points="16,3 30,28 2,28"', belah: '<polygon points="16,2 30,16 16,30 2,16"', enam: '<polygon points="16,2 28,9 28,23 16,30 4,23 4,9"' }[t.p] || '<circle cx="16" cy="16" r="13"') + ' fill="' + t.c + '" stroke="#06202B" stroke-width="2"/></svg>'; }
+    function tkRows() {
+      if (!tks.length) return '<div class="muted">Belum ada tanda titik.</div>';
+      return tkD.map(function (d) {
+        var ls = tks.filter(function (t) { return t.date === d; }), nOn = ls.filter(function (t) { return SH.tkSel[t.id]; }).length, shut = SH.tkFold[d];
+        return '<div class="lsD"><input type="checkbox" data-td="' + d + '"' + (nOn === ls.length ? ' checked' : '') + ' aria-label="Pilih semua tanggal ini"><button type="button" class="lsF" data-tf="' + d + '"><span class="lsAr">' + (shut ? '\u25B8' : '\u25BE') + '</span><b>' + esc(HA.tandaU.d8(d)) + '</b> <span class="muted">' + nOn + '/' + ls.length + ' tanda</span></button></div>' +
+          (shut ? '' : ls.map(function (t) { return '<label class="lsR"><input type="checkbox" data-ti="' + t.id + '"' + (SH.tkSel[t.id] ? ' checked' : '') + '>' + tkIcon(t) + ' <span class="lsT"><b>' + esc(t.h + '.' + t.no) + '</b> <span class="muted">' + esc(String(t.bn)) + ' \u00B7 ' + t.je + ' m dari tepi</span>' + (t.note ? '<br><span class="lsS">' + esc(t.note.length > 48 ? t.note.slice(0, 47) + '\u2026' : t.note) + '</span>' : '') + '</span></label>'; }).join(''));
+      }).join('');
+    }
+    function tkChosen(b) { return SH.tkOn ? tks.filter(function (t) { return t.bid === b.id && SH.tkSel[t.id]; }).sort(function (x, y) { return x.h < y.h ? -1 : (x.h > y.h ? 1 : x.no - y.no); }) : []; }
     function dateRows() { return dts.map(function (x) { return '<label><input type="checkbox" data-d="' + x.d + '"' + (SH.dates[x.d] ? ' checked' : '') + '>' + esc(HA.tandaU.d8(x.d)) + ' <span class="muted">(' + x.n + ')</span></label>'; }).join(''); }
     function catRows() {
       if (!cats.length) return '<div class="muted">Belum ada tanda.</div>';
       return cats.map(function (c) { return '<label><input type="checkbox" data-k="' + c.k + '"' + (SH.cats[c.k] ? ' checked' : '') + '><i class="tdd" style="background:' + c.col + '"></i>' + esc(c.name) + ' <span class="muted">(' + c.n + ')</span></label>'; }).join('');
     }
-    function noCat() { return n > 0 && (!cats.some(function (c) { return SH.cats[c.k]; }) || !dts.some(function (x) { return SH.dates[x.d]; })); }
+    function noCat() { return n > 0 && (!cats.some(function (c) { return SH.cats[c.k]; }) || !dts.some(function (x) { return SH.dates[x.d]; })) && !list.some(function (b) { return tkChosen(b).length; }); }
     openSheet('<div class="grab"></div><div class="st">BAGIKAN ' + (many ? list.length + ' BLOK' : 'BLOK ' + esc(String(list[0].name)).toUpperCase()) + '</div>' +
       '<div class="muted" style="margin-bottom:8px">' + n + ' tanda' + (n ? '' : ' · blok akan dicetak tanpa tanda') + (nNoCat ? ' · ' + nNoCat + ' tanpa kategori tidak ikut PDF' : '') + '</div><div class="muted" style="margin-bottom:8px">PDF: satu halaman per kategori di tiap blok</div>' +
       '<div id="shPvw"><canvas id="shCv"></canvas><div id="shPm" class="muted">Menyusun preview…</div></div><div class="muted" id="shHint" style="text-align:center;margin:4px 0 0">Ketuk gambar untuk mengubah tampilan</div>' +
@@ -458,6 +474,7 @@
       '<div class="h" style="margin-top:10px">JUDUL TAMBAHAN (BOLEH KOSONG)</div><input type="text" id="shT" maxlength="60" placeholder="Kosong = hanya nama blok" value="' + esc(SH.title) + '" style="width:100%">' +
       '<div class="h" style="margin-top:10px">KATEGORI YANG DIBAGIKAN</div><div class="plist" id="shCats">' + catRows() + '</div>' +
       '<div class="h" style="margin-top:10px">TANGGAL YANG DIBAGIKAN</div><div class="plist" id="shDts">' + (dts.length ? dateRows() : '<div class="muted">Belum ada tanggal.</div>') + '</div>' +
+      (tks.length ? '<div class="h" style="margin-top:10px">TANDA TITIK</div><label class="plist"><input type="checkbox" id="shTk"' + (SH.tkOn ? ' checked' : '') + '> Sertakan tanda titik <span class="muted">(' + tks.length + ')</span></label><div id="shTkL" class="plist" style="max-height:40vh;overflow:auto">' + tkRows() + '</div>' : '') +
       '<div id="shLt"><div class="h" style="margin-top:10px">LATAR PDF</div><div class="seg" id="shL"><button data-v="sat"' + (SH.latar !== 'sk' ? ' class="on"' : '') + '>Satelit</button><button data-v="sk"' + (SH.latar === 'sk' ? ' class="on"' : '') + '>Sketsa</button></div><div id="shGy" style="display:' + (SH.latar === 'sk' ? 'block' : 'none') + '"><div class="h" style="margin-top:8px">TANDA DI SKETSA</div><div class="seg" id="shG"><button data-v="warna"' + (SH.gaya !== 'arsir' ? ' class="on"' : '') + '>Warna</button><button data-v="arsir"' + (SH.gaya === 'arsir' ? ' class="on"' : '') + '>Arsiran</button></div></div></div>' +
       '<div id="shEd" style="display:none">' +
       '<div id="shP"><div class="h" style="margin-top:10px">SEKELILING BLOK DI PDF</div><div class="seg" id="shB">' + [10, 15, 20].map(function (v) { return '<button data-v="' + v + '"' + (HA.tandaBufM() === v ? ' class="on"' : '') + '>' + v + ' m</button>'; }).join('') + '</div>' +
@@ -468,7 +485,7 @@
     function seg(id, f) { $(id).onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-v]'); if (!b) return; f(b.getAttribute('data-v')); $(id).querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); }; }
     function grab() { SH.title = $('shT').value.trim(); SH.nama = $('shN').checked; SH.nilai = $('shV').checked; }
     function pitems(b) { return selItems(b, pre).filter(function (it) { return SH.cats[HA.tandaCatKey(it)] && SH.dates[HA.tandaU.dateOf(it)]; }); }
-    function groupsOf(ls) { return ls.map(function (b) { return { title: SH.title, items: pitems(b), blk: b }; }); }
+    function groupsOf(ls) { return ls.map(function (b) { return { title: SH.title, items: pitems(b), blk: b, tk: tkChosen(b) }; }); }
     function opts() { return { rincian: SH.rinci, nama: SH.nama, nilai: SH.nilai, fs: SH.fs, sketsa: SH.latar === 'sk', hatch: SH.latar === 'sk' && SH.gaya === 'arsir' }; }
     function pdfBytes() { grab(); return BT.buildPdf(groupsOf(list), opts()); }
     // preview mini: halaman pertama saja
@@ -512,6 +529,15 @@
     $('shN').onchange = $('shV').onchange = thumb;
     $('shRc').onchange = function () { SH.rinci = this.checked; S.settings.shRinci = SH.rinci; HA.saveSettings(); thumb(); };
     $('shDts').onchange = function (e) { var d = e.target.getAttribute && e.target.getAttribute('data-d'); if (d) { SH.dates[d] = e.target.checked; thumb(); } };
+    if ($('shTk')) {
+      $('shTk').onchange = function () { SH.tkOn = this.checked; $('shTkL').style.opacity = SH.tkOn ? '1' : '.45'; thumb(); };
+      $('shTkL').onchange = function (e) {
+        var i = e.target.getAttribute && e.target.getAttribute('data-ti'), d = e.target.getAttribute && e.target.getAttribute('data-td');
+        if (i) SH.tkSel[i] = e.target.checked; else if (d) tks.forEach(function (t) { if (t.date === d) SH.tkSel[t.id] = e.target.checked; }); else return;
+        $('shTkL').innerHTML = tkRows(); thumb();
+      };
+      $('shTkL').onclick = function (e) { var f = e.target.closest && e.target.closest('[data-tf]'); if (!f) return; var d = f.getAttribute('data-tf'); SH.tkFold[d] = !SH.tkFold[d]; $('shTkL').innerHTML = tkRows(); };
+    }
     $('shT').oninput = lazyThumb;
     $('shCats').onchange = function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-k'); if (k) { SH.cats[k] = e.target.checked; thumb(); } };
     $('shPvw').onclick = function () { var ed = $('shEd'), open = ed.style.display === 'none'; ed.style.display = open ? '' : 'none'; $('shHint').textContent = open ? 'Ketuk gambar lagi untuk menutup pengaturan' : 'Ketuk gambar untuk mengubah tampilan'; if (open) { try { ed.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (x) {} } };
@@ -521,7 +547,16 @@
       grab();
       var groups = list.map(function (b) { var its = pitems(b).slice(); its.unshift({ id: 'blk' + b.id, t: 'pg', pts: b.pts, name: 'Blok ' + b.name, boundary: true, col: '#FFE600' }); return { name: 'Blok ' + b.name, items: its }; });
       var all = []; groups.forEach(function (g) { g.items.forEach(function (i) { all.push(i); }); });
-      return HA.tandaKml(all, SH.title || def, groups);
+      var kml = HA.tandaKml(all, SH.title || def, groups), tf = '';
+      function xe2(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+      function kc(h) { h = String(h).replace('#', ''); return 'ff' + h.slice(4, 6) + h.slice(2, 4) + h.slice(0, 2); }
+      list.forEach(function (b) {
+        var tl = tkChosen(b); if (!tl.length) return;
+        tf += '<Folder><name>' + xe2('Tanda titik \u00B7 Blok ' + b.name) + '</name>' + tl.map(function (t) {
+          return '<Placemark><name>' + xe2(t.h + '.' + t.no) + '</name><description>' + xe2('Blok ' + b.name + ' | ' + t.date + ' | ' + t.je + ' m dari tepi' + (t.note ? ' | ' + t.note : '')) + '</description><Style><IconStyle><color>' + kc(t.c) + '</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle></Style><Point><coordinates>' + (+t.ll[1]).toFixed(7) + ',' + (+t.ll[0]).toFixed(7) + ',0</coordinates></Point></Placemark>';
+        }).join('') + '</Folder>';
+      });
+      return tf ? kml.replace('</Document>', tf + '</Document>') : kml;
     }
     function geoText() {
       grab(); var feats = [];
@@ -536,16 +571,16 @@
           var g = it.t === 'pt' ? { type: 'Point', coordinates: cc[0] } : (it.t === 'ln' ? { type: 'LineString', coordinates: cc } : { type: 'Polygon', coordinates: [cc.concat([cc[0]])] });
           feats.push({ type: 'Feature', properties: pr, geometry: g });
         });
-        (HA.titikOf ? HA.titikOf(b.id) : []).forEach(function (t) {
+        tkChosen(b).forEach(function (t) {
           feats.push({ type: 'Feature', properties: { jenis: 'tanda_titik', blok: String(b.name), label: t.h + '.' + t.no, pola: t.p, warna: t.c, catatan: t.note || '', tanggal: t.date, jarak_tepi_m: t.je }, geometry: { type: 'Point', coordinates: [+t.ll[1].toFixed(7), +t.ll[0].toFixed(7)] } });
         });
       });
       return JSON.stringify({ type: 'FeatureCollection', name: SH.title || def, features: feats });
     }
     $('shX').onclick = function () { clearTimeout(tmr); seq++; closeSheet(); };
-    $('shPv').onclick = function () { if (noCat()) { toast('Centang minimal satu kategori dan satu tanggal'); return; } var bt = $('shPv'); bt.disabled = true; pdfBytes().then(function (b) { bt.disabled = false; HA.pdfPreview(b, function () { HA.saveFile(fname('pdf', true), btoa(b), 'application/pdf'); }); }).catch(function () { bt.disabled = false; toast('Gagal menyusun PDF'); }); };
+    $('shPv').onclick = function () { if (noCat()) { toast('Centang minimal satu kategori dan tanggal, atau tanda titik'); return; } var bt = $('shPv'); bt.disabled = true; pdfBytes().then(function (b) { bt.disabled = false; HA.pdfPreview(b, function () { HA.saveFile(fname('pdf', true), btoa(b), 'application/pdf'); }); }).catch(function () { bt.disabled = false; toast('Gagal menyusun PDF'); }); };
     $('shGo').onclick = function () {
-      if (noCat()) { toast('Centang minimal satu kategori dan satu tanggal'); return; }
+      if (noCat()) { toast('Centang minimal satu kategori dan tanggal, atau tanda titik'); return; }
       if (SH.fmt === 'geojson') { HA.saveFile(fname('geojson', true), HA.textB64(geoText()), 'application/geo+json'); return; }
       if (SH.fmt !== 'pdf') { HA.saveFile(fname('kml', true), HA.textB64(kmlText()), 'application/vnd.google-earth.kml+xml'); return; }
       if (miss.length && !warned && SH.latar !== 'sk') { warned = true; toast('Citra belum lengkap. Unduh dulu, atau ketuk Bagikan lagi untuk lanjut'); return; }

@@ -143,6 +143,7 @@
 
   // ---------- cetak (drawer > Cetak > Master) ----------
   function ribu(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+  function fsNum(v) { var l = { s: 5, m: 7.5, l: 11 }[v]; if (l) return l; var n = parseFloat(v); return isFinite(n) ? n : null; }
   var PS = { sel: null, fmt: 'pdf', map: true, list: false, title: '', fs: 'a', pos: 'c', luas: (function () { try { return localStorage.getItem('hz_pmluas') !== '0'; } catch (e) { return true; } })() };
   function printPanel() {
     var ms = masters(); ms.forEach(function (m, i) { if (m.id == null) m.id = Date.now() + i; });
@@ -157,8 +158,8 @@
         '<div class="h">FORMAT (pilih satu)</div><div class="seg" id="pmFmt"><button data-f="pdf"' + (PS.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-f="kml"' + (PS.fmt === 'kml' ? ' class="on"' : '') + '>KML</button><button data-f="data"' + (PS.fmt === 'data' ? ' class="on"' : '') + '>Data blok</button></div>' +
         (PS.fmt === 'pdf' ? '<div class="h">ISI PDF</div><label><input type="checkbox" id="pmMap"' + (PS.map ? ' checked' : '') + '> Peta (satu lembar, ber-geo)</label><label><input type="checkbox" id="pmLuas"' + (PS.luas ? ' checked' : '') + '> Tampilkan luas di peta</label><label><input type="checkbox" id="pmList"' + (PS.list ? ' checked' : '') + '> Daftar blok lengkap</label>' +
           '<div class="h">JUDUL</div><input type="text" id="pmTtl" maxlength="60" placeholder="Kosong = nama master" value="' + esc(PS.title) + '" style="width:100%">' +
-          '<div class="h">UKURAN TEKS</div><div class="seg" id="pmFs">' + [['a', 'Otomatis'], ['s', 'Kecil'], ['m', 'Sedang'], ['l', 'Besar']].map(function (o) { return '<button data-v="' + o[0] + '"' + (PS.fs === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>'; }).join('') + '</div>' +
-          '<div class="h">POSISI TEKS DI BLOK</div><div class="seg" id="pmPos">' + [['c', 'Tengah'], ['t', 'Atas'], ['b', 'Bawah']].map(function (o) { return '<button data-v="' + o[0] + '"' + (PS.pos === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>'; }).join('') + '</div>'
+          '<div class="h">UKURAN TEKS NO BLOK (pt)</div><div class="row" style="gap:6px"><button class="btn" id="pmFm" style="width:3rem">−</button><input type="number" id="pmFn" min="1" max="30" step="0.5" inputmode="decimal" placeholder="Otomatis" value="' + (fsNum(PS.fs) != null ? fsNum(PS.fs) : '') + '" style="flex:1;text-align:center"><button class="btn" id="pmFp" style="width:3rem">+</button><button class="btn' + (fsNum(PS.fs) == null ? ' on' : '') + '" id="pmFa">Otomatis</button></div><div class="muted" style="margin-top:2px">Luas ikut ukuran ini, tampil di bawah nomor.</div>' +
+          ''
           : PS.fmt === 'data' ? '<div class="muted" style="margin-top:6px">Satu berkas ringan (Zip berisi .hzblok, tanpa gambar): blok Terkonfirmasi di dalam master ini. Penerima membukanya di HZ Trip; hanya blok baru yang ditambahkan.</div>' : '<div class="muted" style="margin-top:6px">KML berisi bentuk dan posisi blok serta batas master, tanpa luasan.</div>') +
         '</div>' +
         '<div class="muted" id="pmInfo" style="margin-top:8px">' + (mem ? (mem.in.length + mem.man.length) + ' blok akan dicetak' + (mem.pend.length ? ' · ' + mem.pend.length + ' blok perbatasan belum diputuskan' : '') : '') + '</div>' +
@@ -175,8 +176,14 @@
     if ($('pmLuas')) $('pmLuas').onchange = function () { PS.luas = this.checked; try { localStorage.setItem('hz_pmluas', this.checked ? '1' : '0'); } catch (e) {} };
     if ($('pmTtl')) {
       $('pmTtl').oninput = function () { PS.title = this.value; };
-      $('pmFs').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-v]'); if (b) { PS.fs = b.getAttribute('data-v'); $('pmFs').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); } };
-      $('pmPos').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-v]'); if (b) { PS.pos = b.getAttribute('data-v'); $('pmPos').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); } };
+      (function () {
+        var inp = $('pmFn'), au = $('pmFa');
+        function setF(v) { if (v == null) { PS.fs = 'a'; inp.value = ''; au.classList.add('on'); HA.toast('Ukuran teks: otomatis'); return; } v = Math.max(1, Math.min(30, Math.round(v * 2) / 2)); PS.fs = v; inp.value = v; au.classList.remove('on'); HA.toast('Ukuran teks ' + String(v).replace('.', ',') + ' pt'); }
+        $('pmFm').onclick = function () { setF((fsNum(PS.fs) != null ? fsNum(PS.fs) : 6) - 0.5); };
+        $('pmFp').onclick = function () { setF((fsNum(PS.fs) != null ? fsNum(PS.fs) : 6) + 0.5); };
+        au.onclick = function () { setF(null); };
+        inp.onchange = function () { var v = parseFloat(String(this.value).replace(',', '.')); setF(isFinite(v) ? v : null); };
+      })();
     }
     if ($('pmPrev')) $('pmPrev').onclick = function () {
       if (!PS.map && !PS.list) { toast('Centang minimal Peta atau Daftar blok'); return; }
@@ -187,7 +194,7 @@
     $('pmVer').onclick = function () { if (HA.VM) HA.VM.open(m, printPanel); };
     if ($('pmPosB')) $('pmPosB').onclick = function () {
       var mm = members(m), lst = mm.in.concat(mm.man); if (!lst.length) { toast('Belum ada blok yang dicetak'); return; }
-      if (HA.lpPos) { closeSheet(); HA.lpPos(m, { list: lst, fs: { s: 5, m: 7.5, l: 11 }[PS.fs] || 4, bw: 1, kNo: true, luas: PS.luas, back: printPanel }); }
+      if (HA.lpPos) { closeSheet(); HA.lpPos(m, { list: lst, fs: fsNum(PS.fs) || 4, bw: 1, kNo: true, luas: PS.luas, back: printPanel }); }
     };
     $('pmGo').onclick = function () {
       if (PS.fmt === 'data') {
@@ -377,7 +384,7 @@
         infos.push({ b: b, nm: nm, ar: fmtHa(HzBlok.areaHa(b.pts)) + ' ha', fit: Math.min(bw * 0.84 / (Math.max(3, nm.length) * 0.56), bh * (opts.luas === false ? 0.7 : 0.42)), x0: X(q[1]), x1: X(q[3]), y0: Y(q[0]), y1: Y(q[2]) });
       });
       // ukuran teks seragam (pt): diatur pengguna; baris: no blok, luas blok, tanggal, luas kategori
-      var fits = infos.map(function (o) { return o.fit; }).sort(function (p, q) { return p - q; }), fsU = Math.max(3, Math.min(9, fits[Math.floor(fits.length * 0.25)] || 6)); if ({ s: 1, m: 1, l: 1 }[opts.fs]) fsU = { s: 5, m: 7.5, l: 11 }[opts.fs]; if (opts.fsPt) fsU = opts.fsPt;
+      var fits = infos.map(function (o) { return o.fit; }).sort(function (p, q) { return p - q; }), fsU = Math.max(3, Math.min(9, fits[Math.floor(fits.length * 0.25)] || 6)); if ({ s: 1, m: 1, l: 1 }[opts.fs]) fsU = { s: 5, m: 7.5, l: 11 }[opts.fs]; else if (isFinite(parseFloat(opts.fs))) fsU = parseFloat(opts.fs); if (opts.fsPt) fsU = opts.fsPt;
       infos.forEach(function (o) {
         var ip = poiC[o.b.id] || (poiC[o.b.id] = (opts.pos === 't' ? poiBand(o.b.pts, kx, ky, 0.55, 0.95) : (opts.pos === 'b' ? poiBand(o.b.pts, kx, ky, 0.05, 0.45) : null)) || poi(o.b.pts, kx, ky));
         if (o.b.lblOff) ip = [ip[0] + o.b.lblOff[0], ip[1] + o.b.lblOff[1]];
@@ -386,7 +393,11 @@
         if (opts.luas !== false) { ls.push(o.ar); lyr.push('Luas blok'); }
         var lf = sh ? sh.lines : opts.lines; if (lf) lf(o.b).forEach(function (t) { ls.push(asc(t.t != null ? t.t : t)); lyr.push(t.l || 'Tanggal dan luas kategori'); });
         var lh = fsU * 1.15, y0 = cy + (ls.length * lh) / 2 - fsU * 0.85;
-        ls.forEach(function (t, i) { c.push(L(lyr[i], 'BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - t.length * fsU * 0.52 / 2) + ' ' + f2(y0 - i * lh) + ' Td (' + pe(t) + ') Tj ET')); });
+        ls.forEach(function (t, i) {
+          var tp = 'BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - t.length * fsU * 0.52 / 2) + ' ' + f2(y0 - i * lh) + ' Td (' + pe(t) + ') Tj ET';
+          // biru tinta tua (jadi abu tua di fotokopi) + halo putih tipis; tepi blok tetap hitam
+          c.push(L(lyr[i], 'q 1 G 1 j ' + f2(fsU * 0.32) + ' w 1 Tr ' + tp + ' Q q 0.122 0.306 0.62 rg 0 Tr ' + tp + ' Q'));
+        });
       });
       // skala dan panah utara
       var L0 = [100, 200, 500, 1000, 2000, 5000].filter(function (v) { return v * sc < fw * 0.25; }).pop() || 100, bx = PW / 2 - L0 * sc / 2, by = M + 16;
