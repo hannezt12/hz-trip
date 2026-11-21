@@ -18,7 +18,7 @@
   var MN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
   var MC0 = ['#e6194b', '#f58231', '#ffe119', '#8fd14f', '#2e8b3d', '#17bebb', '#4fc3f7', '#1f4fa8', '#8e44ad', '#d81b9a', '#8d5524', '#6c7a89'];
   var YR = +S.today.slice(0, 4);
-  var DEF = function () { return { sel: null, jn: 'bulanan', scope: 'master', blk: '', from: addDays(S.today, -29), to: S.today, cs: [], k1: '', k2: '', y1: YR, m1: 1, y2: YR, m2: 12, kNo: true, luas: true, kLeg: true, bw: 1, fs: 2, title: '', lt: {}, lr: {}, mc: null, lg: { x: null, y: null, fs: 8 } }; };
+  var DEF = function () { return { sel: null, jn: 'bulanan', scope: 'master', blk: '', from: addDays(S.today, -29), to: S.today, cs: [], k1: '', k2: '', mw: '', y1: YR, m1: 1, y2: YR, m2: 12, kNo: true, luas: true, kLeg: true, bw: 1, fs: 2, title: '', lt: {}, lr: {}, mc: null, lg: { x: null, y: null, fs: 8 } }; };
   var PS = Object.assign(DEF(), S.settings.lpPS || {});
   PS.lg = Object.assign({ x: null, y: null, fs: 8 }, PS.lg || {}); if (!PS.lt) PS.lt = {}; if (!PS.lr) PS.lr = {}; if (!Array.isArray(PS.cs)) PS.cs = [];
   var AC = { k1: false, k2: false };
@@ -75,6 +75,17 @@
     });
     return { title: 'Rincian kegiatan', sub: m.name + ' - ' + periode, cols: [{ h: 'Tanggal', x: 40, max: 10 }, { h: 'Blok', x: 100, max: 18 }, { h: 'Kategori', x: 190, sw: true, max: 34 }, { h: 'Luas', x: 420, max: 14 }, { h: 'Luas blok', x: 490, max: 12 }], rows: rows };
   }
+  // ---------- warna isi blok menurut lapisan (status / varietas) ----------
+  function mwLap() { return PS.mw && HA.lyb ? HA.lyb.by(PS.mw) : null; }
+  var SOFT = ['#FFE082', '#A5D6A7', '#81D4FA', '#CE93D8', '#FFAB91', '#B0BEC5', '#F48FB1', '#C5E1A5', '#80CBC4', '#BCAAA4'];
+  function mwCol(lp, it) { if (lp.mode === 'fill' && it.col) return it.col; var i = lp.items.indexOf(it); return SOFT[(i < 0 ? 0 : i) % SOFT.length]; }
+  function mwFills(list) {
+    var lp = mwLap(); if (!lp) return { fills: [], leg: [], by: {} };
+    var fills = [], used = {}, by = {};
+    list.forEach(function (b) { var it = HA.lyb.of(b, lp.id); if (!it) return; used[it.id] = it; by[b.id] = mwCol(lp, it); fills.push({ pts: b.pts, mode: 'full', col: by[b.id] }); });
+    var leg = lp.items.filter(function (it) { return used[it.id]; }).map(function (it) { var t = lp.name + ': ' + (it.sym ? it.sym + ' ' : '') + it.name; return { key: 'w:' + it.id, base: t, col: mwCol(lp, it), txt: PS.lr['w:' + it.id] || t }; });
+    return { fills: fills, leg: leg, by: by };
+  }
   // ---------- susun laporan ----------
   function build(m) {
     var list = scopeList(m), R = range(), periode = dmy(R.from) + ' - ' + dmy(R.to), sh, tables = [], i;
@@ -86,8 +97,10 @@
         var o = byB[k], best = null; Object.keys(o.ms).forEach(function (mk) { if (!best || o.ms[mk].a > o.ms[best].a || (o.ms[mk].a === o.ms[best].a && mk > best)) best = mk; });
         fills.push({ pts: o.b.pts, mode: o.cat === PS.k1 ? 'ring' : 'inner', col: mcol(+best.slice(5, 7)) });
       });
+      var W = mwFills(list); fills = W.fills.concat(fills);
       var leg = [], y = PS.y1, mo = PS.m1, cross = PS.y1 !== PS.y2;
       for (i = 0; i < monthsN(); i++) { var key = y + '-' + ('0' + mo).slice(-2), base = PS.lr['m:' + key] || (MN[mo - 1] + (cross ? ' ' + String(y).slice(2) : '')); leg.push({ key: 'm:' + key, base: base, col: mcol(mo), txt: base }); mo++; if (mo > 12) { mo = 1; y++; } }
+      leg = leg.concat(W.leg);
       var keter = [{ kind: 'ring', txt: 'Garis tepi = ' + catName(PS.k1) }]; if (PS.k2) keter.push({ kind: 'fill', txt: 'Warna dalam = ' + catName(PS.k2) });
       var sum = {}; recs.forEach(function (r) { var mk = r.d.slice(0, 7); sum[mk] = sum[mk] || [0, 0]; sum[mk][r.it.cat === PS.k1 ? 0 : 1] += areaOf(r.it); });
       var srows = [], t1 = 0, t2 = 0; y = PS.y1; mo = PS.m1;
@@ -100,9 +113,10 @@
       var cs = PS.cs.filter(function (id) { return !!catById(id); });
       var rc = collect(list, cs); if (!rc.length) return null;
       var best2 = {}; rc.forEach(function (r) { var k = r.b.id; if (best2[k] == null || r.ci < best2[k].ci) best2[k] = { b: r.b, ci: r.ci }; });
-      var fl = Object.keys(best2).map(function (k) { var o = best2[k], c = catById(cs[o.ci]); return { pts: o.b.pts, mode: 'full', col: c ? c.col : '#888888' }; });
-      var seen = {}, lg2 = []; rc.forEach(function (r) { seen[r.it.cat] = 1; });
-      cs.forEach(function (id) { if (seen[id]) { var c = catById(id); lg2.push({ key: 'c:' + id, base: catName(id), col: c ? c.col : '#888888', txt: catName(id) }); } });
+      var Wb = mwFills(list);
+      var fl = Object.keys(best2).map(function (k) { var o = best2[k], c = catById(cs[o.ci]); return { pts: o.b.pts, mode: 'full', col: Wb.by[o.b.id] || (c ? c.col : '#888888') }; });
+      var seen = {}, lg2 = []; if (Wb.leg.length) lg2 = Wb.leg.slice(); rc.forEach(function (r) { seen[r.it.cat] = 1; });
+      cs.forEach(function (id) { if (seen[id] && !Wb.leg.length) { var c = catById(id); lg2.push({ key: 'c:' + id, base: catName(id), col: c ? c.col : '#888888', txt: catName(id) }); } });
       tables.push(detailTable(m, rc, cs, periode));
       sh = { name: 'Laporan Bulanan', fills: fl, leg: lg2, info: [['Jenis', 'Bulanan']] };
     }
@@ -134,6 +148,7 @@
       '<div class="h">KATEGORI</div>' +
       (thn ? acc('k1', 'Kategori 1 (garis tepi)', PS.k1, cl, false) + acc('k2', 'Kategori 2 (isi dalam)', PS.k2, cl.filter(function (c) { return c.id !== PS.k1; }), true) + '<div class="muted" style="margin-top:4px">Sub kategori ikut kategorinya dan hanya tampil di lembar tabel.</div>'
         : '<div class="pmCats">' + (cl.length ? cl.map(function (c) { var i = PS.cs.indexOf(c.id); return '<label class="pmC"><input type="checkbox" data-c="' + c.id + '"' + (i >= 0 ? ' checked' : '') + '><i class="pmSw" style="background:' + c.col + '"></i>' + esc(c.name) + (i >= 0 ? '<b class="pmOrd">' + (i + 1) + '</b>' : '') + '</label>'; }).join('') : '<div class="muted">Belum ada kategori.</div>') + '</div><div class="muted" style="margin-top:4px">Urutan centang = prioritas warna bila satu blok punya beberapa kategori; kategori lain tetap tampil di tabel.</div>') +
+      '<div class="h">WARNA ISI BLOK</div><select id="pmMw" style="width:100%"><option value="">Menurut kategori</option>' + (HA.lyb ? HA.lyb.all().filter(function (l) { return l.items.length; }).map(function (l) { return '<option value="' + l.id + '"' + (PS.mw === l.id ? ' selected' : '') + '>Menurut ' + esc(l.name) + '</option>'; }).join('') : '') + '</select><div class="muted" style="margin-top:4px">Status/varietas diatur di menu Lapisan. Isi blok memakai warna tiap item lapisan.</div>' +
       '<div class="h">CAKUPAN</div><div class="seg" id="pmSc"><button data-s="master"' + (PS.scope === 'master' ? ' class="on"' : '') + '>Master</button><button data-s="blok"' + (PS.scope === 'blok' ? ' class="on"' : '') + '>Blok tertentu</button></div>' +
       (PS.scope === 'blok' ? '<input type="text" id="pmBlk" placeholder="No blok, pisahkan koma (mis. 04 TS 16, 04 TS 17)" value="' + esc(PS.blk) + '" style="width:100%;margin-top:6px">' : '') +
       '<div class="muted" id="pmN" style="margin-top:4px">' + list.length + ' blok akan dicetak</div>' +
@@ -164,6 +179,7 @@
     sh.querySelectorAll('.pmC input').forEach(function (e) { e.onchange = function () { var id = e.getAttribute('data-c'), i = PS.cs.indexOf(id); if (e.checked && i < 0) PS.cs.push(id); else if (!e.checked && i >= 0) PS.cs.splice(i, 1); persist(); rerender(); }; });
     sh.querySelectorAll('.pmAh').forEach(function (b) { b.onclick = function () { var k = b.getAttribute('data-a'); AC[k] = !AC[k]; rerender(); }; });
     ['k1', 'k2'].forEach(function (k) { sh.querySelectorAll('input[name=pm_' + k + ']').forEach(function (r) { r.onchange = function () { PS[k] = r.value; if (PS.k1 && PS.k1 === PS.k2) PS.k2 = ''; AC[k] = false; persist(); rerender(); }; }); });
+    if ($('pmMw')) $('pmMw').onchange = function () { PS.mw = this.value; persist(); };
     $('pmSc').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-s]'); if (b) { PS.scope = b.getAttribute('data-s'); persist(); rerender(); } };
     function cnt() { if ($('pmN')) $('pmN').textContent = scopeList(m).length + ' blok akan dicetak'; }
     if ($('pmBlk')) { $('pmBlk').oninput = function () { PS.blk = this.value; cnt(); }; $('pmBlk').onchange = persist; }
