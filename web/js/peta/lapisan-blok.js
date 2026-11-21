@@ -105,13 +105,18 @@
           '<label class="lbOn"><input type="checkbox" data-on="' + l.id + '"' + (l.on ? ' checked' : '') + '> Ikut cetak</label></div>';
       }).join('') +
       (HA.obj ? '<div class="lbCard"><button type="button" class="lbOpen" id="lbObj"><b>Objek</b><span class="muted">' + HA.obj.jenis().length + ' jenis \u00B7 ' + HA.obj.objs().length + ' objek \u00B7 titik, garis, area</span></button><label class="lbOn"><input type="checkbox" id="lbObjOn"' + (HA.obj.on() ? ' checked' : '') + '> Ikut cetak</label></div>' : '') +
-      '<button class="btn" id="lbBulk" style="width:100%;margin-top:10px">Atur banyak blok</button>' +
+      '<div class="lbCard" style="display:block"><b>Tebang otomatis</b><div class="muted" style="margin:2px 0 6px">Tanda tebang/panen menaikkan status blok otomatis (nama kategori berisi "bibit" = tebang bibit, selain itu produksi). Tebang berikutnya di blok yang sama dalam jumlah hari ini dianggap lanjutan, status tidak naik lagi.</div><div class="row" style="gap:8px"><label class="calL">Produksi (hari)<input type="number" id="lbWp" min="1" max="365" value="' + winDays('produksi') + '"></label><label class="calL">Bibit (hari)<input type="number" id="lbWb" min="1" max="365" value="' + winDays('bibit') + '"></label></div></div>' +
+      '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="lbCx" style="flex:1">Ekspor CSV</button><button class="btn" id="lbCi" style="flex:1">Impor CSV</button></div>' +
+      '<button class="btn" id="lbBulk" style="width:100%;margin-top:8px">Atur banyak blok</button>' +
       '<button class="btn" id="lbNew" style="width:100%;margin-top:8px">+ Lapisan baru</button>');
     $('lbX').onclick = closeSheet;
     $('sheet').querySelectorAll('.lbOpen').forEach(function (e) { e.onclick = function () { lapOpen(e.getAttribute('data-l')); }; });
     $('sheet').querySelectorAll('[data-on]').forEach(function (e) { e.onchange = function () { lapBy(e.getAttribute('data-on')).on = e.checked; save(); }; });
     if ($('lbObj')) { $('lbObj').onclick = function () { HA.obj.open(); }; $('lbObjOn').onchange = function () { S.settings.objOn = this.checked; save(); }; }
     $('lbBulk').onclick = function () { bulk(null); };
+    function wv(id, k) { $(id).onchange = function () { var v = Math.max(1, Math.min(365, Math.round(+this.value) || 30)); this.value = v; (S.settings.lybWin = S.settings.lybWin || {})[k] = v; save(); }; }
+    wv('lbWp', 'produksi'); wv('lbWb', 'bibit');
+    $('lbCx').onclick = csvOut; $('lbCi').onclick = csvIn;
     $('lbNew').onclick = newLap;
   }
   function newLap() {
@@ -254,13 +259,18 @@
     draw();
   }
 
-  // ---------- usul naik status: kategori Panen/Tebang tercatat di blok ----------
-  var sq = {}, sqT = null;
+  // ---------- naik status otomatis: tanda Panen/Tebang (produksi / bibit) tercatat di blok ----------
   function blockOfItem(it) {
     var bl = HA.blocksList(), i;
     if (it.bid != null) for (i = 0; i < bl.length; i++) if (String(bl[i].id) === String(it.bid)) return bl[i];
     if (it.pts && it.pts[0] && HA.blockAt) { try { return HA.blockAt(L.latLng(it.pts[0][0], it.pts[0][1])); } catch (e) {} }
     return null;
+  }
+  function winDays(j) { var w = S.settings.lybWin || {}, v = +w[j]; return v > 0 ? v : 30; }
+  function dayDiff(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5); }
+  function umurAt(b, d) {
+    if (!b || !b.tn || !/^\d{4}-\d{2}$/.test(b.tn)) return '';
+    var m = (+d.slice(0, 4) - +b.tn.slice(0, 4)) * 12 + (+d.slice(5, 7) - +b.tn.slice(5, 7)); return m < 0 ? '' : m;
   }
   function suggest(it) {
     if (!it || !it.cat) return;
@@ -268,31 +278,113 @@
     if (!c || !/panen|tebang/i.test(c.name || '')) return;
     var l = lapBy('status'); if (!l || !l.items.length) return;
     var b = blockOfItem(it); if (!b || !of(b, 'status') || !nextItem(b, l)) return;
-    var d = it.date || today(); if (d <= (b.stSug || '')) return;
-    if (!sq[b.id] || sq[b.id].d < d) sq[b.id] = { b: b, d: d };
-    clearTimeout(sqT); sqT = setTimeout(function () { flush(0); }, 1500);
+    var d = it.date || today(), j = /bibit/i.test(c.name) ? 'bibit' : 'produksi';
+    if (b.stSug) { if (d <= b.stSug || dayDiff(b.stSug, d) < winDays(j)) return; }
+    var cur = of(b, 'status'), nx = nextItem(b, l), um = umurAt(b, d), pt = b.tn || '', ps = b.stSug || '';
+    if (!setItem(b, 'status', nx.id)) return;
+    var e = b.lyh[b.lyh.length - 1]; e.jn = j; e.um = um; e.pi = cur.id; e.pt = pt; e.ps = ps; e.ds = d;
+    b.tn = d.slice(0, 7); b.stSug = d; save();
+    toast('Blok ' + b.name + ': ' + cur.name + ' \u2192 ' + nx.name + ' (tebang ' + j + '). Urungkan di Riwayat status.');
   }
-  function flush(n) {
-    var ks = Object.keys(sq); if (!ks.length) return;
-    var busy = $('sheet').classList.contains('on') || (HA.DM && HA.DM.edit);
-    if (busy) { if (n < 40) sqT = setTimeout(function () { flush(n + 1); }, 2500); return; }
-    var l = lapBy('status'), rows = ks.map(function (k) {
-      var q = sq[k], cur = of(q.b, 'status'), nx = nextItem(q.b, l); if (!cur || !nx) return '';
-      return '<label class="lsR"><input type="checkbox" data-sb="' + k + '" checked><span class="lsT"><b>Blok ' + esc(String(q.b.name)) + '</b> <span class="muted">' + esc(cur.name) + ' \u2192 ' + esc(nx.name) + ' \u00B7 panen ' + esc(q.d) + '</span></span></label>';
-    }).filter(Boolean);
-    if (!rows.length) { sq = {}; return; }
-    openSheet('<div class="grab"></div><div class="st">NAIK STATUS?</div><div class="muted" style="margin:6px 0">Kategori panen/tebang baru dicatat. Naikkan status tanam blok berikut?</div><div class="plist" style="max-height:40vh;overflow:auto">' + rows.join('') + '</div>' +
-      '<button class="btn pri" id="nsGo" style="width:100%;margin-top:10px;height:50px">Naik status</button><button class="btn" id="nsNo" style="width:100%;margin-top:8px">Lewati</button>');
-    function done(apply) {
-      var pick = {}; $('sheet').querySelectorAll('[data-sb]').forEach(function (e) { pick[e.getAttribute('data-sb')] = e.checked; });
-      var n2 = 0;
-      Object.keys(sq).forEach(function (k) {
-        var q = sq[k], nx = nextItem(q.b, l); q.b.stSug = q.d;
-        if (apply && pick[k] && nx && setItem(q.b, 'status', nx.id)) { q.b.tn = q.d.slice(0, 7); n2++; }
-      });
-      sq = {}; save(); closeSheet(); if (apply) toast(n2 + ' blok naik status');
+  function undoLast(b) {
+    var h = b.lyh || [], e = h[h.length - 1]; if (!e || e.ps === undefined) return false;
+    if (e.pi) { b.ly = b.ly || {}; b.ly[e.l] = e.pi; } else if (b.ly) delete b.ly[e.l];
+    b.tn = e.pt || ''; if (e.ps) b.stSug = e.ps; else delete b.stSug; h.pop(); save(); return true;
+  }
+
+  // ---------- impor / ekspor CSV (dicocokkan lewat nama blok persis) ----------
+  function nk(v) { return String(v == null ? '' : v).toLowerCase().replace(/\s*\/\s*/g, '/').replace(/\s+/g, ' ').trim(); }
+  function cc(v) { v = String(v == null ? '' : v); if (/^\d+[\/.\-]\d+$/.test(v)) return '="' + v + '"'; if (/[;"\n]/.test(v)) return '"' + v.replace(/"/g, '""') + '"'; return v; }
+  function csvOut() {
+    var ls = all().filter(function (l) { return l.items.length; }), rows = [['Blok'].concat(ls.map(function (l) { return l.name; })).concat(['Bulan tanam', 'Umur']).map(cc).join(';')];
+    HA.blocksList().forEach(function (b) { rows.push([b.name].concat(ls.map(function (l) { var it = of(b, l.id); return it ? it.name : ''; })).concat([b.tn || '', umur(b)]).map(cc).join(';')); });
+    HA.saveFile('HZTrip-lapisan-blok-' + today() + '.csv', HA.textB64('﻿' + rows.join('\r\n')), 'text/csv');
+  }
+  function parseCsv(t) {
+    t = String(t || '').replace(/^﻿/, ''); var fl = t.split(/\r?\n/)[0] || '', dl = ';', cs = [[';', (fl.match(/;/g) || []).length], [',', (fl.match(/,/g) || []).length], ['\t', (fl.match(/\t/g) || []).length]].sort(function (a, b) { return b[1] - a[1]; }); if (cs[0][1]) dl = cs[0][0];
+    var out = [], row = [], f = '', q = false, i, c;
+    for (i = 0; i < t.length; i++) {
+      c = t[i];
+      if (q) { if (c === '"') { if (t[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+      else if (c === '"' && f === '') q = true;
+      else if (c === dl) { row.push(f); f = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; row.push(f); out.push(row); row = []; f = ''; }
+      else f += c;
     }
-    $('nsGo').onclick = function () { done(true); }; $('nsNo').onclick = function () { done(false); };
+    if (f !== '' || row.length) { row.push(f); out.push(row); }
+    return out.map(function (r) { return r.map(function (v) { var m = /^="(.*)"$/.exec(v.trim()); return (m ? m[1] : v).trim(); }); }).filter(function (r) { return r.some(function (v) { return v !== ''; }); });
+  }
+  var MONS = { jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, may: 5, jun: 6, jul: 7, agu: 8, aug: 8, ags: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12 };
+  function parseTn(v) {
+    v = String(v || '').trim(); if (!v) return ''; var m, y, mo;
+    if ((m = /^(\d{4})[-\/.](\d{1,2})/.exec(v))) { y = +m[1]; mo = +m[2]; }
+    else if ((m = /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/.exec(v))) { y = +m[3]; mo = +m[2]; }
+    else if ((m = /^(\d{1,2})[-\/.](\d{4})$/.exec(v))) { y = +m[2]; mo = +m[1]; }
+    else if ((m = /^([A-Za-z]{3,})[\s\-\/.]+(\d{2,4})$/.exec(v))) { mo = MONS[m[1].slice(0, 3).toLowerCase()] || 0; y = +m[2]; if (y < 100) y += 2000; }
+    else return null;
+    return (mo >= 1 && mo <= 12 && y >= 1990 && y <= 2100) ? y + '-' + p2(mo) : null;
+  }
+  function csvIn() {
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.csv,.txt,text/csv,text/plain';
+    inp.onchange = function () {
+      var f = inp.files && inp.files[0]; if (!f) return; var fr = new FileReader();
+      fr.onload = function () { try { csvPrev(parseCsv(fr.result)); } catch (e) { toast('Berkas tidak terbaca'); } };
+      fr.readAsText(f);
+    };
+    inp.click();
+  }
+  function csvPrev(rows) {
+    if (rows.length < 2) { toast('CSV kosong'); return; }
+    var hd = rows[0].map(nk), ls = all(), ci = { b: -1, t: -1 }, lc = {};
+    hd.forEach(function (h, i) {
+      if (ci.b < 0 && /^(blok|no blok|nama blok|block)$/.test(h)) ci.b = i;
+      else if (ci.t < 0 && /^(bulan tanam|tanam|tebang|bulan tanam\/tebang)$/.test(h)) ci.t = i;
+      else ls.forEach(function (l) { var n = nk(l.name); if ((h === n || (l.id === 'status' && h === 'status')) && lc[l.id] == null) lc[l.id] = i; });
+    });
+    if (ci.b < 0) { toast('Kolom "Blok" tidak ditemukan di baris pertama'); return; }
+    if (ci.t < 0 && !Object.keys(lc).length) { toast('Tidak ada kolom Status/Varietas/Bulan tanam'); return; }
+    var map = {}; HA.blocksList().forEach(function (b) { (map[nk(b.name)] = map[nk(b.name)] || []).push(b); });
+    var ok = [], miss = [], dup = [], unk = {}, badT = 0;
+    rows.slice(1).forEach(function (r) {
+      var nm = r[ci.b]; if (!nm) return; var bs = map[nk(nm)];
+      if (!bs) { miss.push(nm); return; } if (bs.length > 1) { dup.push(nm); return; }
+      var o = { b: bs[0], v: {}, t: null };
+      Object.keys(lc).forEach(function (id) {
+        var raw = (r[lc[id]] || '').trim(); if (!raw) return; var l = lapBy(id), k = nk(raw), it = null;
+        l.items.forEach(function (x) { if (nk(x.name) === k || (x.sym && nk(x.sym) === k)) it = x; });
+        if (it) o.v[id] = it.id; else { (unk[id] = unk[id] || {})[raw] = 1; o.v[id] = { nw: raw }; }
+      });
+      if (ci.t >= 0 && (r[ci.t] || '').trim()) { var tn = parseTn(r[ci.t]); if (tn === null) badT++; else o.t = tn; }
+      ok.push(o);
+    });
+    var mk = Object.keys(unk).filter(function (id) { return lapBy(id).mode === 'fill'; });
+    var h = '<div class="grab"></div><div class="st">IMPOR CSV</div><div class="muted" style="margin:6px 0">Dicocokkan lewat nama blok persis (spasi/huruf besar kecil diabaikan; "04 TS 16" tidak sama dengan "04 TS 16s"). Sel kosong tidak mengubah data.</div>' +
+      '<div class="plist"><div><b>' + ok.length + '</b> blok cocok</div>' + (miss.length ? '<div>' + miss.length + ' tidak ditemukan: <span class="muted">' + esc(miss.slice(0, 8).join(', ') + (miss.length > 8 ? ' ...' : '')) + '</span></div>' : '') +
+      (dup.length ? '<div>' + dup.length + ' nama kembar di app (dilewati): <span class="muted">' + esc(dup.slice(0, 5).join(', ')) + '</span></div>' : '') + (badT ? '<div>' + badT + ' bulan tanam tidak terbaca (dilewati)</div>' : '') +
+      Object.keys(unk).map(function (id) { var l = lapBy(id), n = Object.keys(unk[id]); return '<div>' + n.length + ' ' + esc(l.name) + ' belum ada: <span class="muted">' + esc(n.slice(0, 8).join(', ') + (n.length > 8 ? ' ...' : '')) + '</span></div>'; }).join('') + '</div>' +
+      (mk.length ? '<label style="display:block;margin-top:8px"><input type="checkbox" id="ciNw" checked> Buat otomatis item baru (' + mk.map(function (id) { return esc(lapBy(id).name); }).join(', ') + '), warna/arsir bisa diubah di menu Lapisan</label>' : '') +
+      (Object.keys(unk).some(function (id) { return lapBy(id).mode === 'sym'; }) ? '<div class="muted" style="margin-top:6px">Status yang belum ada tidak dibuat otomatis (dilewati).</div>' : '') +
+      '<button class="btn pri" id="ciGo" style="width:100%;margin-top:10px;height:50px"' + (ok.length ? '' : ' disabled') + '>Terapkan</button><button class="btn" id="ciNo" style="width:100%;margin-top:8px">Batal</button>';
+    openSheet(h);
+    $('ciNo').onclick = home;
+    $('ciGo').onclick = function () {
+      var mkNew = $('ciNw') && $('ciNw').checked, made = {}, n = 0, idx = 0;
+      ok.forEach(function (o) {
+        var ch = false;
+        Object.keys(o.v).forEach(function (id) {
+          var v = o.v[id], l = lapBy(id);
+          if (typeof v === 'object') {
+            if (l.mode !== 'fill' || !mkNew) return; var k = nk(v.nw), it = made[id + '|' + k];
+            if (!it) { it = { id: 'i' + Date.now().toString(36) + (idx++), name: v.nw, sym: '', col: PAL[l.items.length % PAL.length], pat: PATS[(Math.floor(l.items.length / PAL.length) % (PATS.length - 1)) + 1][0], pc: '#000000' }; l.items.push(it); made[id + '|' + k] = it; }
+            v = it.id;
+          }
+          if (setItem(o.b, id, v)) ch = true;
+        });
+        if (o.t && o.b.tn !== o.t) { o.b.tn = o.t; ch = true; }
+        if (ch) n++;
+      });
+      save(); toast(n + ' blok diperbarui'); home();
+    };
   }
   var hk = setInterval(function () {
     if (!HA.tandaAdd || HA.tandaAdd._lyb) return;
@@ -301,9 +393,11 @@
   function hist(b, back) {
     var h = (b.lyh || []).slice().reverse();
     openSheet('<div class="grab"></div><div class="bth"><div class="st">RIWAYAT STATUS \u00B7 BLOK ' + esc(String(b.name)).toUpperCase() + '</div><button class="btn pri" id="rhX">Tutup</button></div>' +
-      (h.length ? '<div class="lbList">' + h.map(function (x) { var l = lapBy(x.l), it = l && itemBy(l, x.i); return '<div class="lbRow" style="min-height:2.75rem;align-items:center"><span class="muted" style="width:6.5rem;flex:none">' + esc(x.d) + '</span><span><b>' + esc(l ? l.name : x.l) + '</b>: ' + esc(it ? it.name : 'dikosongkan') + '</span></div>'; }).join('') + '</div>' : '<div class="muted" style="margin:10px 0">Belum ada perubahan.</div>') +
+      (h.length ? '<div class="lbList">' + h.map(function (x) { var l = lapBy(x.l), it = l && itemBy(l, x.i); return '<div class="lbRow" style="min-height:2.75rem;align-items:center"><span class="muted" style="width:6.5rem;flex:none">' + esc(x.d) + '</span><span><b>' + esc(l ? l.name : x.l) + '</b>: ' + esc(it ? it.name : 'dikosongkan') + (x.jn ? ' <span class="muted">\u00B7 tebang ' + x.jn + (x.um !== '' && x.um != null ? ' \u00B7 umur ' + x.um + ' bln' : '') + '</span>' : '') + '</span></div>'; }).join('') + '</div>' : '<div class="muted" style="margin:10px 0">Belum ada perubahan.</div>') +
+      (((b.lyh || []).length && b.lyh[b.lyh.length - 1].ps !== undefined) ? '<button class="btn" id="rhUn" style="width:100%;margin-top:8px">Urungkan perubahan terakhir</button>' : '') +
       (b.tn ? '<div class="muted" style="margin-top:8px">Bulan tanam/tebang terakhir: ' + esc(b.tn) + '</div>' : ''));
     $('rhX').onclick = function () { if (back) back(); else closeSheet(); };
+    if ($('rhUn')) $('rhUn').onclick = function () { if (undoLast(b)) { toast('Perubahan terakhir diurungkan'); hist(b, back); } };
   }
   HA.lyb = { hist: hist, suggest: suggest, all: all, by: lapBy, of: of, set: setItem, umur: umur, txt: txt, next: nextItem, active: active, fillPdf: fillPdf, swatchPdf: swatchPdf, rgb: rgb, pathOf: pathOf, PATS: PATS, PAL: PAL, prevSvg: prevSvg, home: home, bulk: bulk, today: today };
   document.addEventListener('DOMContentLoaded', wire); if (document.readyState !== 'loading') wire();
