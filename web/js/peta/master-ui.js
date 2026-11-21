@@ -380,7 +380,7 @@
         HA.linesList().forEach(function (ln) {
           if (rn > 1500 || !ln.pts || ln.pts.length < 2) return;
           var q = bbox(ln.pts); if (q[2] < mb[0] || q[0] > mb[2] || q[3] < mb[1] || q[1] > mb[3]) return; rn++;
-          var pth = '', wd = Math.max(0.5, Math.min(4, (+ln.w || 2) * sc));
+          var pth = '', wd = Math.max(0.5, Math.min(1.5, (+ln.w || 2) * sc));
           ln.pts.forEach(function (p, i) { pth += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); });
           rs.push(ln.type === 'drain' ? 'q 0.35 G [3 2] 0 d ' + f2(wd) + ' w ' + pth + 'S Q' : 'q 0.55 G ' + f2(wd) + ' w ' + pth + 'S Q');
         });
