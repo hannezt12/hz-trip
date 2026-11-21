@@ -86,7 +86,7 @@
       var b = document.createElement('button'); b.id = a[0]; b.className = 'locbtn' + a[1]; b.setAttribute('aria-label', a[2]); b.innerHTML = a[3]; w.appendChild(b);
     });
     var sr = document.createElement('div'); sr.id = 'tdSrch'; sr.style.display = 'none';
-    sr.innerHTML = '<div class="tdSq"><input type="search" id="tdQ" placeholder="Cari nama blok" autocomplete="off"><button class="ib" id="tdQx" aria-label="Tutup">' + IC.close + '</button></div><div id="tdSl"></div>';
+    sr.innerHTML = '<div class="tdSq"><input type="search" id="tdQ" placeholder="Cari nama blok atau koordinat" autocomplete="off"><button class="ib" id="tdQx" aria-label="Tutup">' + IC.close + '</button></div><div id="tdSl"></div>';
     w.appendChild(sr);
     var xh = document.createElement('div'); xh.id = 'tdCross'; xh.innerHTML = IC.cross; w.appendChild(xh);
     var co = document.createElement('div'); co.id = 'tdCoord'; co.innerHTML = '<span id="tdCoordT"></span><button type="button" id="tdCopy" aria-label="Salin koordinat">' + IC.copy + '</button>'; w.appendChild(co);
@@ -109,6 +109,7 @@
     $('tdSr').onclick = function () { if ($('tdSrch').style.display === 'none') srchOpen(); else srchClose(); };
     $('tdQx').onclick = srchClose;
     $('tdQ').oninput = srchList;
+    $('tdQ').onkeydown = function (e) { if (e.key === 'Enter') { var kc = parseKoord(this.value); if (kc) { e.preventDefault(); goKoord(kc); } } };
     $('tdLay').onclick = function () { bmode = bmode === 'sat' ? 'osm' : 'sat'; HA.setBase(sp(), bmode); sp()._forceOvl = bmode === 'osm'; if (HA.syncOverlays) HA.syncOverlays(sp()); toast(bmode === 'sat' ? 'Mode satelit' : 'Mode peta + peta PDF'); };
     $('tdChip').onclick = function () { if (!cur) return; if (itemsOf(cur).length) history(null); else zoomBlk(); };
   }
@@ -238,7 +239,34 @@
   function norm(s) { return String(s).toLowerCase().replace(/\s+/g, ''); }
   function srchOpen() { $('tdSrch').style.display = 'block'; $('tdQ').value = ''; srchList(); setTimeout(function () { try { $('tdQ').focus(); } catch (e) {} }, 60); }
   function srchClose() { var s = $('tdSrch'); if (s) { s.style.display = 'none'; try { $('tdQ').blur(); } catch (e) {} } }
+  // koordinat: "1,6363739, 104,2009687" (koma desimal), "-4.9 105.2", "1.63;104.2"
+  function parseKoord(str) {
+    var t = String(str || '').replace(/[\u00B0\u00BA]/g, '').trim();
+    var m = t.match(/^(-?\d{1,3}(?:[.,]\d+)?)\s*(?:;|,\s*|\s)\s*(-?\d{1,3}(?:[.,]\d+)?)$/); if (!m) return null;
+    var a = parseFloat(m[1].replace(',', '.')), b = parseFloat(m[2].replace(',', '.'));
+    if (!isFinite(a) || !isFinite(b)) return null;
+    if (Math.abs(a) > 90 && Math.abs(b) <= 90) { var x = a; a = b; b = x; }
+    if (Math.abs(a) > 90 || Math.abs(b) > 180) return null;
+    return [a, b];
+  }
+  HA.parseKoord = parseKoord;
+  var goMk = null, goTm = null;
+  function goKoord(kc) {
+    var m = sp(); if (!m || !kc) return;
+    srchClose();
+    if (goMk) { try { m.removeLayer(goMk); } catch (e) {} goMk = null; } clearTimeout(goTm);
+    m.setView(kc, Math.max(m.getZoom(), 18));
+    goMk = L.circleMarker(kc, { radius: 9, color: '#fff', weight: 3, fillColor: '#E53935', fillOpacity: 1 }).addTo(m).bindTooltip(kc[0].toFixed(7) + ', ' + kc[1].toFixed(7), { permanent: true, direction: 'top', offset: [0, -10] });
+    goTm = setTimeout(function () { if (goMk) { try { m.removeLayer(goMk); } catch (e) {} goMk = null; } }, 90000);
+    toast('Koordinat ' + kc[0].toFixed(6) + ', ' + kc[1].toFixed(6));
+  }
   function srchList() {
+    var kc = parseKoord($('tdQ').value);
+    if (kc) {
+      $('tdSl').innerHTML = '<button class="bprow" id="tdGo"><span class="bpi"><b>Pergi ke koordinat</b><small>' + kc[0].toFixed(7) + ', ' + kc[1].toFixed(7) + '</small></span></button>';
+      $('tdGo').onclick = function () { goKoord(kc); };
+      return;
+    }
     var q = norm($('tdQ').value), ref = pos, m = sp();
     if (!ref && m) { var c = m.getCenter(); ref = [c.lat, c.lng]; }
     var l = blocksC().map(function (b) { var q2 = bbox(b.pts); return { b: b, d: ref ? dist(ref, [(q2[0] + q2[2]) / 2, (q2[1] + q2[3]) / 2]) : 0, n: norm(b.name) }; });

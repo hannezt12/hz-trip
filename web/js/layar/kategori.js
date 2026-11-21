@@ -78,7 +78,23 @@
   function dkm(a, b) { var R = 6371000, p = Math.PI / 180, x = (b[1] - a[1]) * p * Math.cos((a[0] + b[0]) / 2 * p), y = (b[0] - a[0]) * p; return Math.sqrt(x * x + y * y) * R; }
   function nrm(t) { return String(t).toLowerCase().replace(/\s+/g, ''); }
   var coll = (typeof Intl !== 'undefined' && Intl.Collator) ? new Intl.Collator('id', { numeric: true }) : { compare: function (a, b) { return a < b ? -1 : a > b ? 1 : 0; } };
+  var goMk = null, goTm = null;
+  function goKoord(kc) {
+    var m = map(); if (!m || !kc) return;
+    srchClose();
+    if (goMk) { try { m.removeLayer(goMk); } catch (e) {} goMk = null; } clearTimeout(goTm);
+    m.setView(kc, Math.max(m.getZoom(), 18));
+    goMk = L.circleMarker(kc, { radius: 9, color: '#fff', weight: 3, fillColor: '#E53935', fillOpacity: 1 }).addTo(m).bindTooltip(kc[0].toFixed(7) + ', ' + kc[1].toFixed(7), { permanent: true, direction: 'top', offset: [0, -10] });
+    goTm = setTimeout(function () { if (goMk) { try { m.removeLayer(goMk); } catch (e) {} goMk = null; } }, 90000);
+    toast('Koordinat ' + kc[0].toFixed(6) + ', ' + kc[1].toFixed(6));
+  }
   function srchList() {
+    var kc = HA.parseKoord ? HA.parseKoord($('katQ').value) : null;
+    if (kc) {
+      var e0 = $('katSl'); e0.innerHTML = '<button type="button" class="bprow" id="katGo"><span class="bpi"><b>Pergi ke koordinat</b><small>' + kc[0].toFixed(7) + ', ' + kc[1].toFixed(7) + '</small></span></button>'; e0.style.display = 'block';
+      $('katGo').onclick = function () { goKoord(kc); };
+      return;
+    }
     var q = nrm($('katQ').value), c = map() ? map().getCenter() : null, ref = c ? [c.lat, c.lng] : null;
     var l = HA.blocksList().filter(function (b) { return b.conf && b.pts && b.pts.length >= 3; }).map(function (b) {
       var la = 0, lo = 0; b.pts.forEach(function (p) { la += p[0]; lo += p[1]; }); la /= b.pts.length; lo /= b.pts.length;
@@ -109,6 +125,7 @@
   function srchWire() {
     var q = $('katQ');
     q.onfocus = srchList; q.oninput = srchList;
+    q.onkeydown = function (e) { if (e.key === 'Enter') { var kc = HA.parseKoord && HA.parseKoord(this.value); if (kc) { e.preventDefault(); goKoord(kc); } } };
     $('katXc').onclick = srchClose;
   }
   KM.openSearch = srchOpen;
