@@ -104,11 +104,13 @@
         return '<div class="lbCard"><button type="button" class="lbOpen" data-l="' + l.id + '"><b>' + esc(l.name) + '</b><span class="muted">' + l.items.length + ' jenis · ' + nb + ' blok · ' + (l.mode === 'sym' ? 'simbol' : 'warna + arsir') + '</span></button>' +
           '<label class="lbOn"><input type="checkbox" data-on="' + l.id + '"' + (l.on ? ' checked' : '') + '> Ikut cetak</label></div>';
       }).join('') +
+      (HA.obj ? '<div class="lbCard"><button type="button" class="lbOpen" id="lbObj"><b>Objek</b><span class="muted">' + HA.obj.jenis().length + ' jenis \u00B7 ' + HA.obj.objs().length + ' objek \u00B7 titik, garis, area</span></button><label class="lbOn"><input type="checkbox" id="lbObjOn"' + (HA.obj.on() ? ' checked' : '') + '> Ikut cetak</label></div>' : '') +
       '<button class="btn" id="lbBulk" style="width:100%;margin-top:10px">Atur banyak blok</button>' +
       '<button class="btn" id="lbNew" style="width:100%;margin-top:8px">+ Lapisan baru</button>');
     $('lbX').onclick = closeSheet;
     $('sheet').querySelectorAll('.lbOpen').forEach(function (e) { e.onclick = function () { lapOpen(e.getAttribute('data-l')); }; });
     $('sheet').querySelectorAll('[data-on]').forEach(function (e) { e.onchange = function () { lapBy(e.getAttribute('data-on')).on = e.checked; save(); }; });
+    if ($('lbObj')) { $('lbObj').onclick = function () { HA.obj.open(); }; $('lbObjOn').onchange = function () { S.settings.objOn = this.checked; save(); }; }
     $('lbBulk').onclick = function () { bulk(null); };
     $('lbNew').onclick = newLap;
   }
@@ -252,7 +254,7 @@
     draw();
   }
 
-  HA.lyb = { all: all, by: lapBy, of: of, set: setItem, umur: umur, txt: txt, next: nextItem, active: active, fillPdf: fillPdf, swatchPdf: swatchPdf, prevSvg: prevSvg, home: home, bulk: bulk, today: today };
+  HA.lyb = { all: all, by: lapBy, of: of, set: setItem, umur: umur, txt: txt, next: nextItem, active: active, fillPdf: fillPdf, swatchPdf: swatchPdf, rgb: rgb, pathOf: pathOf, PATS: PATS, PAL: PAL, prevSvg: prevSvg, home: home, bulk: bulk, today: today };
   document.addEventListener('DOMContentLoaded', wire); if (document.readyState !== 'loading') wire();
   function wire() {
     var a = document.querySelector('#drawer a[data-lyb]'); if (!a || a._w) return; a._w = 1;

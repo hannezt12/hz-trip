@@ -1137,6 +1137,10 @@
     c.push('0 g BT /F2 16 Tf ' + f2(M) + ' ' + f2(PH - M - 14) + ' Td (' + pe(ttl) + ') Tj ET');
     if (subT) c.push('0 g BT /F1 11 Tf ' + f2(M) + ' ' + f2(PH - M - 30) + ' Td (' + pe(subT) + ') Tj ET');
     // latar: garis blok terkonfirmasi yang bersinggungan dengan area cetak
+    if (o.obj !== false && HA.obj && HA.obj.on() && HA.obj.objs().length) {
+      var ogk = gsFor(hasImg ? 0.45 : 0.55), od = HA.obj.drawPdf({ mb: mb, X: X, Y: Y, f2: f2, pe: pe, gs: '/G' + ogk, labels: true });
+      if (od.s) { usedGs[ogk] = 1; LB(c, 'Objek'); c.push(od.s); LE(c); }
+    }
     if (o.blk) {
       LB(c, 'Tepi blok');
       var ex = [mb[0] - (mb[2] - mb[0]) * 0.1, mb[1] - (mb[3] - mb[1]) * 0.1, mb[2] + (mb[2] - mb[0]) * 0.1, mb[3] + (mb[3] - mb[1]) * 0.1], cnt = 0;

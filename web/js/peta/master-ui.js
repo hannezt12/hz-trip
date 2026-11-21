@@ -157,7 +157,7 @@
       }).join('') +
         '<div class="h">FORMAT (pilih satu)</div><div class="seg" id="pmFmt"><button data-f="pdf"' + (PS.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-f="kml"' + (PS.fmt === 'kml' ? ' class="on"' : '') + '>KML</button><button data-f="data"' + (PS.fmt === 'data' ? ' class="on"' : '') + '>Data blok</button></div>' +
         (PS.fmt === 'pdf' ? '<div class="h">ISI PDF</div><label><input type="checkbox" id="pmMap"' + (PS.map ? ' checked' : '') + '> Peta (satu lembar, ber-geo)</label><label><input type="checkbox" id="pmLuas"' + (PS.luas ? ' checked' : '') + '> Tampilkan luas di peta</label><label><input type="checkbox" id="pmList"' + (PS.list ? ' checked' : '') + '> Daftar blok lengkap</label>' +
-          (HA.lyb && HA.lyb.all().some(function (l) { return l.items.length; }) ? '<div class="h">LAPISAN BLOK (layer PDF)</div>' + HA.lyb.all().filter(function (l) { return l.items.length; }).map(function (l) { return '<label><input type="checkbox" data-lyo="' + l.id + '"' + (l.on ? ' checked' : '') + '> ' + esc(l.name) + '</label>'; }).join('') : '') +
+          (HA.lyb && (HA.lyb.all().some(function (l) { return l.items.length; }) || (HA.obj && HA.obj.objs().length)) ? '<div class="h">LAPISAN BLOK (layer PDF)</div>' + HA.lyb.all().filter(function (l) { return l.items.length; }).map(function (l) { return '<label><input type="checkbox" data-lyo="' + l.id + '"' + (l.on ? ' checked' : '') + '> ' + esc(l.name) + '</label>'; }).join('') + (HA.obj && HA.obj.objs().length ? '<label><input type="checkbox" data-lyo="__obj"' + (HA.obj.on() ? ' checked' : '') + '> Objek (' + HA.obj.objs().length + ')</label>' : '') : '') +
           '<div class="h">JUDUL</div><input type="text" id="pmTtl" maxlength="60" placeholder="Kosong = nama master" value="' + esc(PS.title) + '" style="width:100%">' +
           '<div class="h">UKURAN TEKS NO BLOK (pt)</div><div class="row" style="gap:6px"><button class="btn" id="pmFm" style="width:3rem">−</button><input type="number" id="pmFn" min="1" max="30" step="0.5" inputmode="decimal" placeholder="Otomatis" value="' + (fsNum(PS.fs) != null ? fsNum(PS.fs) : '') + '" style="flex:1;text-align:center"><button class="btn" id="pmFp" style="width:3rem">+</button><button class="btn' + (fsNum(PS.fs) == null ? ' on' : '') + '" id="pmFa">Otomatis</button></div><div class="muted" style="margin-top:2px">Luas ikut ukuran ini, tampil di bawah nomor.</div>' +
           ''
@@ -190,7 +190,7 @@
       if (!PS.map && !PS.list) { toast('Centang minimal Peta atau Daftar blok'); return; }
       cetak(m, 'pdf', { map: PS.map, list: PS.list, luas: PS.luas, title: PS.title, fs: PS.fs, pos: PS.pos }, true);
     };
-    $('sheet').querySelectorAll('[data-lyo]').forEach(function (e) { e.onchange = function () { HA.lyb.by(e.getAttribute('data-lyo')).on = e.checked; saveSettings(); }; });
+    $('sheet').querySelectorAll('[data-lyo]').forEach(function (e) { e.onchange = function () { var k = e.getAttribute('data-lyo'); if (k === '__obj') S.settings.objOn = e.checked; else HA.lyb.by(k).on = e.checked; saveSettings(); }; });
     if ($('pmMap')) { $('pmMap').onchange = function () { PS.map = this.checked; }; $('pmList').onchange = function () { PS.list = this.checked; }; }
     $('pmAtur').onclick = function () { aturSheet(m, printPanel); };
     $('pmVer').onclick = function () { if (HA.VM) HA.VM.open(m, printPanel); };
@@ -388,6 +388,8 @@
         });
         if (rs.length) c.push(L('Jalan dan drainase', 'q ' + f2(M) + ' ' + f2(M) + ' ' + f2(fw) + ' ' + f2(fh) + ' re W n\n' + rs.join('\n') + '\nQ'));
       }
+      var objU = {};
+      if (opts.obj !== false && HA.obj) { var od = HA.obj.drawPdf({ mb: mb, X: X, Y: Y, f2: f2, pe: pe, gs: '/GS1', labels: false }); objU = od.used; if (od.s) c.push(L('Objek', od.s)); }
       c.push('0 0 0 RG 0 0 0 rg ' + f2(bwPt) + ' w');
       var ttl = asc((opts.title || m.name) + (sh && sh.name ? ' - ' + sh.name : '')), tw = ttl.length * 13 * 0.56;
       c.push('BT /F2 13 Tf ' + f2(PW / 2 - tw / 2) + ' ' + f2(PH - 17) + ' Td (' + pe(ttl) + ') Tj ET');
@@ -468,11 +470,19 @@
       }
       if (opts.legend !== false) {
         var rowsL = []; lapA.forEach(function (lp) { var u = lapUsed[lp.id]; if (!u) return; rowsL.push({ h: lp.name }); lp.items.forEach(function (it) { if (u[it.id]) rowsL.push({ lp: lp, it: it }); }); });
+        if (Object.keys(objU).length) { rowsL.push({ h: 'Objek' }); HA.obj.jenis().forEach(function (j) { if (objU[j.id]) rowsL.push({ oj: j }); }); }
         if (rowsL.length) {
           var RHl = 12, LWl = 140, LHl = rowsL.length * RHl + 6, lx0 = M + 10, ly0 = M + 10 + (sh && sh.keter ? sh.keter.length * 16 + 8 : 0);
           c.push('1 g 0.5 w ' + f2(lx0) + ' ' + f2(ly0) + ' ' + f2(LWl) + ' ' + f2(LHl) + ' re f 0 G ' + f2(lx0) + ' ' + f2(ly0) + ' ' + f2(LWl) + ' ' + f2(LHl) + ' re S');
           rowsL.forEach(function (r, i) {
             var ty = ly0 + LHl - 3 - RHl * (i + 1) + 2;
+            if (r.oj) {
+              var oj = r.oj, ox = lx0 + 5;
+              if (oj.t === 'pg') c.push(HA.lyb.swatchPdf({ col: oj.col, pat: oj.pat, pc: oj.pc }, ox, ty - 1, 18, 9));
+              else if (oj.t === 'ln') c.push('q ' + HA.lyb.rgb(oj.col) + ' RG 1.8 w ' + f2(ox) + ' ' + f2(ty + 3) + ' m ' + f2(ox + 18) + ' ' + f2(ty + 3) + ' l S Q');
+              else c.push('q ' + HA.lyb.rgb(oj.col) + ' rg ' + f2(ox + 4.5) + ' ' + f2(ty - 1) + ' 9 9 re f Q q 1 g BT /F2 6 Tf ' + f2(ox + 6.5) + ' ' + f2(ty + 1.5) + ' Td (' + pe(String(oj.sym || '').slice(0, 1)) + ') Tj ET Q');
+              c.push('0 g BT /F1 8 Tf ' + f2(lx0 + 30) + ' ' + f2(ty) + ' Td (' + pe(oj.name) + ') Tj ET'); return;
+            }
             if (r.h) { c.push('0 g BT /F2 8 Tf ' + f2(lx0 + 5) + ' ' + f2(ty) + ' Td (' + pe(r.h) + ') Tj ET'); return; }
             if (r.lp.mode === 'fill') c.push(HA.lyb.swatchPdf(r.it, lx0 + 5, ty - 1, 18, 9)); else c.push('0 g BT /F2 9 Tf ' + f2(lx0 + 5) + ' ' + f2(ty) + ' Td (' + pe(r.it.sym) + ') Tj ET');
             c.push('0 g BT /F1 8 Tf ' + f2(lx0 + 30) + ' ' + f2(ty) + ' Td (' + pe(r.it.name) + ') Tj ET');
