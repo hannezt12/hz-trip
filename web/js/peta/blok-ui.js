@@ -507,7 +507,7 @@
     el.innerHTML = '<div class="bh"><b>' + esc(b.name) + '<small class="bha"> · ' + nf(blkHa(b), 2) + ' ha</small></b><button type="button" class="ib2" id="bpE" aria-label="Edit blok">' + PEN + '</button>' + '' + '<button type="button" class="ib2" id="bpHi" aria-label="Riwayat blok"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></button>' + '<button type="button" class="ib2" id="bpSh" aria-label="Bagikan blok"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></button><button type="button" class="ib2" id="bpX" aria-label="Tutup">✕</button></div>' +
       '<div class="bs" id="bpS"></div><div id="bpBody">' +
       '<div class="bl">' + nf(blkHa(b), 2) + ' ha' + (b.luasCat ? ' (tercatat ' + nf(+b.luasCat, 2) + ')' : '') + ' · ' + (b.dir == null ? 'arah row belum diatur' : 'arah ' + Math.round(b.dir) + '° · jarak ' + nf(blkSp(b), 2) + ' m') + ' · <small>' + blkStatusText(b) + '</small></div>' +
-      '<div class="bl" id="bpR">Menghitung…</div>' + (mode === 'kontur' ? '<div class="bl" id="bpA"></div><div class="bl" id="bpD"></div><div class="bl" id="bpH"></div><div class="bl" id="bpL"></div>' : '') + (b.note ? '<div class="bl"><small>' + esc(b.note) + '</small></div>' : '') +
+      (HA.lyb && HA.lyb.txt(b) ? '<div class="bl"><b>' + esc(HA.lyb.txt(b)) + '</b></div>' : '') + '<div class="bl" id="bpR">Menghitung…</div>' + (mode === 'kontur' ? '<div class="bl" id="bpA"></div><div class="bl" id="bpD"></div><div class="bl" id="bpH"></div><div class="bl" id="bpL"></div>' : '') + (b.note ? '<div class="bl"><small>' + esc(b.note) + '</small></div>' : '') +
       (mode === 'kontur' ? '<div class="tseg" id="bpK"><button type="button" data-k="1">Rapat</button><button type="button" data-k="2">Sedang</button><button type="button" data-k="3">Jarang</button></div><div class="tseg"><button type="button" id="bpG">Edit garis pedoman</button>' + (b.guide ? '<button type="button" id="bpG0">Atur ulang pedoman</button>' : '') + '</div>' : '') + '</div>';
     $('bpX').onclick = function () { closeBlockPop(); };
     function foldOpen(fn) { HA.DM.bpFold = true; applyFold(); fn(); var h = HA.onSheetClose; HA.onSheetClose = function () { HA.DM.bpFold = false; applyFold(); if (h) h(); }; }
@@ -788,6 +788,13 @@
     };
     draw();
   }
+  function lybHtml(b) {
+    if (!HA.lyb) return '';
+    var ls = HA.lyb.all();
+    return '<div class="lbG2">' + ls.map(function (l) {
+      return '<div><div class="muted">' + esc(l.name) + '</div><select id="beLy_' + l.id + '"><option value="">\u2014</option>' + l.items.map(function (x) { return '<option value="' + x.id + '"' + (b.ly && b.ly[l.id] === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>';
+    }).join('') + '</div><div class="lbG"><div><div class="muted">Bulan tanam</div><input type="month" id="beTn" value="' + esc(b.tn || '') + '"></div><div><div class="muted">Umur</div><div id="beUm" style="min-height:2.5rem;display:flex;align-items:center">' + (HA.lyb.umur(b) || '\u2014') + '</div></div><div><div class="muted">&nbsp;</div><button class="btn" id="beUp" style="width:100%">Naik status</button></div></div>';
+  }
   function openBlockEdit(b) {
     HA.pbStopForEdit(); if (HA.DM.closePanel) HA.DM.closePanel(); if (HA.closeLinePop) HA.closeLinePop();
     HA.DM.bpFold = true;
@@ -805,8 +812,8 @@
       '<div class="row" style="margin-top:6px;gap:6px"><button class="btn" id="beP" style="flex:1">Ketuk 2 titik</button><button class="btn" id="beB" style="flex:1">Edit batas</button></div>' +
       '<button class="btn" id="beHi" style="width:100%;margin-top:8px">Riwayat blok</button>' +
       '<button class="btn" id="beMo" style="width:100%;margin-top:8px">Lainnya ▾</button>' +
-      '<div class="bmore" id="beMore"><div class="row" style="margin-top:10px;gap:8px"><div style="flex:1"><div class="muted">Jarak row (m)</div><input type="number" id="beJ" step="0.05" min="0.5" max="5" value="' + blkSp(b) + '"></div><div style="flex:1"><div class="muted">Kurangi tepi (m)</div><input type="number" id="beM" step="1" min="0" max="50" value="' + (+b.margin || 0) + '"></div></div>' +
-      '<div class="row" style="margin-top:10px;gap:6px"><button class="btn" id="bePb" style="flex:1">Pembatas: –</button><button class="btn" id="bePbE" style="flex:1;display:none">Atur garis</button></div><div class="muted" id="bePbI" style="margin-top:4px"></div>' +
+      '<div class="bmore" id="beMore"><div class="lbG"><div><div class="muted">Jarak row (m)</div><input type="number" id="beJ" step="0.05" min="0.5" max="5" value="' + blkSp(b) + '"></div><div><div class="muted">Kurangi tepi (m)</div><input type="number" id="beM" step="1" min="0" max="50" value="' + (+b.margin || 0) + '"></div><div><div class="muted">Pembatas</div><button class="btn" id="bePb" style="width:100%">–</button></div></div>' + lybHtml(b) +
+      '<div class="row" style="margin-top:6px;gap:6px"><button class="btn" id="bePbE" style="flex:1;display:none">Atur garis</button></div><div class="muted" id="bePbI" style="margin-top:4px"></div>' +
       '<div class="row" id="bePbR" style="margin-top:6px;gap:6px;display:none"><button class="btn" id="bePbD" style="flex:1">Arah sisi B</button><button class="btn" id="bePbS" style="flex:1">Samakan arah</button></div>' +
       '<textarea id="beT" rows="2" maxlength="200" placeholder="Catatan (varietas, R&D, dll.)" style="margin-top:8px;width:100%">' + esc(b.note || '') + '</textarea>' +
       '<div class="row" style="margin-top:10px;gap:6px"><button class="btn" id="beD2" style="flex:1;color:var(--r)">Hapus</button></div></div>');
@@ -816,7 +823,7 @@
     function pbLbl(q) { return !q ? '–' : q.st > 0 ? String(+q.w || 1.5).replace('.', ',') : '0'; }
     function pbRefresh() {
       var q = b.pb, st = q ? q.st : null, inf = '';
-      $('bePb').textContent = 'Pembatas: ' + pbLbl(q);
+      $('bePb').textContent = pbLbl(q);
       if (!q) inf = 'Belum ada. Ketuk untuk membuat garis pembatas.';
       else if (!(q.st > 0)) inf = 'Membagi blok menjadi sisi A dan B untuk kategori. Row dan luas tidak berubah.';
       else { var cs = cutsFor(b) || [], ia = cutArea(b, cs) / 10000; inf = 'Memotong row seperti ' + (q.type === 'drain' ? 'drainase' : 'jalan bantu') + ' lebar ' + String(+q.w || 1.5).replace('.', ',') + ' m. Luas tanam ' + nf(Math.max(0, blkHa(b) - ia), 2) + ' ha. Tahan tombol untuk lebar dan jenis.'; }
@@ -845,6 +852,16 @@
     $('beN').onchange = function () { b.name = $('beN').value.trim() || b.name; live(); };
     $('beJ').onchange = function () { var v = +$('beJ').value; b.sp = v >= 0.5 && v <= 5 ? Math.round(v * 100) / 100 : null; live(); };
     $('beM').onchange = function () { b.margin = Math.max(0, +$('beM').value || 0); live(); };
+    if (HA.lyb) {
+      HA.lyb.all().forEach(function (l) { var e = $('beLy_' + l.id); if (e) e.onchange = function () { HA.lyb.set(b, l.id, e.value); live(); }; });
+      if ($('beTn')) $('beTn').onchange = function () { b.tn = this.value || ''; $('beUm').textContent = HA.lyb.umur(b) || '\u2014'; live(); };
+      if ($('beUp')) $('beUp').onclick = function () {
+        var l = HA.lyb.by('status'), nx = l && HA.lyb.next(b, l), cur = HA.lyb.of(b, 'status');
+        if (!l || !l.items.length) { toast('Isi dulu jenis status di menu Lapisan'); return; }
+        if (!nx) { toast('Sudah di status terakhir'); return; }
+        HA.askConfirm('Naik status blok ' + b.name + '?', (cur ? cur.name : '(kosong)') + ' \u2192 ' + nx.name + '. Bulan tanam/tebang diubah ke bulan ini.', 'Naik', function () { HA.lyb.set(b, 'status', nx.id); b.tn = HA.lyb.today().slice(0, 7); live(); openBlockEdit(b); if ($('beMo')) $('beMo').click(); });
+      };
+    }
     function applyLock() {
       var lk = !!b.conf;
       ['beN', 'beP', 'beB', 'beJ', 'beM', 'beT', 'beD2', 'bePb', 'bePbE', 'bePbD', 'bePbS'].forEach(function (id) { var e = $(id); if (e) e.disabled = lk; });

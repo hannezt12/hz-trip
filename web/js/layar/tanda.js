@@ -1038,7 +1038,7 @@
   HA.tandaPrint = printSheet; HA.tandaBuildPdf = buildMarkPdf; HA.tandaBufM = bufM;
 
   function asc(t) { return String(t == null ? '' : t).replace(/[^\x20-\x7E]/g, '?'); }
-  function pe(t) { return asc(t).replace(/([\\()])/g, '\\$1'); }
+  function pe(t) { return String(t == null ? '' : t).replace(/\u00B1/g, '\x01').replace(/\u2022/g, '\x02').replace(/[^\x20-\x7E\x01\x02]/g, '?').replace(/([\\()])/g, '\\$1').replace(/\x01/g, '\\261').replace(/\x02/g, '\\225'); }
   function f2(v) { return (Math.round(v * 100) / 100).toString(); }
   function rgb(hex) { var h = hex.replace('#', ''); return f2(parseInt(h.slice(0, 2), 16) / 255) + ' ' + f2(parseInt(h.slice(2, 4), 16) / 255) + ' ' + f2(parseInt(h.slice(4, 6), 16) / 255); }
   function ck(it) { return it.cat ? it.cat : 'x' + colOf(it).toLowerCase(); }
@@ -1127,7 +1127,7 @@
       if (it.t === 'pt') { r0.pt++; anyPL = true; } else if (it.t === 'ln') { r0.m += st0.m; anyPL = true; } else { r0.ha += st0.ha; r0.lj += st0.n; r0.lm += st0.lm; }
     });
     tord.sort(function (a, b) { var p = trow[a], q = trow[b]; return (p.ord - q.ord) || (p.name < q.name ? -1 : (p.name > q.name ? 1 : 0)) || (p.date < q.date ? -1 : (p.date > q.date ? 1 : 0)); });
-    var custom = asc((ttlText || '').trim()), ttl = blk ? 'Blok ' + asc(blk.name) : (custom || 'Marking HZ Trip'), subT = blk ? [asc(catName || ''), custom].filter(Boolean).join(' \u00B7 ') : '';
+    var custom = asc((ttlText || '').trim()), ttl = blk ? 'Blok ' + asc(blk.name) : (custom || 'Marking HZ Trip'), lapT = (blk && o.lap !== false && HA.lyb) ? HA.lyb.active().map(function (lp) { var li = HA.lyb.of(blk, lp.id); return li ? (lp.mode === 'sym' ? lp.name + ' ' + li.name : li.name) : ''; }).filter(Boolean).join(', ') : '', subT = blk ? [asc(catName || ''), custom, asc(lapT)].filter(Boolean).join(' | ') : '';
     var HH = subT ? 40 : 26, TRH = Math.max(14, Math.min(26, 330 / (tord.length + 1))), noTbl = o.rincian === false, tkl = tk || [], tkN = (noTbl || !tkl.length) ? 0 : Math.min(tkl.length, 10), tkRH = 11, tkBlk = tkN ? (tkN + 2 + (tkl.length > tkN ? 1 : 0)) * tkRH + 8 : 0, TH = (noTbl ? 16 : TRH * (tord.length + 1) + 16) + tkBlk;
     var ya = M + TH + 10, yb = PH - M - HH, fw = PW - 2 * M, fh = yb - ya, sc = Math.min(fw / (mw * 1.1), fh / (mh * 1.1)), offx = (fw - mw * sc) / 2, offy = (fh - mh * sc) / 2;
     var X = function (lng) { return M + offx + (lng - mb[1]) * kx * sc; }, Y = function (lat) { return ya + offy + (lat - mb[0]) * ky * sc; };
@@ -1149,6 +1149,11 @@
       LE(c);
     }
     if (o.sketsa && blk && HA.cutsFor) { LB(c, 'Jalan dan drainase'); try { (HA.cutsFor(blk) || []).forEach(function (cu) { var cp = ''; cu.pts.forEach(function (p, i) { cp += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); c.push('0.72 G ' + f2(Math.max(1.2, (cu.w || 2) * sc)) + ' w ' + cp + 'S'); }); } catch (e) {} LE(c); }
+    var lapA = (blk && o.lap !== false && HA.lyb) ? HA.lyb.active().filter(function (lp) { return HA.lyb.of(blk, lp.id); }) : [];
+    lapA.forEach(function (lp) {
+      if (lp.mode !== 'fill') return; var li = HA.lyb.of(blk, lp.id), gk = gsFor(hasImg ? 0.45 : 0.55); usedGs[gk] = 1;
+      LB(c, 'Lapisan: ' + lp.name); c.push(HA.lyb.fillPdf(li, blk.pts.map(function (p) { return [X(p[1]), Y(p[0])]; }), '/G' + gk)); LE(c);
+    });
     if (blk) { var bs = ''; blk.pts.forEach(function (p, i) { bs += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); LB(c, 'Tepi blok'); c.push(hasImg ? '1 0.9 0 RG 2.2 w ' + bs + 'h S' : '0 G 1.6 w ' + bs + 'h S'); LE(c); }
     var fits = [];
     items.forEach(function (it) {
@@ -1189,6 +1194,13 @@
         c.push('q 1 g ' + f2(x - 2) + ' ' + f2(yb - fsU * 0.25) + ' ' + f2(w + 4) + ' ' + f2(fsU * 1.15) + ' re f Q');
         c.push('0 g BT /F1 ' + f2(fsU) + ' Tf ' + f2(x) + ' ' + f2(yb) + ' Td (' + pe(t) + ') Tj ET');
       });
+      LE(c);
+    });
+    // lapisan blok: simbol (mis. status tanaman) di tengah blok + keterangan kecil di kanan atas peta
+    lapA.forEach(function (lp) {
+      var li = HA.lyb.of(blk, lp.id), ip = HA.poi(blk.pts, kx, ky), sx = X(ip[1]), sy = Y(ip[0]);
+      LB(c, 'Lapisan: ' + lp.name);
+      if (lp.mode === 'sym') { var fz = 16; c.push('q 1 G 1 j 3 w 1 Tr BT /F2 ' + fz + ' Tf ' + f2(sx - String(li.sym).length * fz * 0.28) + ' ' + f2(sy - fz * 0.35) + ' Td (' + pe(li.sym) + ') Tj ET Q q 0.122 0.306 0.62 rg 0 Tr BT /F2 ' + fz + ' Tf ' + f2(sx - String(li.sym).length * fz * 0.28) + ' ' + f2(sy - fz * 0.35) + ' Td (' + pe(li.sym) + ') Tj ET Q'); }
       LE(c);
     });
     // tanda titik: ikon di atas sketsa

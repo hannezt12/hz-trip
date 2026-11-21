@@ -157,6 +157,7 @@
       }).join('') +
         '<div class="h">FORMAT (pilih satu)</div><div class="seg" id="pmFmt"><button data-f="pdf"' + (PS.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-f="kml"' + (PS.fmt === 'kml' ? ' class="on"' : '') + '>KML</button><button data-f="data"' + (PS.fmt === 'data' ? ' class="on"' : '') + '>Data blok</button></div>' +
         (PS.fmt === 'pdf' ? '<div class="h">ISI PDF</div><label><input type="checkbox" id="pmMap"' + (PS.map ? ' checked' : '') + '> Peta (satu lembar, ber-geo)</label><label><input type="checkbox" id="pmLuas"' + (PS.luas ? ' checked' : '') + '> Tampilkan luas di peta</label><label><input type="checkbox" id="pmList"' + (PS.list ? ' checked' : '') + '> Daftar blok lengkap</label>' +
+          (HA.lyb && HA.lyb.all().some(function (l) { return l.items.length; }) ? '<div class="h">LAPISAN BLOK (layer PDF)</div>' + HA.lyb.all().filter(function (l) { return l.items.length; }).map(function (l) { return '<label><input type="checkbox" data-lyo="' + l.id + '"' + (l.on ? ' checked' : '') + '> ' + esc(l.name) + '</label>'; }).join('') : '') +
           '<div class="h">JUDUL</div><input type="text" id="pmTtl" maxlength="60" placeholder="Kosong = nama master" value="' + esc(PS.title) + '" style="width:100%">' +
           '<div class="h">UKURAN TEKS NO BLOK (pt)</div><div class="row" style="gap:6px"><button class="btn" id="pmFm" style="width:3rem">−</button><input type="number" id="pmFn" min="1" max="30" step="0.5" inputmode="decimal" placeholder="Otomatis" value="' + (fsNum(PS.fs) != null ? fsNum(PS.fs) : '') + '" style="flex:1;text-align:center"><button class="btn" id="pmFp" style="width:3rem">+</button><button class="btn' + (fsNum(PS.fs) == null ? ' on' : '') + '" id="pmFa">Otomatis</button></div><div class="muted" style="margin-top:2px">Luas ikut ukuran ini, tampil di bawah nomor.</div>' +
           ''
@@ -189,6 +190,7 @@
       if (!PS.map && !PS.list) { toast('Centang minimal Peta atau Daftar blok'); return; }
       cetak(m, 'pdf', { map: PS.map, list: PS.list, luas: PS.luas, title: PS.title, fs: PS.fs, pos: PS.pos }, true);
     };
+    $('sheet').querySelectorAll('[data-lyo]').forEach(function (e) { e.onchange = function () { HA.lyb.by(e.getAttribute('data-lyo')).on = e.checked; saveSettings(); }; });
     if ($('pmMap')) { $('pmMap').onchange = function () { PS.map = this.checked; }; $('pmList').onchange = function () { PS.list = this.checked; }; }
     $('pmAtur').onclick = function () { aturSheet(m, printPanel); };
     $('pmVer').onclick = function () { if (HA.VM) HA.VM.open(m, printPanel); };
@@ -249,7 +251,7 @@
 
   // ---------- penulis PDF minimal ----------
   function asc(t) { return String(t == null ? '' : t).replace(/[^\x20-\x7E]/g, '?'); }
-  function pe(t) { return asc(t).replace(/([\\()])/g, '\\$1'); }
+  function pe(t) { return String(t == null ? '' : t).replace(/\u00B1/g, '\x01').replace(/\u2022/g, '\x02').replace(/[^\x20-\x7E\x01\x02]/g, '?').replace(/([\\()])/g, '\\$1').replace(/\x01/g, '\\261').replace(/\x02/g, '\\225'); }
   function rgbc(hex) { var h = String(hex || '#888888').replace('#', ''); if (h.length !== 6) h = '888888'; return f2(parseInt(h.slice(0, 2), 16) / 255) + ' ' + f2(parseInt(h.slice(2, 4), 16) / 255) + ' ' + f2(parseInt(h.slice(4, 6), 16) / 255); }
   function lgBox(leg, fs) { var mx = 0; leg.forEach(function (r) { mx = Math.max(mx, asc(r.txt).length); }); var kf = (fs || 8) / 8; return { kf: kf, RH: 14 * kf, LW: Math.max(90, Math.min(320, (34 + mx * 4.6) * kf)), LH: 14 * kf * leg.length }; }
   HA.lgBox = lgBox;
@@ -340,7 +342,7 @@
     var gs2 = add('<< /Type /ExtGState /ca 0.8 /CA 1 >>'), gs1 = add('<< /Type /ExtGState /ca 0.4 /CA 1 >>'), kids = [], res = '<< /Font << /F1 ' + f1 + ' 0 R /F2 ' + f2o + ' 0 R >> /ExtGState << /GS1 ' + gs1 + ' 0 R /GS2 ' + gs2 + ' 0 R >> >>', tot = haOf(list);
     var ocgs = [], ocmap = {};
     function L(name, str) { if (opts.layers === false) return str; if (!ocmap[name]) { var o = add('<< /Type /OCG /Name (' + pe(name) + ') >>'); ocmap[name] = { n: o, k: 'L' + (ocgs.length + 1) }; ocgs.push(name); } return '/OC /' + ocmap[name].k + ' BDC ' + str + ' EMC'; }
-    var poiC = {};
+    var poiC = {}, lapA = (opts.lap === false || !HA.lyb) ? [] : HA.lyb.active(), lapUsed = {};
     (opts.map ? (opts.sheets && opts.sheets.length ? opts.sheets : [null]) : []).forEach(function (sh) {
       var allp = m.pts.slice(); list.forEach(function (b) { b.pts.forEach(function (p) { allp.push(p); }); });
       var mb = bbox(allp), latc = (mb[0] + mb[2]) / 2, kx = 111320 * Math.cos(latc * Math.PI / 180), ky = 111320;
@@ -391,6 +393,11 @@
       c.push('BT /F2 13 Tf ' + f2(PW / 2 - tw / 2) + ' ' + f2(PH - 17) + ' Td (' + pe(ttl) + ') Tj ET');
       list.forEach(function (b) {
         var s = ''; b.pts.forEach(function (p, i) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); });
+        lapA.forEach(function (lp) {
+          if (lp.mode !== 'fill') return; var li = HA.lyb.of(b, lp.id); if (!li) return;
+          (lapUsed[lp.id] = lapUsed[lp.id] || {})[li.id] = 1;
+          c.push(L('Lapisan: ' + lp.name, HA.lyb.fillPdf(li, b.pts.map(function (p) { return [X(p[1]), Y(p[0])]; }), '/GS1')));
+        });
         c.push(L('Tepi blok', s + 'h S'));
         var q = bbox(b.pts), bw = (q[3] - q[1]) * kx * sc, bh = (q[2] - q[0]) * ky * sc, nm = asc(b.name);
         infos.push({ b: b, nm: nm, ar: fmtHa(HzBlok.areaHa(b.pts)) + ' ha', fit: Math.min(bw * 0.84 / (Math.max(3, nm.length) * 0.56), bh * (opts.luas === false ? 0.7 : 0.42)), x0: X(q[1]), x1: X(q[3]), y0: Y(q[0]), y1: Y(q[2]) });
@@ -404,6 +411,7 @@
         if (opts.name !== false) { ls.push(o.nm); lyr.push('Nomor blok dan luas'); }
         if (opts.luas !== false) { ls.push(o.ar); lyr.push('Nomor blok dan luas'); }
         var lf = sh ? sh.lines : opts.lines; if (lf) lf(o.b).forEach(function (t) { ls.push(asc(t.t != null ? t.t : t)); lyr.push(t.l || 'Tanggal dan luas kategori'); });
+        lapA.forEach(function (lp) { if (lp.mode !== 'sym') return; var li = HA.lyb.of(o.b, lp.id); if (li) { ls.push(li.sym); lyr.push('Lapisan: ' + lp.name); (lapUsed[lp.id] = lapUsed[lp.id] || {})[li.id] = 1; } });
         var lh = fsU * 1.15, y0 = cy + (ls.length * lh) / 2 - fsU * 0.85;
         ls.forEach(function (t, i) {
           var tp = 'BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - t.length * fsU * 0.52 / 2) + ' ' + f2(y0 - i * lh) + ' Td (' + pe(t) + ') Tj ET';
@@ -455,6 +463,19 @@
             if (r.kind === 'ring') c.push('q 0.35 G ' + f2(RW) + ' w ' + f2(M + G + RW / 2) + ' ' + f2(ty + RW / 2) + ' ' + f2(14 - RW) + ' ' + f2(10 - RW) + ' re S Q');
             else c.push('q 0.6 g ' + f2(M + G) + ' ' + f2(ty) + ' 14 10 re f Q');
             c.push('BT /F1 8 Tf 0 g ' + f2(M + G + 20) + ' ' + f2(ty + 2) + ' Td (' + pe(r.txt) + ') Tj ET');
+          });
+        }
+      }
+      if (opts.legend !== false) {
+        var rowsL = []; lapA.forEach(function (lp) { var u = lapUsed[lp.id]; if (!u) return; rowsL.push({ h: lp.name }); lp.items.forEach(function (it) { if (u[it.id]) rowsL.push({ lp: lp, it: it }); }); });
+        if (rowsL.length) {
+          var RHl = 12, LWl = 140, LHl = rowsL.length * RHl + 6, lx0 = M + 10, ly0 = M + 10 + (sh && sh.keter ? sh.keter.length * 16 + 8 : 0);
+          c.push('1 g 0.5 w ' + f2(lx0) + ' ' + f2(ly0) + ' ' + f2(LWl) + ' ' + f2(LHl) + ' re f 0 G ' + f2(lx0) + ' ' + f2(ly0) + ' ' + f2(LWl) + ' ' + f2(LHl) + ' re S');
+          rowsL.forEach(function (r, i) {
+            var ty = ly0 + LHl - 3 - RHl * (i + 1) + 2;
+            if (r.h) { c.push('0 g BT /F2 8 Tf ' + f2(lx0 + 5) + ' ' + f2(ty) + ' Td (' + pe(r.h) + ') Tj ET'); return; }
+            if (r.lp.mode === 'fill') c.push(HA.lyb.swatchPdf(r.it, lx0 + 5, ty - 1, 18, 9)); else c.push('0 g BT /F2 9 Tf ' + f2(lx0 + 5) + ' ' + f2(ty) + ' Td (' + pe(r.it.sym) + ') Tj ET');
+            c.push('0 g BT /F1 8 Tf ' + f2(lx0 + 30) + ' ' + f2(ty) + ' Td (' + pe(r.it.name) + ') Tj ET');
           });
         }
       }

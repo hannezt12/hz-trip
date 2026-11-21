@@ -504,12 +504,14 @@
       }).join('');
     }
     function noCat() { return n > 0 && (!cats.some(function (c) { return SH.cats[c.k]; }) || !dts.some(function (x) { return SH.dates[x.d]; })) && !list.some(function (b) { return tkChosen(b).length; }); }
+    var lyList = HA.lyb ? HA.lyb.all().filter(function (l) { return l.items.length && list.some(function (b) { return HA.lyb.of(b, l.id); }); }) : [];
     var stTitle = 'BAGIKAN ' + (many ? list.length + ' BLOK' : 'BLOK ' + esc(String(list[0].name)).toUpperCase());
     openSheet('<div class="grab"></div><div class="st">' + stTitle + '</div>' +
       '<div id="shS1">' +
       '<div class="muted" style="margin-bottom:8px">' + n + ' tanda' + (n ? '' : ' · blok akan dicetak tanpa tanda') + (nNoCat ? ' · ' + nNoCat + ' tanpa kategori tidak ikut PDF' : '') + '</div>' +
       '<button type="button" class="shRow" id="shBc"><span class="shL">Kategori</span><span class="shV" id="shBcV"></span><span class="lsAr">›</span></button>' +
       '<button type="button" class="shRow" id="shBd"><span class="shL">Tanggal kategori</span><span class="shV" id="shBdV"></span><span class="lsAr">›</span></button>' +
+      (lyList.length ? '<button type="button" class="shRow" id="shBl"><span class="shL">Lapisan</span><span class="shV" id="shBlV"></span><span class="lsAr">\u203A</span></button>' : '') +
       (tks.length ? '<div class="shRow shRc"><input type="checkbox" id="shTk"' + (SH.tkOn ? ' checked' : '') + ' aria-label="Sertakan tanda titik"><button type="button" class="shRb" id="shBt"><span class="shL">Tanda titik</span><span class="shV" id="shBtV"></span><span class="lsAr">›</span></button></div>' : '') +
       '<div class="muted" id="shSm" style="margin:10px 0"></div>' +
       '<button class="btn pri" id="shNx" style="width:100%;height:52px">Lanjut</button><button class="btn" id="shX" style="width:100%;margin-top:8px">Tutup</button></div>' +
@@ -539,6 +541,7 @@
       list.forEach(function (b) { nT += pitems(b).length; });
       $('shBcV').textContent = nC + ' dari ' + cats.length;
       $('shBdV').textContent = PERL[SH.per] + ' · ' + nT + ' tanda';
+      if ($('shBlV')) $('shBlV').textContent = lyList.filter(function (l) { return l.on; }).map(function (l) { return l.name; }).join(', ') || 'Tidak dicetak';
       if ($('shBtV')) $('shBtV').textContent = SH.tkOn ? nTk() + ' dari ' + tks.length + ' · ' + PERL[SH.per] : 'Tidak dicetak';
       var tx = nC + ' kategori · ' + nT + ' tanda' + (tks.length ? ' · ' + (SH.tkOn ? nTk() : 0) + ' tanda titik' : '') + ' · ±' + pg + ' halaman PDF';
       $('shSm').innerHTML = esc(tx) + (pg > 30 ? '<br><b>Halaman banyak. Perkecil periode atau kategori supaya PDF ringan.</b>' : '');
@@ -595,6 +598,7 @@
       var d = $('shDet'); if (!d) return;
       if (detK === 'c') d.innerHTML = '<div class="st">KATEGORI</div><input type="text" id="shQ" placeholder="Cari kategori" value="' + esc(SH.q) + '" style="width:100%"><div class="shAct"><button type="button" class="btn sm" data-ca="all">Semua</button><button type="button" class="btn sm" data-ca="none">Kosongkan</button></div><div class="plist" id="shCats">' + catRows() + '</div><button class="btn pri" id="shOk" style="width:100%;margin-top:12px">Selesai</button>';
       else if (detK === 'd') d.innerHTML = '<div class="st">TANGGAL KATEGORI</div><div class="shCh" id="shChB">' + chipB() + '</div><div class="shRg" id="shRgW">' + rngH() + '</div><div id="shTree">' + dateTree() + '</div><button class="btn pri" id="shOk" style="width:100%;margin-top:12px">Selesai</button>';
+      else if (detK === 'l') d.innerHTML = '<div class="st">LAPISAN</div><div class="muted" style="margin:4px 0">Yang dicentang ikut tercetak sebagai layer sendiri (juga di Master dan Laporan).</div><div class="plist">' + lyList.map(function (l) { return '<label><input type="checkbox" data-ly="' + l.id + '"' + (l.on ? ' checked' : '') + '>' + esc(l.name) + ' <span class="muted">(' + list.filter(function (b) { return HA.lyb.of(b, l.id); }).length + ' blok)</span></label>'; }).join('') + '</div><button class="btn pri" id="shOk" style="width:100%;margin-top:12px">Selesai</button>';
       else if (detK === 't') d.innerHTML = '<div class="st">TANDA TITIK</div><div class="shCh" id="shChB">' + chipB() + '</div><div class="shRg" id="shRgW">' + rngH() + '</div><div class="shAct"><button type="button" class="btn sm" data-ta="all">Semua</button><button type="button" class="btn sm" data-ta="none">Kosongkan</button></div><div id="shTkL" class="plist">' + tkRows() + '</div><button class="btn pri" id="shOk" style="width:100%;margin-top:12px">Selesai</button>';
     }
     function detOpen(k) { detK = k; $('shS1').style.display = 'none'; $('shDet').style.display = ''; detRender(); var sh = $('sheet'); if (sh) sh.scrollTop = 0; }
@@ -602,6 +606,7 @@
     function detRefresh() { if ($('shTree')) $('shTree').innerHTML = dateTree(); if ($('shTkL')) $('shTkL').innerHTML = tkRows(); if ($('shCats')) $('shCats').innerHTML = catRows(); if ($('shChB')) $('shChB').innerHTML = chipB(); }
     $('shBc').onclick = function () { detOpen('c'); };
     $('shBd').onclick = function () { detOpen('d'); };
+    if ($('shBl')) $('shBl').onclick = function () { detOpen('l'); };
     if ($('shTk')) {
       $('shBt').onclick = function () { SH.tkOn = true; $('shTk').checked = true; detOpen('t'); };
       $('shTk').onchange = function () { SH.tkOn = this.checked; sum(); };
@@ -619,6 +624,7 @@
     $('shDet').onchange = function (e) {
       var t = e.target, g = function (a) { return t.getAttribute && t.getAttribute(a); }, v;
       if ((v = g('data-k'))) { SH.cats[v] = t.checked; return; }
+      if ((v = g('data-ly'))) { HA.lyb.by(v).on = t.checked; HA.saveSettings(); return; }
       if ((v = g('data-d'))) { SH.dates[v] = t.checked; SH.per = 'man'; $('shTree').innerHTML = dateTree(); $('shChB').innerHTML = chipB(); return; }
       if ((v = g('data-yy'))) { dts.forEach(function (x) { if (x.d.slice(0, 4) === v) SH.dates[x.d] = t.checked; }); SH.per = 'man'; $('shTree').innerHTML = dateTree(); $('shChB').innerHTML = chipB(); return; }
       if ((v = g('data-ym'))) { dts.forEach(function (x) { if (x.d.slice(0, 7) === v) SH.dates[x.d] = t.checked; }); SH.per = 'man'; $('shTree').innerHTML = dateTree(); $('shChB').innerHTML = chipB(); return; }
