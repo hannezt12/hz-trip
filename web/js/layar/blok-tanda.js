@@ -449,6 +449,24 @@
     list.forEach(function (b) { (HA.titikOf ? HA.titikOf(b.id) : []).forEach(function (t) { tks.push(t); if (!tkSeen[t.date]) { tkSeen[t.date] = 1; tkD.push(t.date); } }); });
     tkD.sort().reverse();
     SH.tkOn = true; SH.tkSel = {}; SH.tkFold = {}; tks.forEach(function (t) { SH.tkSel[t.id] = true; }); tkD.forEach(function (d, i) { SH.tkFold[d] = i !== 0; });
+
+    // ---- periode cepat, ringkasan, dan dua langkah (v0.19.6) ----
+    var p2 = function (v) { return (v < 10 ? '0' : '') + v; };
+    function iso(dt) { return dt.getFullYear() + '-' + p2(dt.getMonth() + 1) + '-' + p2(dt.getDate()); }
+    var now = new Date(), todayI = iso(now), PERL = { bln: 'Bulan ini', '3bl': '3 bulan', thn: 'Tahun ini', all: 'Semua', rng: 'Rentang', man: 'Pilihan sendiri' };
+    var MON = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    function perOk(d) {
+      if (SH.per === 'all') return true;
+      if (SH.per === 'bln') return d.slice(0, 7) === todayI.slice(0, 7);
+      if (SH.per === '3bl') return d >= iso(new Date(now.getTime() - 90 * 86400000)) && d <= todayI;
+      if (SH.per === 'thn') return d.slice(0, 4) === todayI.slice(0, 4);
+      if (SH.per === 'rng') return (!SH.from || d >= SH.from) && (!SH.to || d <= SH.to);
+      return true;
+    }
+    function applyPer() { if (SH.per === 'man') return; dts.forEach(function (x) { SH.dates[x.d] = perOk(x.d); }); tks.forEach(function (t) { SH.tkSel[t.id] = perOk(t.date); }); }
+    SH.per = 'all'; SH.from = ''; SH.to = ''; SH.dFold = {}; SH.q = '';
+    if (!pre && (dts.some(function (x) { return x.d.slice(0, 4) === todayI.slice(0, 4); }) || tks.some(function (t) { return String(t.date).slice(0, 4) === todayI.slice(0, 4); }))) SH.per = 'thn';
+    applyPer();
     function tkIcon(t) { return '<svg width="22" height="22" viewBox="0 0 32 32" style="vertical-align:middle">' + ({ bulat: '<circle cx="16" cy="16" r="13"', kotak: '<rect x="4" y="4" width="24" height="24" rx="4"', segitiga: '<polygon points="16,3 30,28 2,28"', belah: '<polygon points="16,2 30,16 16,30 2,16"', enam: '<polygon points="16,2 28,9 28,23 16,30 4,23 4,9"' }[t.p] || '<circle cx="16" cy="16" r="13"') + ' fill="' + t.c + '" stroke="#06202B" stroke-width="2"/></svg>'; }
     function tkRows() {
       if (!tks.length) return '<div class="muted">Belum ada tanda titik.</div>';
@@ -459,29 +477,73 @@
       }).join('');
     }
     function tkChosen(b) { return SH.tkOn ? tks.filter(function (t) { return t.bid === b.id && SH.tkSel[t.id]; }).sort(function (x, y) { return x.h < y.h ? -1 : (x.h > y.h ? 1 : x.no - y.no); }) : []; }
-    function dateRows() { return dts.map(function (x) { return '<label><input type="checkbox" data-d="' + x.d + '"' + (SH.dates[x.d] ? ' checked' : '') + '>' + esc(HA.tandaU.d8(x.d)) + ' <span class="muted">(' + x.n + ')</span></label>'; }).join(''); }
     function catRows() {
+      var q = (SH.q || '').toLowerCase(), ls = cats.filter(function (c) { return !q || c.name.toLowerCase().indexOf(q) >= 0; });
       if (!cats.length) return '<div class="muted">Belum ada tanda.</div>';
-      return cats.map(function (c) { return '<label><input type="checkbox" data-k="' + c.k + '"' + (SH.cats[c.k] ? ' checked' : '') + '><i class="tdd" style="background:' + c.col + '"></i>' + esc(c.name) + ' <span class="muted">(' + c.n + ')</span></label>'; }).join('');
+      if (!ls.length) return '<div class="muted">Tidak ada kategori yang cocok.</div>';
+      return ls.map(function (c) { return '<label><input type="checkbox" data-k="' + c.k + '"' + (SH.cats[c.k] ? ' checked' : '') + '><i class="tdd" style="background:' + c.col + '"></i>' + esc(c.name) + ' <span class="muted">(' + c.n + ')</span></label>'; }).join('');
+    }
+    function chipB() { return ['bln', '3bl', 'thn', 'all', 'rng'].map(function (k) { return '<button type="button" data-pr="' + k + '"' + (SH.per === k ? ' class="on"' : '') + '>' + PERL[k] + '</button>'; }).join(''); }
+    function rngH() { return SH.per === 'rng' ? '<label>Dari <input type="date" id="shRf" value="' + SH.from + '"></label><label>Sampai <input type="date" id="shRt" value="' + SH.to + '"></label>' : ''; }
+    function dateTree() {
+      if (!dts.length) return '<div class="muted">Belum ada tanggal.</div>';
+      var ys = {}, yk = [];
+      dts.forEach(function (x) {
+        var y = x.d.slice(0, 4), m = x.d.slice(0, 7); if (!ys[y]) { ys[y] = { n: 0, on: 0, ms: {}, mk: [] }; yk.push(y); }
+        var Y = ys[y]; if (!Y.ms[m]) { Y.ms[m] = { n: 0, on: 0, ds: [] }; Y.mk.push(m); }
+        var M = Y.ms[m]; M.n += x.n; M.ds.push(x); Y.n += x.n; if (SH.dates[x.d]) { M.on += x.n; Y.on += x.n; }
+      });
+      return yk.map(function (y) {
+        var Y = ys[y], oy = SH.dFold['y' + y];
+        return '<div class="lsD"><input type="checkbox" data-yy="' + y + '"' + (Y.on === Y.n ? ' checked' : '') + ' aria-label="Pilih seluruh tahun"><button type="button" class="lsF" data-df="y' + y + '"><span class="lsAr">' + (oy ? '▾' : '▸') + '</span><b>' + y + '</b> <span class="muted">' + Y.on + '/' + Y.n + ' tanda</span></button></div>' +
+          (oy ? Y.mk.map(function (m) {
+            var M = Y.ms[m], om = SH.dFold['m' + m];
+            return '<div class="lsD shM"><input type="checkbox" data-ym="' + m + '"' + (M.on === M.n ? ' checked' : '') + ' aria-label="Pilih seluruh bulan"><button type="button" class="lsF" data-df="m' + m + '"><span class="lsAr">' + (om ? '▾' : '▸') + '</span><b>' + MON[+m.slice(5) - 1] + '</b> <span class="muted">' + M.on + '/' + M.n + ' tanda</span></button></div>' +
+              (om ? M.ds.map(function (x) { return '<label class="lsR shDd"><input type="checkbox" data-d="' + x.d + '"' + (SH.dates[x.d] ? ' checked' : '') + '>' + esc(HA.tandaU.d8(x.d)) + ' <span class="muted">(' + x.n + ')</span></label>'; }).join('') : '');
+          }).join('') : '');
+      }).join('');
     }
     function noCat() { return n > 0 && (!cats.some(function (c) { return SH.cats[c.k]; }) || !dts.some(function (x) { return SH.dates[x.d]; })) && !list.some(function (b) { return tkChosen(b).length; }); }
-    openSheet('<div class="grab"></div><div class="st">BAGIKAN ' + (many ? list.length + ' BLOK' : 'BLOK ' + esc(String(list[0].name)).toUpperCase()) + '</div>' +
-      '<div class="muted" style="margin-bottom:8px">' + n + ' tanda' + (n ? '' : ' · blok akan dicetak tanpa tanda') + (nNoCat ? ' · ' + nNoCat + ' tanpa kategori tidak ikut PDF' : '') + '</div><div class="muted" style="margin-bottom:8px">PDF: satu halaman per kategori di tiap blok</div>' +
+    var stTitle = 'BAGIKAN ' + (many ? list.length + ' BLOK' : 'BLOK ' + esc(String(list[0].name)).toUpperCase());
+    openSheet('<div class="grab"></div><div class="st">' + stTitle + '</div>' +
+      '<div id="shS1">' +
+      '<div class="muted" style="margin-bottom:8px">' + n + ' tanda' + (n ? '' : ' · blok akan dicetak tanpa tanda') + (nNoCat ? ' · ' + nNoCat + ' tanpa kategori tidak ikut PDF' : '') + '</div>' +
+      '<button type="button" class="shRow" id="shBc"><span class="shL">Kategori</span><span class="shV" id="shBcV"></span><span class="lsAr">›</span></button>' +
+      '<button type="button" class="shRow" id="shBd"><span class="shL">Tanggal kategori</span><span class="shV" id="shBdV"></span><span class="lsAr">›</span></button>' +
+      (tks.length ? '<div class="shRow shRc"><input type="checkbox" id="shTk"' + (SH.tkOn ? ' checked' : '') + ' aria-label="Sertakan tanda titik"><button type="button" class="shRb" id="shBt"><span class="shL">Tanda titik</span><span class="shV" id="shBtV"></span><span class="lsAr">›</span></button></div>' : '') +
+      '<div class="muted" id="shSm" style="margin:10px 0"></div>' +
+      '<button class="btn pri" id="shNx" style="width:100%;height:52px">Lanjut</button><button class="btn" id="shX" style="width:100%;margin-top:8px">Tutup</button></div>' +
+      '<div id="shDet" style="display:none"></div>' +
+      '<div id="shS2" style="display:none"><button type="button" class="btn sm" id="shBk" style="margin-bottom:8px">‹ Kembali</button><div class="muted" id="shSm2" style="margin-bottom:8px"></div>' +
       '<div id="shPvw"><canvas id="shCv"></canvas><div id="shPm" class="muted">Menyusun preview…</div></div><div class="muted" id="shHint" style="text-align:center;margin:4px 0 0">Ketuk gambar untuk mengubah tampilan</div>' +
       '<div id="shW" style="display:none"></div>' +
       '<div class="h" style="margin-top:10px">FORMAT (PILIH SATU)</div><div class="seg" id="shF"><button data-v="pdf"' + (SH.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-v="kml"' + (SH.fmt === 'kml' ? ' class="on"' : '') + '>KML</button><button data-v="geojson"' + (SH.fmt === 'geojson' ? ' class="on"' : '') + '>GeoJSON</button></div>' +
       '<label id="shRw" class="plist" style="margin-top:8px;display:' + (SH.fmt === 'pdf' ? 'block' : 'none') + '"><input type="checkbox" id="shRc"' + (SH.rinci ? ' checked' : '') + '> Sertakan rincian (tabel kategori, tanggal, luas)</label>' +
       '<div class="h" style="margin-top:10px">JUDUL TAMBAHAN (BOLEH KOSONG)</div><input type="text" id="shT" maxlength="60" placeholder="Kosong = hanya nama blok" value="' + esc(SH.title) + '" style="width:100%">' +
-      '<div class="h" style="margin-top:10px">KATEGORI YANG DIBAGIKAN</div><div class="plist" id="shCats">' + catRows() + '</div>' +
-      '<div class="h" style="margin-top:10px">TANGGAL YANG DIBAGIKAN</div><div class="plist" id="shDts">' + (dts.length ? dateRows() : '<div class="muted">Belum ada tanggal.</div>') + '</div>' +
-      (tks.length ? '<div class="h" style="margin-top:10px">TANDA TITIK</div><label class="plist"><input type="checkbox" id="shTk"' + (SH.tkOn ? ' checked' : '') + '> Sertakan tanda titik <span class="muted">(' + tks.length + ')</span></label><div id="shTkL" class="plist" style="max-height:40vh;overflow:auto">' + tkRows() + '</div>' : '') +
       '<div id="shLt"><div class="h" style="margin-top:10px">LATAR PDF</div><div class="seg" id="shL"><button data-v="sat"' + (SH.latar !== 'sk' ? ' class="on"' : '') + '>Satelit</button><button data-v="sk"' + (SH.latar === 'sk' ? ' class="on"' : '') + '>Sketsa</button></div><div id="shGy" style="display:' + (SH.latar === 'sk' ? 'block' : 'none') + '"><div class="h" style="margin-top:8px">TANDA DI SKETSA</div><div class="seg" id="shG"><button data-v="warna"' + (SH.gaya !== 'arsir' ? ' class="on"' : '') + '>Warna</button><button data-v="arsir"' + (SH.gaya === 'arsir' ? ' class="on"' : '') + '>Arsiran</button></div></div></div>' +
       '<div id="shEd" style="display:none">' +
       '<div id="shP"><div class="h" style="margin-top:10px">SEKELILING BLOK DI PDF</div><div class="seg" id="shB">' + [10, 15, 20].map(function (v) { return '<button data-v="' + v + '"' + (HA.tandaBufM() === v ? ' class="on"' : '') + '>' + v + ' m</button>'; }).join('') + '</div>' +
       '<div class="plist" style="margin-top:8px"><label><input type="checkbox" id="shN"' + (SH.nama ? ' checked' : '') + '> Nama tanda</label><label><input type="checkbox" id="shV"' + (SH.nilai ? ' checked' : '') + '> Nilai (ha atau meter)</label></div>' +
       '<div class="h" style="margin-top:10px">UKURAN TEKS</div><div class="seg" id="shS">' + [['a', 'Otomatis'], ['s', 'Kecil'], ['m', 'Sedang'], ['l', 'Besar']].map(function (o) { return '<button data-v="' + o[0] + '"' + (SH.fs === o[0] ? ' class="on"' : '') + '>' + o[1] + '</button>'; }).join('') + '</div></div></div>' +
       '<div class="muted" id="shK" style="margin-top:10px;display:none">KML berisi batas blok dan tanda persis di dalam blok, tanpa tambahan sekeliling.</div>' +
-      '<button class="btn" id="shPv" style="width:100%;margin-top:12px">Preview layar penuh</button><button class="btn pri" id="shGo" style="width:100%;margin-top:8px;height:52px">Kirim</button><button class="btn" id="shX" style="width:100%;margin-top:8px">Tutup</button>');
+      '<button class="btn" id="shPv" style="width:100%;margin-top:12px">Preview layar penuh</button><button class="btn pri" id="shGo" style="width:100%;margin-top:8px;height:52px">Kirim</button><button class="btn" id="shX2" style="width:100%;margin-top:8px">Tutup</button></div>');
+    var S2 = false, detK = null;
+    function nTk() { return tks.filter(function (t) { return SH.tkSel[t.id]; }).length; }
+    function pagesEst() {
+      var pg = 0;
+      list.forEach(function (b) { var ks = {}, tn = tkChosen(b).length; pitems(b).forEach(function (x) { ks[HA.tandaCatKey(x)] = 1; }); pg += Math.max(1, Object.keys(ks).length) + (tn > 10 ? Math.ceil((tn - 10) / 44) : 0); });
+      return pg + (many && SH.rinci ? Math.ceil(list.length / 6) : 0);
+    }
+    function sum() {
+      var nC = cats.filter(function (c) { return SH.cats[c.k]; }).length, nT = 0, pg = pagesEst();
+      list.forEach(function (b) { nT += pitems(b).length; });
+      $('shBcV').textContent = nC + ' dari ' + cats.length;
+      $('shBdV').textContent = PERL[SH.per] + ' · ' + nT + ' tanda';
+      if ($('shBtV')) $('shBtV').textContent = SH.tkOn ? nTk() + ' dari ' + tks.length + ' · ' + PERL[SH.per] : 'Tidak dicetak';
+      var tx = nC + ' kategori · ' + nT + ' tanda' + (tks.length ? ' · ' + (SH.tkOn ? nTk() : 0) + ' tanda titik' : '') + ' · ±' + pg + ' halaman PDF';
+      $('shSm').innerHTML = esc(tx) + (pg > 30 ? '<br><b>Halaman banyak. Perkecil periode atau kategori supaya PDF ringan.</b>' : '');
+      if ($('shSm2')) $('shSm2').textContent = tx;
+    }
     function seg(id, f) { $(id).onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-v]'); if (!b) return; f(b.getAttribute('data-v')); $(id).querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); }; }
     function grab() { SH.title = $('shT').value.trim(); SH.nama = $('shN').checked; SH.nilai = $('shV').checked; }
     function pitems(b) { return selItems(b, pre).filter(function (it) { return SH.cats[HA.tandaCatKey(it)] && SH.dates[HA.tandaU.dateOf(it)]; }); }
@@ -490,7 +552,7 @@
     function pdfBytes() { grab(); return BT.buildPdf(groupsOf(list), opts()); }
     // preview mini: halaman pertama saja
     function thumb() {
-      if (SH.fmt !== 'pdf') return;
+      if (SH.fmt !== 'pdf' || !S2) return;
       grab(); var id = ++seq; $('shPm').style.display = ''; $('shPm').textContent = 'Menyusun preview…';
       BT.buildPdf(groupsOf(list.slice(0, 1)), opts()).then(function (b) {
         if (id !== seq || !$('shCv')) return null;
@@ -528,20 +590,52 @@
     seg('shG', function (v) { SH.gaya = v; S.settings.shGaya = v; HA.saveSettings(); thumb(); });
     $('shN').onchange = $('shV').onchange = thumb;
     $('shRc').onchange = function () { SH.rinci = this.checked; S.settings.shRinci = SH.rinci; HA.saveSettings(); thumb(); };
-    $('shDts').onchange = function (e) { var d = e.target.getAttribute && e.target.getAttribute('data-d'); if (d) { SH.dates[d] = e.target.checked; thumb(); } };
-    if ($('shTk')) {
-      $('shTk').onchange = function () { SH.tkOn = this.checked; $('shTkL').style.opacity = SH.tkOn ? '1' : '.45'; thumb(); };
-      $('shTkL').onchange = function (e) {
-        var i = e.target.getAttribute && e.target.getAttribute('data-ti'), d = e.target.getAttribute && e.target.getAttribute('data-td');
-        if (i) SH.tkSel[i] = e.target.checked; else if (d) tks.forEach(function (t) { if (t.date === d) SH.tkSel[t.id] = e.target.checked; }); else return;
-        $('shTkL').innerHTML = tkRows(); thumb();
-      };
-      $('shTkL').onclick = function (e) { var f = e.target.closest && e.target.closest('[data-tf]'); if (!f) return; var d = f.getAttribute('data-tf'); SH.tkFold[d] = !SH.tkFold[d]; $('shTkL').innerHTML = tkRows(); };
+    // --- langkah 1: tiga tombol, tiap tombol membuka pilihan rinci ---
+    function detRender() {
+      var d = $('shDet'); if (!d) return;
+      if (detK === 'c') d.innerHTML = '<div class="st">KATEGORI</div><input type="text" id="shQ" placeholder="Cari kategori" value="' + esc(SH.q) + '" style="width:100%"><div class="shAct"><button type="button" class="btn sm" data-ca="all">Semua</button><button type="button" class="btn sm" data-ca="none">Kosongkan</button></div><div class="plist" id="shCats">' + catRows() + '</div><button class="btn pri" id="shOk" style="width:100%;margin-top:12px">Selesai</button>';
+      else if (detK === 'd') d.innerHTML = '<div class="st">TANGGAL KATEGORI</div><div class="shCh" id="shChB">' + chipB() + '</div><div class="shRg" id="shRgW">' + rngH() + '</div><div id="shTree">' + dateTree() + '</div><button class="btn pri" id="shOk" style="width:100%;margin-top:12px">Selesai</button>';
+      else if (detK === 't') d.innerHTML = '<div class="st">TANDA TITIK</div><div class="shCh" id="shChB">' + chipB() + '</div><div class="shRg" id="shRgW">' + rngH() + '</div><div class="shAct"><button type="button" class="btn sm" data-ta="all">Semua</button><button type="button" class="btn sm" data-ta="none">Kosongkan</button></div><div id="shTkL" class="plist">' + tkRows() + '</div><button class="btn pri" id="shOk" style="width:100%;margin-top:12px">Selesai</button>';
     }
+    function detOpen(k) { detK = k; $('shS1').style.display = 'none'; $('shDet').style.display = ''; detRender(); var sh = $('sheet'); if (sh) sh.scrollTop = 0; }
+    function detClose() { detK = null; $('shDet').style.display = 'none'; $('shS1').style.display = ''; sum(); }
+    function detRefresh() { if ($('shTree')) $('shTree').innerHTML = dateTree(); if ($('shTkL')) $('shTkL').innerHTML = tkRows(); if ($('shCats')) $('shCats').innerHTML = catRows(); if ($('shChB')) $('shChB').innerHTML = chipB(); }
+    $('shBc').onclick = function () { detOpen('c'); };
+    $('shBd').onclick = function () { detOpen('d'); };
+    if ($('shTk')) {
+      $('shBt').onclick = function () { SH.tkOn = true; $('shTk').checked = true; detOpen('t'); };
+      $('shTk').onchange = function () { SH.tkOn = this.checked; sum(); };
+    }
+    $('shDet').onclick = function (e) {
+      var t = e.target, b;
+      if (!t.closest) return;
+      if ((b = t.closest('[data-pr]'))) { SH.per = b.getAttribute('data-pr'); applyPer(); detRender(); return; }
+      if ((b = t.closest('[data-df]'))) { var k = b.getAttribute('data-df'); SH.dFold[k] = !SH.dFold[k]; $('shTree').innerHTML = dateTree(); return; }
+      if ((b = t.closest('[data-tf]'))) { var d2 = b.getAttribute('data-tf'); SH.tkFold[d2] = !SH.tkFold[d2]; $('shTkL').innerHTML = tkRows(); return; }
+      if ((b = t.closest('[data-ca]'))) { var on = b.getAttribute('data-ca') === 'all', q = (SH.q || '').toLowerCase(); cats.forEach(function (c) { if (!q || c.name.toLowerCase().indexOf(q) >= 0) SH.cats[c.k] = on; }); $('shCats').innerHTML = catRows(); return; }
+      if ((b = t.closest('[data-ta]'))) { var on2 = b.getAttribute('data-ta') === 'all'; tks.forEach(function (x) { SH.tkSel[x.id] = on2; }); $('shTkL').innerHTML = tkRows(); return; }
+      if (t.closest('#shOk')) detClose();
+    };
+    $('shDet').onchange = function (e) {
+      var t = e.target, g = function (a) { return t.getAttribute && t.getAttribute(a); }, v;
+      if ((v = g('data-k'))) { SH.cats[v] = t.checked; return; }
+      if ((v = g('data-d'))) { SH.dates[v] = t.checked; SH.per = 'man'; $('shTree').innerHTML = dateTree(); $('shChB').innerHTML = chipB(); return; }
+      if ((v = g('data-yy'))) { dts.forEach(function (x) { if (x.d.slice(0, 4) === v) SH.dates[x.d] = t.checked; }); SH.per = 'man'; $('shTree').innerHTML = dateTree(); $('shChB').innerHTML = chipB(); return; }
+      if ((v = g('data-ym'))) { dts.forEach(function (x) { if (x.d.slice(0, 7) === v) SH.dates[x.d] = t.checked; }); SH.per = 'man'; $('shTree').innerHTML = dateTree(); $('shChB').innerHTML = chipB(); return; }
+      if ((v = g('data-ti'))) { SH.tkSel[v] = t.checked; $('shTkL').innerHTML = tkRows(); return; }
+      if ((v = g('data-td'))) { tks.forEach(function (x) { if (x.date === v) SH.tkSel[x.id] = t.checked; }); $('shTkL').innerHTML = tkRows(); return; }
+      if (t.id === 'shRf' || t.id === 'shRt') { SH.from = ($('shRf') || {}).value || ''; SH.to = ($('shRt') || {}).value || ''; SH.per = 'rng'; applyPer(); detRefresh(); }
+    };
+    $('shDet').oninput = function (e) { if (e.target.id === 'shQ') { SH.q = e.target.value; $('shCats').innerHTML = catRows(); } };
+    $('shNx').onclick = function () {
+      if (noCat()) { toast('Centang minimal satu kategori dan tanggal, atau tanda titik'); return; }
+      S2 = true; $('shS1').style.display = 'none'; $('shS2').style.display = ''; sum(); sync(); warn(); thumb();
+    };
+    $('shBk').onclick = function () { S2 = false; seq++; clearTimeout(tmr); $('shS2').style.display = 'none'; $('shS1').style.display = ''; sum(); };
+    $('shX2').onclick = function () { clearTimeout(tmr); seq++; closeSheet(); };
     $('shT').oninput = lazyThumb;
-    $('shCats').onchange = function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-k'); if (k) { SH.cats[k] = e.target.checked; thumb(); } };
     $('shPvw').onclick = function () { var ed = $('shEd'), open = ed.style.display === 'none'; ed.style.display = open ? '' : 'none'; $('shHint').textContent = open ? 'Ketuk gambar lagi untuk menutup pengaturan' : 'Ketuk gambar untuk mengubah tampilan'; if (open) { try { ed.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (x) {} } };
-    sync(); warn(); thumb();
+    sum();
     var fname = function (ext, commit) { return fileName(list.length, cats.filter(function (c) { return SH.cats[c.k]; }).map(function (c) { return c.name; }), ext, commit); };
     function kmlText() {
       grab();

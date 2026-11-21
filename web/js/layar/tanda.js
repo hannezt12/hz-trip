@@ -1062,6 +1062,11 @@
     var dd = new Date(), p2 = function (n) { return (n < 10 ? '0' : '') + n; }, tgl = p2(dd.getDate()) + '-' + p2(dd.getMonth() + 1) + '-' + String(dd.getFullYear()).slice(2);
     var cat = add(''), pages = add(''), f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'), f2o = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
     var gsM = {};
+    // layer PDF (OCG): satu layer per jenis isi; Adobe/QGIS/Avenza bisa menyalakan dan mematikan
+    var ocgs = [], ocmap = {}, pgLy = {};
+    function LB(c, name) { if (o.layers === false) return; if (!ocmap[name]) { var ob = add('<< /Type /OCG /Name (' + pe(asc(name)) + ') >>'); ocmap[name] = { n: ob, k: 'L' + (ocgs.length + 1) }; ocgs.push(name); } pgLy[name] = 1; c.push('/OC /' + ocmap[name].k + ' BDC'); }
+    function LE(c) { if (o.layers === false) return; c.push('EMC'); }
+    function catLy(it) { var cc = it.cat ? catOf(it.cat) : null; return 'Kategori: ' + (cc ? cc.name : 'Tanpa kategori'); }
     function gsFor(op) { var k = Math.round(op * 100); if (!gsM[k]) gsM[k] = add('<< /Type /ExtGState /ca ' + (k / 100) + ' /CA 1 >>'); return k; }
     var res0 = '<< /Font << /F1 ' + f1 + ' 0 R /F2 ' + f2o + ' 0 R >>';
     var usedGs = {}, patM = {}, usedPat = {};
@@ -1111,7 +1116,7 @@
       }
     }
     function page(items, ttlText, blk, img, catName, tk) {
-    var mb = pageBox(items, blk, o), hasImg = !!img;
+    var mb = pageBox(items, blk, o), hasImg = !!img; pgLy = {};
     var latc = (mb[0] + mb[2]) / 2, kx = 111320 * Math.cos(latc * Math.PI / 180), ky = 111320;
     var mw = Math.max(50, (mb[3] - mb[1]) * kx), mh = Math.max(50, (mb[2] - mb[0]) * ky), PW = 595.28, PH = 841.89, M = 24;
     var trow = {}, tord = [], anyPL = false;
@@ -1128,11 +1133,12 @@
     var X = function (lng) { return M + offx + (lng - mb[1]) * kx * sc; }, Y = function (lat) { return ya + offy + (lat - mb[0]) * ky * sc; };
     var lngAt = function (x) { return mb[1] + (x - M - offx) / (kx * sc); }, latAt = function (y) { return mb[0] + (y - ya - offy) / (ky * sc); };
     var c = [], info = [], imN = 0;
-    if (hasImg) { imN = add(stream('/Type /XObject /Subtype /Image /Width ' + img.w + ' /Height ' + img.h + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode', img.data)); c.push('q ' + f2((mb[3] - mb[1]) * kx * sc) + ' 0 0 ' + f2((mb[2] - mb[0]) * ky * sc) + ' ' + f2(X(mb[1])) + ' ' + f2(Y(mb[0])) + ' cm /Im' + imN + ' Do Q'); }
+    if (hasImg) { imN = add(stream('/Type /XObject /Subtype /Image /Width ' + img.w + ' /Height ' + img.h + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode', img.data)); LB(c, 'Latar satelit'); c.push('q ' + f2((mb[3] - mb[1]) * kx * sc) + ' 0 0 ' + f2((mb[2] - mb[0]) * ky * sc) + ' ' + f2(X(mb[1])) + ' ' + f2(Y(mb[0])) + ' cm /Im' + imN + ' Do Q'); LE(c); }
     c.push('0 g BT /F2 16 Tf ' + f2(M) + ' ' + f2(PH - M - 14) + ' Td (' + pe(ttl) + ') Tj ET');
     if (subT) c.push('0 g BT /F1 11 Tf ' + f2(M) + ' ' + f2(PH - M - 30) + ' Td (' + pe(subT) + ') Tj ET');
     // latar: garis blok terkonfirmasi yang bersinggungan dengan area cetak
     if (o.blk) {
+      LB(c, 'Tepi blok');
       var ex = [mb[0] - (mb[2] - mb[0]) * 0.1, mb[1] - (mb[3] - mb[1]) * 0.1, mb[2] + (mb[2] - mb[0]) * 0.1, mb[3] + (mb[3] - mb[1]) * 0.1], cnt = 0;
       c.push(hasImg ? '1 G 0.9 w [3 2] 0 d' : '0.62 G 0.4 w');
       blks().forEach(function (b) {
@@ -1140,9 +1146,10 @@
         var s = ''; b.pts.forEach(function (p, i) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); c.push(s + 'h S');
       });
       if (hasImg) c.push('[] 0 d');
+      LE(c);
     }
-    if (o.sketsa && blk && HA.cutsFor) { try { (HA.cutsFor(blk) || []).forEach(function (cu) { var cp = ''; cu.pts.forEach(function (p, i) { cp += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); c.push('0.72 G ' + f2(Math.max(1.2, (cu.w || 2) * sc)) + ' w ' + cp + 'S'); }); } catch (e) {} }
-    if (blk) { var bs = ''; blk.pts.forEach(function (p, i) { bs += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); c.push(hasImg ? '1 0.9 0 RG 2.2 w ' + bs + 'h S' : '0 G 1.6 w ' + bs + 'h S'); }
+    if (o.sketsa && blk && HA.cutsFor) { LB(c, 'Jalan dan drainase'); try { (HA.cutsFor(blk) || []).forEach(function (cu) { var cp = ''; cu.pts.forEach(function (p, i) { cp += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); c.push('0.72 G ' + f2(Math.max(1.2, (cu.w || 2) * sc)) + ' w ' + cp + 'S'); }); } catch (e) {} LE(c); }
+    if (blk) { var bs = ''; blk.pts.forEach(function (p, i) { bs += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); LB(c, 'Tepi blok'); c.push(hasImg ? '1 0.9 0 RG 2.2 w ' + bs + 'h S' : '0 G 1.6 w ' + bs + 'h S'); LE(c); }
     var fits = [];
     items.forEach(function (it) {
       var col = colOf(it), st = statOf(it), lab = [];
@@ -1156,15 +1163,17 @@
     var fsU = Math.max(4, Math.min(11, fits.length ? fits[Math.floor(fits.length * 0.25)] : 8)); if ({ s: 1, m: 1, l: 1 }[o.fs]) fsU = { s: 5, m: 7.5, l: 11 }[o.fs];
     // bentuk
     info.forEach(function (n) {
-      var it = n.it, s = '', i;
+      var it = n.it, s = '', i; LB(c, catLy(it));
       if (it.t === 'pg') { it.pts.forEach(function (p, i2) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i2 ? ' l ' : ' m '); }); var gyi = HA.gyOf ? HA.gyOf(it) : null, gcol = gyi ? gyi.col : n.col; if (o.hatch && !(gyi && gyi.gar)) c.push('q /Pattern cs /' + patFor(patK(it)) + ' scn ' + s + 'h f Q 0 G 1.1 w ' + s + 'h S'); else if (gyi && gyi.gar) c.push((o.hatch ? '0 0 0' : rgb(gcol)) + ' RG ' + f2(Math.max(0.6, (gyi.w || 3) * 0.45)) + ' w ' + s + 'h S'); else { usedGs[gsFor(opOf(it))] = 1; c.push('q /G' + gsFor(opOf(it)) + ' gs ' + rgb(gcol) + ' rg ' + s + 'h f Q ' + rgb(gcol) + ' RG 1.3 w ' + s + 'h S'); } }
       else if (it.t === 'ln') { it.pts.forEach(function (p, i2) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i2 ? ' l ' : ' m '); }); c.push((o.hatch ? '0 0 0' : rgb(n.col)) + ' RG 2.4 w 1 J 1 j ' + s + 'S 0 J 0 j'); }
       else { var px = X(it.pts[0][1]), py = Y(it.pts[0][0]), r = 4.2, k = r * 0.5523; c.push(rgb(n.col) + ' rg 1 G 0.9 w ' + f2(px + r) + ' ' + f2(py) + ' m ' + f2(px + r) + ' ' + f2(py + k) + ' ' + f2(px + k) + ' ' + f2(py + r) + ' ' + f2(px) + ' ' + f2(py + r) + ' c ' + f2(px - k) + ' ' + f2(py + r) + ' ' + f2(px - r) + ' ' + f2(py + k) + ' ' + f2(px - r) + ' ' + f2(py) + ' c ' + f2(px - r) + ' ' + f2(py - k) + ' ' + f2(px - k) + ' ' + f2(py - r) + ' ' + f2(px) + ' ' + f2(py - r) + ' c ' + f2(px + k) + ' ' + f2(py - r) + ' ' + f2(px + r) + ' ' + f2(py - k) + ' ' + f2(px + r) + ' ' + f2(py) + ' c B'); }
+      LE(c);
     });
     // teks
     c.push('0 g 0 G');
     info.forEach(function (n) {
       var it = n.it, lab = n.lab; if (!lab.length) return;
+      LB(c, catLy(it));
       var cx, cy, align = 'c';
       if (it.t === 'pg') {
         var ip = (o.pos === 't' ? HA.poiBand(it.pts, kx, ky, 0.55, 0.95) : (o.pos === 'b' ? HA.poiBand(it.pts, kx, ky, 0.05, 0.45) : null)) || HA.poi(it.pts, kx, ky); cx = X(ip[1]); cy = Y(ip[0]);
@@ -1180,17 +1189,21 @@
         c.push('q 1 g ' + f2(x - 2) + ' ' + f2(yb - fsU * 0.25) + ' ' + f2(w + 4) + ' ' + f2(fsU * 1.15) + ' re f Q');
         c.push('0 g BT /F1 ' + f2(fsU) + ' Tf ' + f2(x) + ' ' + f2(yb) + ' Td (' + pe(t) + ') Tj ET');
       });
+      LE(c);
     });
     // tanda titik: ikon di atas sketsa
     if (tkl.length) {
+      LB(c, 'Tanda titik');
       var TKR = tkl.length > 60 ? 4.6 : (tkl.length > 30 ? 6 : 8);
       tkl.forEach(function (t) {
         var px = X(t.ll[1]), py = Y(t.ll[0]), lb = t.h + '.' + t.no, fz = Math.min(TKR * 0.95, (TKR * 1.75) / (lb.length * 0.56));
         c.push(tkShape(t.p, px, py, TKR, t.c));
         c.push(tkInk(t.c) + ' BT /F2 ' + f2(fz) + ' Tf ' + f2(px - lb.length * fz * 0.56 / 2) + ' ' + f2(py - fz * 0.35) + ' Td (' + pe(lb) + ') Tj ET 0 g 0 G');
       });
+      LE(c);
     }
     // skala dan panah utara
+    LB(c, 'Legenda dan tabel');
     var L0 = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000].filter(function (v) { return v * sc < fw * 0.25; }).pop() || 10, bx = PW / 2 - L0 * sc / 2, by = ya + 16;
     if (hasImg) c.push('1 g ' + f2(bx - 8) + ' ' + f2(by - 8) + ' ' + f2(L0 * sc + 16) + ' 28 re f 0 g');
     c.push('0 G 1 w ' + f2(bx) + ' ' + f2(by) + ' m ' + f2(bx + L0 * sc) + ' ' + f2(by) + ' l S ' + f2(bx) + ' ' + f2(by - 4) + ' m ' + f2(bx) + ' ' + f2(by + 4) + ' l S ' + f2(bx + L0 * sc) + ' ' + f2(by - 4) + ' m ' + f2(bx + L0 * sc) + ' ' + f2(by + 4) + ' l S');
@@ -1231,11 +1244,12 @@
       if (tkl.length > tkN) tkPages(blk, tkl.slice(tkN));
     }
     txc(M, M + 5, 'Dicetak ' + tgl + ' | HZ Trip ' + ver, false, 8);
+    LE(c);
     var cs = add(stream('', c.join('\n')));
     var corners = [[M, ya], [M, yb], [PW - M, yb], [PW - M, ya]], lp = [0, 0, 0, 1, 1, 1, 1, 0], gp = [];
     corners.forEach(function (q) { gp.push(latAt(q[1]).toFixed(7), lngAt(q[0]).toFixed(7)); });
     var vp = '/VP [ << /Type /Viewport /Name (Peta) /BBox [' + f2(M) + ' ' + f2(ya) + ' ' + f2(PW - M) + ' ' + f2(yb) + '] /Measure << /Type /Measure /Subtype /GEO /Bounds [0 0 0 1 1 1 1 0] /GPTS [' + gp.join(' ') + '] /LPTS [' + lp.join(' ') + '] /GCS << /Type /GEOGCS /WKT (GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]) /EPSG 4326 >> /PDU [/M /DEG /DEG] >> >> ]';
-    var pg = add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW) + ' ' + f2(PH) + '] /Resources ' + (function () { var res = res0 + ' /ExtGState << ' + Object.keys(usedGs).map(function (k) { return '/G' + k + ' ' + gsM[k] + ' 0 R'; }).join(' ') + ' >>' + (imN ? ' /XObject << /Im' + imN + ' ' + imN + ' 0 R >>' : '') + (Object.keys(usedPat).length ? ' /Pattern << ' + Object.keys(usedPat).map(function (k) { return '/P' + k + ' ' + patM[k] + ' 0 R'; }).join(' ') + ' >>' : '') + ' >>'; return res; })() + ' /Contents ' + cs + ' 0 R ' + vp + ' >>');
+    var pg = add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW) + ' ' + f2(PH) + '] /Resources ' + (function () { var res = res0 + ' /ExtGState << ' + Object.keys(usedGs).map(function (k) { return '/G' + k + ' ' + gsM[k] + ' 0 R'; }).join(' ') + ' >>' + (imN ? ' /XObject << /Im' + imN + ' ' + imN + ' 0 R >>' : '') + (Object.keys(pgLy).length ? ' /Properties << ' + Object.keys(pgLy).map(function (nm) { return '/' + ocmap[nm].k + ' ' + ocmap[nm].n + ' 0 R'; }).join(' ') + ' >>' : '') + (Object.keys(usedPat).length ? ' /Pattern << ' + Object.keys(usedPat).map(function (k) { return '/P' + k + ' ' + patM[k] + ' 0 R'; }).join(' ') + ' >>' : '') + ' >>'; return res; })() + ' /Contents ' + cs + ' 0 R ' + vp + ' >>');
     return pg;
     }
     function sumPages() {
@@ -1285,7 +1299,8 @@
     }
     var kids = (o.summary && groups.length > 1 && o.rincian !== false ? sumPages() : []);
     groups.forEach(function (g) { kids.push(page(g.items, g.title, g.blk, g.img, g.cat, g.tk)); tkAfter.splice(0).forEach(function (id) { kids.push(id); }); });
-    objs[cat - 1] = '<< /Type /Catalog /Pages ' + pages + ' 0 R >>';
+    var ocl = ocgs.map(function (nm) { return ocmap[nm].n + ' 0 R'; }).join(' ');
+    objs[cat - 1] = '<< /Type /Catalog /Pages ' + pages + ' 0 R' + (ocgs.length ? ' /OCProperties << /OCGs [' + ocl + '] /D << /Order [' + ocl + '] /ON [' + ocl + '] >> >>' : '') + ' >>';
     objs[pages - 1] = '<< /Type /Pages /Count ' + kids.length + ' /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] >>';
     var out = '%PDF-1.7\n%\xE2\xE3\xCF\xD3\n', offs = [];
     objs.forEach(function (b, i) { offs.push(out.length); out += (i + 1) + ' 0 obj\n' + b + '\nendobj\n'; });

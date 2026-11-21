@@ -339,7 +339,7 @@
     var fsp = add('<< /Type /Filespec /F (hzblok.json) /UF (hzblok.json) /EF << /F ' + emb + ' 0 R /UF ' + emb + ' 0 R >> /AFRelationship /Data /Desc (Data blok HZ Trip) >>');
     var gs2 = add('<< /Type /ExtGState /ca 0.8 /CA 1 >>'), gs1 = add('<< /Type /ExtGState /ca 0.4 /CA 1 >>'), kids = [], res = '<< /Font << /F1 ' + f1 + ' 0 R /F2 ' + f2o + ' 0 R >> /ExtGState << /GS1 ' + gs1 + ' 0 R /GS2 ' + gs2 + ' 0 R >> >>', tot = haOf(list);
     var ocgs = [], ocmap = {};
-    function L(name, str) { if (!opts.layers) return str; if (!ocmap[name]) { var o = add('<< /Type /OCG /Name (' + pe(name) + ') >>'); ocmap[name] = { n: o, k: 'L' + (ocgs.length + 1) }; ocgs.push(name); } return '/OC /' + ocmap[name].k + ' BDC ' + str + ' EMC'; }
+    function L(name, str) { if (opts.layers === false) return str; if (!ocmap[name]) { var o = add('<< /Type /OCG /Name (' + pe(name) + ') >>'); ocmap[name] = { n: o, k: 'L' + (ocgs.length + 1) }; ocgs.push(name); } return '/OC /' + ocmap[name].k + ' BDC ' + str + ' EMC'; }
     var poiC = {};
     (opts.map ? (opts.sheets && opts.sheets.length ? opts.sheets : [null]) : []).forEach(function (sh) {
       var allp = m.pts.slice(); list.forEach(function (b) { b.pts.forEach(function (p) { allp.push(p); }); });
@@ -374,12 +374,24 @@
         else if (f.mode === 'ring') c.push(L(nm2, 'q ' + rgbc(f.col) + ' rg ' + pth(f.pts) + (inner ? pth(inner) + 'f*' : 'f') + ' Q'));
         else if (inner) c.push(L(nm2, 'q ' + rgbc(f.col) + ' rg ' + pth(inner) + 'f Q'));
       });
+      if (opts.roads !== false && HA.linesList) {
+        // jalan bantu dan drainase yang berada di area peta (layer sendiri)
+        var rs = [], rn = 0;
+        HA.linesList().forEach(function (ln) {
+          if (rn > 1500 || !ln.pts || ln.pts.length < 2) return;
+          var q = bbox(ln.pts); if (q[2] < mb[0] || q[0] > mb[2] || q[3] < mb[1] || q[1] > mb[3]) return; rn++;
+          var pth = '', wd = Math.max(0.5, Math.min(4, (+ln.w || 2) * sc));
+          ln.pts.forEach(function (p, i) { pth += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); });
+          rs.push(ln.type === 'drain' ? 'q 0.35 G [3 2] 0 d ' + f2(wd) + ' w ' + pth + 'S Q' : 'q 0.55 G ' + f2(wd) + ' w ' + pth + 'S Q');
+        });
+        if (rs.length) c.push(L('Jalan dan drainase', 'q ' + f2(M) + ' ' + f2(M) + ' ' + f2(fw) + ' ' + f2(fh) + ' re W n\n' + rs.join('\n') + '\nQ'));
+      }
       c.push('0 0 0 RG 0 0 0 rg ' + f2(bwPt) + ' w');
       var ttl = asc((opts.title || m.name) + (sh && sh.name ? ' - ' + sh.name : '')), tw = ttl.length * 13 * 0.56;
       c.push('BT /F2 13 Tf ' + f2(PW / 2 - tw / 2) + ' ' + f2(PH - 17) + ' Td (' + pe(ttl) + ') Tj ET');
       list.forEach(function (b) {
         var s = ''; b.pts.forEach(function (p, i) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); });
-        c.push(L('Batas blok', s + 'h S'));
+        c.push(L('Tepi blok', s + 'h S'));
         var q = bbox(b.pts), bw = (q[3] - q[1]) * kx * sc, bh = (q[2] - q[0]) * ky * sc, nm = asc(b.name);
         infos.push({ b: b, nm: nm, ar: fmtHa(HzBlok.areaHa(b.pts)) + ' ha', fit: Math.min(bw * 0.84 / (Math.max(3, nm.length) * 0.56), bh * (opts.luas === false ? 0.7 : 0.42)), x0: X(q[1]), x1: X(q[3]), y0: Y(q[0]), y1: Y(q[2]) });
       });
@@ -389,8 +401,8 @@
         var ip = poiC[o.b.id] || (poiC[o.b.id] = (opts.pos === 't' ? poiBand(o.b.pts, kx, ky, 0.55, 0.95) : (opts.pos === 'b' ? poiBand(o.b.pts, kx, ky, 0.05, 0.45) : null)) || poi(o.b.pts, kx, ky));
         if (o.b.lblOff) ip = [ip[0] + o.b.lblOff[0], ip[1] + o.b.lblOff[1]];
         var cx = X(ip[1]), cy = Y(ip[0]), ls = [], lyr = [];
-        if (opts.name !== false) { ls.push(o.nm); lyr.push('No blok'); }
-        if (opts.luas !== false) { ls.push(o.ar); lyr.push('Luas blok'); }
+        if (opts.name !== false) { ls.push(o.nm); lyr.push('Nomor blok dan luas'); }
+        if (opts.luas !== false) { ls.push(o.ar); lyr.push('Nomor blok dan luas'); }
         var lf = sh ? sh.lines : opts.lines; if (lf) lf(o.b).forEach(function (t) { ls.push(asc(t.t != null ? t.t : t)); lyr.push(t.l || 'Tanggal dan luas kategori'); });
         var lh = fsU * 1.15, y0 = cy + (ls.length * lh) / 2 - fsU * 0.85;
         ls.forEach(function (t, i) {
@@ -400,12 +412,14 @@
         });
       });
       // skala dan panah utara
+      var scStart = c.length;
       var L0 = [100, 200, 500, 1000, 2000, 5000].filter(function (v) { return v * sc < fw * 0.25; }).pop() || 100, bx = PW / 2 - L0 * sc / 2, by = M + 16;
       c.push('1 w ' + f2(bx) + ' ' + f2(by) + ' m ' + f2(bx + L0 * sc) + ' ' + f2(by) + ' l S ' + f2(bx) + ' ' + f2(by - 4) + ' m ' + f2(bx) + ' ' + f2(by + 4) + ' l S ' + f2(bx + L0 * sc) + ' ' + f2(by - 4) + ' m ' + f2(bx + L0 * sc) + ' ' + f2(by + 4) + ' l S');
       c.push('BT /F1 8 Tf ' + f2(bx) + ' ' + f2(by + 7) + ' Td (' + (L0 >= 1000 ? (L0 / 1000) + ' km' : L0 + ' m') + ') Tj ET');
       var nx0 = PW - M - 24, ny0 = PH - M - 46;
       c.push('1 w ' + f2(nx0) + ' ' + f2(ny0) + ' m ' + f2(nx0) + ' ' + f2(ny0 + 28) + ' l S ' + f2(nx0 - 5) + ' ' + f2(ny0 + 20) + ' m ' + f2(nx0) + ' ' + f2(ny0 + 28) + ' l ' + f2(nx0 + 5) + ' ' + f2(ny0 + 20) + ' l S');
       c.push('BT /F2 9 Tf ' + f2(nx0 - 3) + ' ' + f2(ny0 - 10) + ' Td (U) Tj ET');
+      if (c.length > scStart) c.push(L('Legenda dan tabel', c.splice(scStart).join('\n')));
       // legenda: tabel info (Master: sudut paling kosong; Laporan: kanan bawah), kotak daftar (kiri, bisa digeser), keterangan (kiri bawah)
       var rows = [['Master', m.name.length > 24 ? m.name.slice(0, 23) + '.' : m.name], ['Jumlah blok', String(list.length)], ['Total luas', fmtHa(tot) + ' ha']].concat(opts.dates ? [[opts.datesLbl || 'Tanggal', opts.dates]] : [], [['Dicetak', tgl], ['Versi app', ver]]);
       if (sh && sh.info) rows = rows.concat(sh.info);
@@ -444,7 +458,7 @@
           });
         }
       }
-      if (opts.layers && opts.legend !== false && c.length > lgStart) { var lgs = c.splice(lgStart).join('\n'); c.push(L('Legenda', lgs)); }
+      if (opts.layers !== false && opts.legend !== false && c.length > lgStart) { var lgs = c.splice(lgStart).join('\n'); c.push(L('Legenda dan tabel', lgs)); }
       var resP = res; if (ocgs.length) resP = res.replace(/ >>$/, ' /Properties << ' + ocgs.map(function (nm) { return '/' + ocmap[nm].k + ' ' + ocmap[nm].n + ' 0 R'; }).join(' ') + ' >> >>');
       var cs = add(stream('', c.join('\n')));
       var corners = [[M, M], [M, PH - M], [PW - M, PH - M], [PW - M, M]], lp = [0, 0, 0, 1, 1, 1, 1, 0], gp = [];
