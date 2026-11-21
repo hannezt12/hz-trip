@@ -141,10 +141,120 @@
     draw();
   }
 
+  // ---------- keterangan (lajur tabel di kanan peta Master): Varietas, Bulan tanam, Status ----------
+  var KT_ALL = [['var', 'Varietas'], ['bt', 'Bulan tanam'], ['st', 'Status tanaman']];
+  function ktCfg() {
+    var k = S.settings.kt; if (!k) k = S.settings.kt = { on: false, tabs: ['var', 'bt', 'st'], cols: { pc: true, rc: true, tot: true, pct: true } };
+    if (!k.cols) k.cols = { pc: true, rc: true, tot: true, pct: true };
+    KT_ALL.forEach(function (a) { if (!k.tabs) k.tabs = []; });
+    return k;
+  }
+  function ktData(list, cfg) {
+    var tot = 0, ls = HA.lyb, out = [];
+    var haB = list.map(function (b) { var h = 0; try { h = HzBlok.areaHa(b.pts); } catch (e) {} tot += h; return h; });
+    function grp(keyF, rowsDef) {
+      var m = {}; rowsDef.forEach(function (r) { m[r.k] = { r: r, pc: 0, rc: 0, tot: 0 }; });
+      list.forEach(function (b, i) {
+        var k = keyF(b), g = m[k] || m['']; if (!g) return; var st = ls.of(b, 'status'), h = haB[i];
+        g.tot += h; if (st && st.id === 'pc') g.pc += h; else if (st) g.rc += h;
+      });
+      return rowsDef.map(function (r) { return m[r.k]; }).filter(function (g) { return g.tot > 0.0001; });
+    }
+    var va = ls.by('varietas'), st = ls.by('status');
+    (cfg.tabs || []).forEach(function (id) {
+      if (id === 'var' && va) {
+        var defs = va.items.map(function (it) { return { k: it.id, name: it.name, it: it }; }).concat([{ k: '', name: 'Belum diisi' }]);
+        out.push({ id: id, title: 'Varietas', kind: 'pcrc', rows: grp(function (b) { var it = ls.of(b, 'varietas'); return it ? it.id : ''; }, defs) });
+      } else if (id === 'bt') {
+        var defb = ls.BN.map(function (n, i) { return { k: String(i + 1), name: n, col: ls.bulanCol(i + 1) }; }).concat([{ k: '', name: 'Belum diisi' }]);
+        out.push({ id: id, title: 'Bulan tanam', kind: 'pcrc', rows: grp(function (b) { var m = ls.bulanOf(b); return m ? String(m) : ''; }, defb) });
+      } else if (id === 'st' && st) {
+        var defs2 = st.items.map(function (it) { return { k: it.id, name: it.name, sym: it.sym }; }).concat([{ k: '', name: 'Belum diisi' }]);
+        var rs = grp(function (b) { var it = ls.of(b, 'status'); return it ? it.id : ''; }, defs2);
+        out.push({ id: id, title: 'Status tanaman', kind: 'st', rows: rs });
+      }
+    });
+    return { tot: tot, tabs: out };
+  }
+  // gambar lajur; kembalikan { ops, w } (w = lebar lajur total pt)
+  function ktDraw(list, PW, PH, M, cfg, f2) {
+    var D = ktData(list, cfg), cols = cfg.cols || {}, RH = 11, FS = 7.5, ops = [], cx = PW + 10, y = PH - M, maxX = cx;
+    var pctF = function (v) { return D.tot > 0 ? (Math.round(v / D.tot * 1000) / 10).toFixed(1).replace('.', ',') + '%' : '-'; };
+    var hf = function (v) { return v > 0.0001 ? fmtHa(v) : '-'; };
+    var colw = 118, nw = 44;
+    D.tabs.forEach(function (t) {
+      var hd = ['Nama'], keys = [];
+      if (t.kind === 'pcrc') { if (cols.pc !== false) { hd.push('PC'); keys.push('pc'); } if (cols.rc !== false) { hd.push('RC'); keys.push('rc'); } if (cols.tot !== false) { hd.push('Total'); keys.push('tot'); } }
+      else { hd.push('ha'); keys.push('tot'); }
+      if (cols.pct !== false) { hd.push('%'); keys.push('pct'); }
+      var tw = colw + keys.length * nw, rows = t.rows.map(function (g) { return { g: g }; }), tt = { pc: 0, rc: 0, tot: 0 };
+      t.rows.forEach(function (g) { tt.pc += g.pc; tt.rc += g.rc; tt.tot += g.tot; });
+      rows.push({ g: { r: { name: 'Total' }, pc: tt.pc, rc: tt.rc, tot: tt.tot }, bold: true });
+      while (rows.length) {
+        var avail = Math.floor((y - M - 14 - RH) / RH);
+        if (avail < 3 && y < PH - M - 1) { cx = maxX + 8; y = PH - M; continue; }
+        var take = rows.splice(0, Math.max(3, Math.min(rows.length, avail)));
+        var H = 14 + RH * (take.length + 1), top = y;
+        ops.push('0 g BT /F2 9 Tf ' + f2(cx) + ' ' + f2(top - 9) + ' Td (' + pe(t.title) + ') Tj ET');
+        var ty = top - 14 - RH;
+        ops.push('0.9 g ' + f2(cx) + ' ' + f2(ty) + ' ' + f2(tw) + ' ' + f2(RH) + ' re f 0 g 0.4 w 0 G ' + f2(cx) + ' ' + f2(ty) + ' ' + f2(tw) + ' ' + f2(RH) + ' re S');
+        hd.forEach(function (h, i) { ops.push('BT /F2 ' + FS + ' Tf ' + f2(i ? cx + colw + (i - 1) * nw + nw - 3 - h.length * FS * 0.52 : cx + 3) + ' ' + f2(ty + 3) + ' Td (' + pe(h) + ') Tj ET'); });
+        take.forEach(function (r, ri) {
+          var ry = ty - RH * (ri + 1), g = r.g;
+          ops.push('0.4 w 0 G ' + f2(cx) + ' ' + f2(ry) + ' ' + f2(tw) + ' ' + f2(RH) + ' re S');
+          var nx = cx + 3;
+          if (g.r && g.r.col) { ops.push('q ' + HA.lyb.rgb(g.r.col) + ' rg ' + f2(cx + 2) + ' ' + f2(ry + 2) + ' 12 7 re f 0 G 0.3 w ' + f2(cx + 2) + ' ' + f2(ry + 2) + ' 12 7 re S Q'); nx = cx + 17; }
+          else if (g.r && g.r.it) { ops.push(HA.lyb.swatchPdf(g.r.it, cx + 2, ry + 2, 12, 7)); nx = cx + 17; }
+          else if (g.r && g.r.sym) {
+            var dn = HA.lyb.diceN(g.r.sym);
+            if (dn) ops.push(HA.lyb.dicePdf(cx + 8, ry + RH / 2, 8, dn, 0, '0 g')); else ops.push('0 g BT /F2 ' + FS + ' Tf ' + f2(cx + 2) + ' ' + f2(ry + 3) + ' Td (' + pe(g.r.sym) + ') Tj ET');
+            nx = cx + 17;
+          }
+          var nm = String(g.r ? g.r.name : ''), maxc = Math.floor((colw - (nx - cx) - 2) / (FS * 0.5)); if (nm.length > maxc) nm = nm.slice(0, Math.max(1, maxc - 1)) + '.';
+          ops.push('0 g BT /F' + (r.bold ? 2 : 1) + ' ' + FS + ' Tf ' + f2(nx) + ' ' + f2(ry + 3) + ' Td (' + pe(asc(nm)) + ') Tj ET');
+          keys.forEach(function (k, i) {
+            var v = k === 'pct' ? pctF(g.tot) : hf(g[k]);
+            ops.push('0 g BT /F' + (r.bold ? 2 : 1) + ' ' + FS + ' Tf ' + f2(cx + colw + i * nw + nw - 3 - v.length * FS * 0.52) + ' ' + f2(ry + 3) + ' Td (' + pe(v) + ') Tj ET');
+          });
+        });
+        y = top - H - 8; if (cx + tw > maxX) maxX = cx + tw;
+      }
+    });
+    return { ops: ops.join('\n'), w: D.tabs.length ? (maxX - PW) + 10 : 0 };
+  }
+
   // ---------- cetak (drawer > Cetak > Master) ----------
   function ribu(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
   function fsNum(v) { var l = { s: 5, m: 7.5, l: 11 }[v]; if (l) return l; var n = parseFloat(v); return isFinite(n) ? n : null; }
   var PS = { sel: null, fmt: 'pdf', map: true, list: false, title: '', fs: 'a', pos: 'c', luas: (function () { try { return localStorage.getItem('hz_pmluas') !== '0'; } catch (e) { return true; } })() };
+  function ktPanel() {
+    var k = ktCfg(), h = '<div class="h">KETERANGAN (lajur tabel di kanan peta)</div><label><input type="checkbox" id="pmKt"' + (k.on ? ' checked' : '') + '> Tampilkan lajur keterangan (kertas dilebarkan ke kanan)</label>';
+    if (k.on) {
+      var order = (k.tabs || []).slice(); KT_ALL.forEach(function (a) { if (order.indexOf(a[0]) < 0) order.push(a[0]); });
+      h += '<div class="lbList" id="pmKtL">' + order.map(function (id, i) {
+        var nm = ''; KT_ALL.forEach(function (a) { if (a[0] === id) nm = a[1]; });
+        return '<div class="lbRow" style="min-height:2.5rem;align-items:center;gap:6px"><input type="checkbox" data-kt="' + id + '"' + ((k.tabs || []).indexOf(id) >= 0 ? ' checked' : '') + '><span style="flex:1">' + nm + '</span><button class="btn sm" data-ku="' + id + '"' + (i ? '' : ' disabled') + '>\u2191</button><button class="btn sm" data-kd="' + id + '"' + (i < order.length - 1 ? '' : ' disabled') + '>\u2193</button></div>';
+      }).join('') + '</div>' +
+      '<div class="muted" style="margin:6px 0 2px">Kolom (Varietas dan Bulan tanam)</div><div class="row" style="gap:10px;flex-wrap:wrap">' + [['pc', 'PC'], ['rc', 'RC'], ['tot', 'Total'], ['pct', '%']].map(function (c) { return '<label><input type="checkbox" data-kc="' + c[0] + '"' + (k.cols[c[0]] !== false ? ' checked' : '') + '> ' + c[1] + '</label>'; }).join('') + '</div>' +
+      '<div class="muted" style="margin-top:4px">Satuan ha. Urutan tabel bisa diubah dengan tombol panah.</div>';
+    }
+    return h + '<label style="margin-top:6px"><input type="checkbox" id="pmBt"' + (S.settings.btOn ? ' checked' : '') + '> Garis tepi bulan tanam (warna dan tebal di menu Lapisan)</label><label><input type="checkbox" id="pmHalo"' + (S.settings.halo !== false ? ' checked' : '') + '> Halo teks (garis putih di sekeliling teks)</label>';
+  }
+  function ktWire(rerender) {
+    var k = ktCfg();
+    if ($('pmKt')) $('pmKt').onchange = function () { k.on = this.checked; saveSettings(); rerender(); };
+    if ($('pmBt')) $('pmBt').onchange = function () { S.settings.btOn = this.checked; saveSettings(); };
+    if ($('pmHalo')) $('pmHalo').onchange = function () { S.settings.halo = this.checked; saveSettings(); };
+    var L2 = $('pmKtL'); if (!L2) return;
+    function order() { var o = (k.ord || k.tabs || []).slice(); KT_ALL.forEach(function (a) { if (o.indexOf(a[0]) < 0) o.push(a[0]); }); return o; }
+    L2.onchange = function (e) { var id = e.target.getAttribute && e.target.getAttribute('data-kt'); if (!id) return; var o = order(), on = {}; (k.tabs || []).forEach(function (t) { on[t] = 1; }); on[id] = e.target.checked ? 1 : 0; k.tabs = o.filter(function (t) { return on[t]; }); k.ord = o; saveSettings(); };
+    L2.onclick = function (e) {
+      var b = e.target.closest && e.target.closest('button'); if (!b) return; var u = b.getAttribute('data-ku'), d = b.getAttribute('data-kd'), id = u || d; if (!id) return;
+      var o = k.ord || order(), i = o.indexOf(id), j = u ? i - 1 : i + 1; if (j < 0 || j >= o.length) return; var t = o[i]; o[i] = o[j]; o[j] = t; k.ord = o;
+      var on = {}; (k.tabs || []).forEach(function (x) { on[x] = 1; }); k.tabs = o.filter(function (x) { return on[x]; }); saveSettings(); rerender();
+    };
+    $('sheet').querySelectorAll('[data-kc]').forEach(function (e) { e.onchange = function () { k.cols[e.getAttribute('data-kc')] = e.checked; saveSettings(); }; });
+  }
   function printPanel() {
     var ms = masters(); ms.forEach(function (m, i) { if (m.id == null) m.id = Date.now() + i; });
     if (!mById(PS.sel)) PS.sel = ms.length ? ms[0].id : null;
@@ -158,6 +268,7 @@
         '<div class="h">FORMAT (pilih satu)</div><div class="seg" id="pmFmt"><button data-f="pdf"' + (PS.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-f="kml"' + (PS.fmt === 'kml' ? ' class="on"' : '') + '>KML</button><button data-f="data"' + (PS.fmt === 'data' ? ' class="on"' : '') + '>Data blok</button></div>' +
         (PS.fmt === 'pdf' ? '<div class="h">ISI PDF</div><label><input type="checkbox" id="pmMap"' + (PS.map ? ' checked' : '') + '> Peta (satu lembar, ber-geo)</label><label><input type="checkbox" id="pmLuas"' + (PS.luas ? ' checked' : '') + '> Tampilkan luas di peta</label><label><input type="checkbox" id="pmList"' + (PS.list ? ' checked' : '') + '> Daftar blok lengkap</label>' +
           (HA.lyb && (HA.lyb.all().some(function (l) { return l.items.length; }) || (HA.obj && HA.obj.objs().length)) ? '<div class="h">LAPISAN BLOK (layer PDF)</div>' + HA.lyb.all().filter(function (l) { return l.items.length; }).map(function (l) { return '<label><input type="checkbox" data-lyo="' + l.id + '"' + (l.on ? ' checked' : '') + '> ' + esc(l.name) + '</label>'; }).join('') + (HA.obj && HA.obj.objs().length ? '<label><input type="checkbox" data-lyo="__obj"' + (HA.obj.on() ? ' checked' : '') + '> Objek (' + HA.obj.objs().length + ')</label>' : '') : '') +
+          ktPanel() +
           '<div class="h">JUDUL</div><input type="text" id="pmTtl" maxlength="60" placeholder="Kosong = nama master" value="' + esc(PS.title) + '" style="width:100%">' +
           '<div class="h">UKURAN TEKS NO BLOK (pt)</div><div class="row" style="gap:6px"><button class="btn" id="pmFm" style="width:3rem">−</button><input type="number" id="pmFn" min="1" max="30" step="0.5" inputmode="decimal" placeholder="Otomatis" value="' + (fsNum(PS.fs) != null ? fsNum(PS.fs) : '') + '" style="flex:1;text-align:center"><button class="btn" id="pmFp" style="width:3rem">+</button><button class="btn' + (fsNum(PS.fs) == null ? ' on' : '') + '" id="pmFa">Otomatis</button></div><div class="muted" style="margin-top:2px">Luas ikut ukuran ini, tampil di bawah nomor.</div>' +
           ''
@@ -170,6 +281,7 @@
         : '<div class="card muted" style="margin-top:6px">Belum ada master. Buat di Data peta > Master: gambar poligon kawasan, lalu kembali ke sini untuk mencetak.</div>') +
       '<button class="btn" id="pmX" style="width:100%;margin-top:8px">Tutup</button>');
     $('pmX').onclick = closeSheet;
+    ktWire(printPanel);
     $('pmMode').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-m]'); if (!b) return; var md = b.getAttribute('data-m'); if (md === 'trip') { closeSheet(); HA.openPrint({ day: S.hDay }); } else if (md === 'laporan' && HA.openLaporan) { closeSheet(); HA.openLaporan(); } };
     if (!ms.length) return;
     $('sheet').querySelectorAll('input[name=pmSel]').forEach(function (r) { r.onchange = function () { PS.sel = r.value; printPanel(); }; });
@@ -400,6 +512,7 @@
           (lapUsed[lp.id] = lapUsed[lp.id] || {})[li.id] = 1;
           c.push(L('Lapisan: ' + lp.name, HA.lyb.fillPdf(li, b.pts.map(function (p) { return [X(p[1]), Y(p[0])]; }), '/GS1')));
         });
+        if (!sh && opts.bt !== false && HA.lyb.btOn()) { var bm = HA.lyb.bulanOf(b); if (bm) c.push(L('Bulan tanam', 'q ' + s + 'h W n ' + rgbc(HA.lyb.bulanCol(bm)) + ' RG 1 j ' + f2(HA.lyb.btW() * 2) + ' w ' + s + 'h S Q')); }
         c.push(L('Tepi blok', s + 'h S'));
         var q = bbox(b.pts), bw = (q[3] - q[1]) * kx * sc, bh = (q[2] - q[0]) * ky * sc, nm = asc(b.name);
         infos.push({ b: b, nm: nm, ar: fmtHa(HzBlok.areaHa(b.pts)) + ' ha', fit: Math.min(bw * 0.84 / (Math.max(3, nm.length) * 0.56), bh * (opts.luas === false ? 0.7 : 0.42)), x0: X(q[1]), x1: X(q[3]), y0: Y(q[0]), y1: Y(q[2]) });
@@ -413,12 +526,14 @@
         if (opts.name !== false) { ls.push(o.nm); lyr.push('Nomor blok dan luas'); }
         if (opts.luas !== false) { ls.push(o.ar); lyr.push('Nomor blok dan luas'); }
         var lf = sh ? sh.lines : opts.lines; if (lf) lf(o.b).forEach(function (t) { ls.push(asc(t.t != null ? t.t : t)); lyr.push(t.l || 'Tanggal dan luas kategori'); });
-        lapA.forEach(function (lp) { if (lp.mode !== 'sym') return; var li = HA.lyb.of(o.b, lp.id); if (li) { ls.push(li.sym); lyr.push('Lapisan: ' + lp.name); (lapUsed[lp.id] = lapUsed[lp.id] || {})[li.id] = 1; } });
+        lapA.forEach(function (lp) { if (lp.mode !== 'sym') return; var li = HA.lyb.of(o.b, lp.id); if (li) { var dn0 = HA.lyb.diceN(li.sym); ls.push(dn0 ? { dice: dn0 } : li.sym); lyr.push('Lapisan: ' + lp.name); (lapUsed[lp.id] = lapUsed[lp.id] || {})[li.id] = 1; } });
         var lh = fsU * 1.15, y0 = cy + (ls.length * lh) / 2 - fsU * 0.85;
+        var HALO = S.settings.halo !== false;
         ls.forEach(function (t, i) {
+          if (typeof t === 'object') { c.push(L(lyr[i], HA.lyb.dicePdf(cx, y0 - i * lh + fsU * 0.32, fsU * 0.9, t.dice, HALO ? fsU * 0.32 : 0))); return; }
           var tp = 'BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - t.length * fsU * 0.52 / 2) + ' ' + f2(y0 - i * lh) + ' Td (' + pe(t) + ') Tj ET';
           // biru tinta tua (jadi abu tua di fotokopi) + halo putih tipis; tepi blok tetap hitam
-          c.push(L(lyr[i], 'q 1 G 1 j ' + f2(fsU * 0.32) + ' w 1 Tr ' + tp + ' Q q 0.122 0.306 0.62 rg 0 Tr ' + tp + ' Q'));
+          c.push(L(lyr[i], (HALO ? 'q 1 G 1 j ' + f2(fsU * 0.32) + ' w 1 Tr ' + tp + ' Q ' : '') + 'q 0.122 0.306 0.62 rg 0 Tr ' + tp + ' Q'));
         });
       });
       // skala dan panah utara
@@ -484,18 +599,20 @@
               c.push('0 g BT /F1 8 Tf ' + f2(lx0 + 30) + ' ' + f2(ty) + ' Td (' + pe(oj.name) + ') Tj ET'); return;
             }
             if (r.h) { c.push('0 g BT /F2 8 Tf ' + f2(lx0 + 5) + ' ' + f2(ty) + ' Td (' + pe(r.h) + ') Tj ET'); return; }
-            if (r.lp.mode === 'fill') c.push(HA.lyb.swatchPdf(r.it, lx0 + 5, ty - 1, 18, 9)); else c.push('0 g BT /F2 9 Tf ' + f2(lx0 + 5) + ' ' + f2(ty) + ' Td (' + pe(r.it.sym) + ') Tj ET');
+            if (r.lp.mode === 'fill') c.push(HA.lyb.swatchPdf(r.it, lx0 + 5, ty - 1, 18, 9)); else if (HA.lyb.diceN(r.it.sym)) c.push(HA.lyb.dicePdf(lx0 + 14, ty + 3.5, 8, HA.lyb.diceN(r.it.sym), 0, '0 g')); else c.push('0 g BT /F2 9 Tf ' + f2(lx0 + 5) + ' ' + f2(ty) + ' Td (' + pe(r.it.sym) + ') Tj ET');
             c.push('0 g BT /F1 8 Tf ' + f2(lx0 + 30) + ' ' + f2(ty) + ' Td (' + pe(r.it.name) + ') Tj ET');
           });
         }
       }
       if (opts.layers !== false && opts.legend !== false && c.length > lgStart) { var lgs = c.splice(lgStart).join('\n'); c.push(L('Legenda dan tabel', lgs)); }
+      var TWk = 0, kc = ktCfg();
+      if (!sh && opts.kt !== false && kc.on && (kc.tabs || []).length) { var kd = ktDraw(list, PW, PH, M, kc, f2); if (kd.w) { TWk = kd.w; c.push(L('Keterangan', kd.ops)); } }
       var resP = res; if (ocgs.length) resP = res.replace(/ >>$/, ' /Properties << ' + ocgs.map(function (nm) { return '/' + ocmap[nm].k + ' ' + ocmap[nm].n + ' 0 R'; }).join(' ') + ' >> >>');
       var cs = add(stream('', c.join('\n')));
       var corners = [[M, M], [M, PH - M], [PW - M, PH - M], [PW - M, M]], lp = [0, 0, 0, 1, 1, 1, 1, 0], gp = [];
       corners.forEach(function (q) { gp.push(latAt(q[1]).toFixed(7), lngAt(q[0]).toFixed(7)); });
       var vp = '/VP [ << /Type /Viewport /Name (Peta) /BBox [' + f2(M) + ' ' + f2(M) + ' ' + f2(PW - M) + ' ' + f2(PH - M) + '] /Measure << /Type /Measure /Subtype /GEO /Bounds [0 0 0 1 1 1 1 0] /GPTS [' + gp.join(' ') + '] /LPTS [' + lp.join(' ') + '] /GCS << /Type /GEOGCS /WKT (GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]) /EPSG 4326 >> /PDU [/M /DEG /DEG] >> >> ]';
-      kids.push(add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW) + ' ' + f2(PH) + '] /Resources ' + resP + ' /Contents ' + cs + ' 0 R ' + vp + ' >>'));
+      kids.push(add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW + TWk) + ' ' + f2(PH) + '] /Resources ' + resP + ' /Contents ' + cs + ' 0 R ' + vp + ' >>'));
     });
     (opts.tables || []).forEach(function (tb) {
       var PER = 46, np = Math.max(1, Math.ceil(tb.rows.length / PER)), k;

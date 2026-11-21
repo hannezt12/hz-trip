@@ -1204,7 +1204,8 @@
     lapA.forEach(function (lp) {
       var li = HA.lyb.of(blk, lp.id), ip = HA.poi(blk.pts, kx, ky), sx = X(ip[1]), sy = Y(ip[0]);
       LB(c, 'Lapisan: ' + lp.name);
-      if (lp.mode === 'sym') { var fz = 16; c.push('q 1 G 1 j 3 w 1 Tr BT /F2 ' + fz + ' Tf ' + f2(sx - String(li.sym).length * fz * 0.28) + ' ' + f2(sy - fz * 0.35) + ' Td (' + pe(li.sym) + ') Tj ET Q q 0.122 0.306 0.62 rg 0 Tr BT /F2 ' + fz + ' Tf ' + f2(sx - String(li.sym).length * fz * 0.28) + ' ' + f2(sy - fz * 0.35) + ' Td (' + pe(li.sym) + ') Tj ET Q'); }
+      if (lp.mode === 'sym' && HA.lyb.diceN(li.sym)) c.push(HA.lyb.dicePdf(sx, sy, 16, HA.lyb.diceN(li.sym), 3));
+      else if (lp.mode === 'sym') { var fz = 16; c.push('q 1 G 1 j 3 w 1 Tr BT /F2 ' + fz + ' Tf ' + f2(sx - String(li.sym).length * fz * 0.28) + ' ' + f2(sy - fz * 0.35) + ' Td (' + pe(li.sym) + ') Tj ET Q q 0.122 0.306 0.62 rg 0 Tr BT /F2 ' + fz + ' Tf ' + f2(sx - String(li.sym).length * fz * 0.28) + ' ' + f2(sy - fz * 0.35) + ' Td (' + pe(li.sym) + ') Tj ET Q'); }
       LE(c);
     });
     // tanda titik: ikon di atas sketsa

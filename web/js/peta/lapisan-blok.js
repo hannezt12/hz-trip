@@ -12,7 +12,44 @@
   function save() { return HA.saveSettings(); }
   var PATS = [['none', 'Polos'], ['d1', 'Miring /'], ['d2', 'Miring \\'], ['x', 'Silang'], ['h', 'Datar'], ['v', 'Tegak'], ['dot', 'Titik']];
   var PAL = ['#E53935', '#FB8C00', '#FDD835', '#43A047', '#00ACC1', '#1E88E5', '#5E35B1', '#D81B60', '#6D4C41', '#757575'];
-  var SYMQ = ['±', '•', '••', '•••', '••••', '+', '*', '#', 'X'];
+  var SYMQ = ['\u00B1', '\u2022', '\u2022\u2022', '\u2022\u2022\u2022', 'D4', 'D5', '+', '*', '#', 'X'];
+
+  // ---------- simbol dadu (RC4 = 4 titik 2x2, RC5 = 4 titik + 1 tengah) ----------
+  function diceN(sym) { return sym === 'D4' ? 4 : sym === 'D5' ? 5 : 0; }
+  function dotsXY(n) { var d = 0.3, a = [[-d, -d], [d, -d], [-d, d], [d, d]]; if (n === 5) a.push([0, 0]); return a; }
+  function circP(x, y, r) { var k = 0.5523 * r; return n2(x + r) + ' ' + n2(y) + ' m ' + n2(x + r) + ' ' + n2(y + k) + ' ' + n2(x + k) + ' ' + n2(y + r) + ' ' + n2(x) + ' ' + n2(y + r) + ' c ' + n2(x - k) + ' ' + n2(y + r) + ' ' + n2(x - r) + ' ' + n2(y + k) + ' ' + n2(x - r) + ' ' + n2(y) + ' c ' + n2(x - r) + ' ' + n2(y - k) + ' ' + n2(x - k) + ' ' + n2(y - r) + ' ' + n2(x) + ' ' + n2(y - r) + ' c ' + n2(x + k) + ' ' + n2(y - r) + ' ' + n2(x + r) + ' ' + n2(y - k) + ' ' + n2(x + r) + ' ' + n2(y) + ' c h '; }
+  // titik dadu di tengah (cx,cy), sisi kotak sz (pt); halo = tebal halo putih (0 = tanpa)
+  function dicePdf(cx, cy, sz, n, halo, ink) {
+    var r = sz * 0.14, pts = dotsXY(n).map(function (q) { return circP(cx + q[0] * sz, cy + q[1] * sz, r); }).join('');
+    return (halo > 0 ? 'q 1 g 1 G ' + n2(halo) + ' w ' + pts + 'B Q ' : '') + 'q ' + (ink || '0.122 0.306 0.62 rg') + ' ' + pts + 'f Q';
+  }
+  function symHtml(sym) {
+    var n = diceN(sym); if (!n) return esc(sym || '-');
+    return '<svg class="lbDice" viewBox="-0.5 -0.5 1 1" width="18" height="18">' + dotsXY(n).map(function (q) { return '<circle cx="' + q[0] + '" cy="' + q[1] + '" r="0.14" fill="currentColor"/>'; }).join('') + '</svg>';
+  }
+  function symTxt(sym) { return diceN(sym) ? '' : String(sym || ''); }
+
+  // ---------- Bulan tanam: 12 warna bersama (garis tepi Master + warna bulan Laporan) ----------
+  var BN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  var BC0 = ['#e6194b', '#f58231', '#ffe119', '#8fd14f', '#2e8b3d', '#17bebb', '#4fc3f7', '#1f4fa8', '#8e44ad', '#d81b9a', '#8d5524', '#6c7a89'];
+  function bulanCol(n) { var a = S.settings.bulanCol; return (a && a[n - 1]) || BC0[n - 1]; }
+  function btOn() { return !!S.settings.btOn; }
+  function btW() { var v = +S.settings.btW; return v > 0 ? v : 1.5; }
+  function bulanOf(b) { return b && b.tn && /^\d{4}-\d{2}$/.test(b.tn) ? +b.tn.slice(5, 7) : 0; }
+  function btOpen() {
+    var cnt = {}; HA.blocksList().forEach(function (b) { var m = bulanOf(b); if (m) cnt[m] = (cnt[m] || 0) + 1; });
+    openSheet('<div class="grab"></div><div class="bth"><div class="st">BULAN TANAM</div><button class="btn pri" id="btX">Selesai</button></div>' +
+      '<div class="muted" style="margin:4px 0 8px">Satu warna per bulan (tanpa tahun). Warna ini dipakai sebagai garis tepi blok di cetak Master dan sebagai warna bulan di Laporan Tahunan. Bulan tanam blok diatur di Edit blok (blok RC: bulan tebang terakhir).</div>' +
+      '<label style="display:block"><input type="checkbox" id="btOn"' + (btOn() ? ' checked' : '') + '> Ikut cetak Master (garis tepi menurut bulan tanam)</label>' +
+      '<div class="h" style="margin-top:10px">TEBAL GARIS TEPI (pt)</div><input type="number" id="btW" min="0.5" max="8" step="0.5" inputmode="decimal" value="' + btW() + '" style="width:100%">' +
+      '<div class="h" style="margin-top:10px">WARNA BULAN</div><div class="lbList">' + BN.map(function (nm, i) { return '<label class="lbRow" style="min-height:2.75rem;align-items:center;gap:10px"><input type="color" data-n="' + (i + 1) + '" value="' + bulanCol(i + 1) + '"><span style="flex:1">' + nm + '</span><span class="muted">' + (cnt[i + 1] || 0) + ' blok</span></label>'; }).join('') + '</div>' +
+      '<button class="btn" id="btR" style="width:100%;margin-top:8px">Kembalikan warna awal</button>');
+    $('btX').onclick = home;
+    $('btOn').onchange = function () { S.settings.btOn = this.checked; save(); };
+    $('btW').onchange = function () { var v = Math.max(0.5, Math.min(8, parseFloat(String(this.value).replace(',', '.')) || 1.5)); S.settings.btW = v; this.value = v; save(); };
+    $('sheet').querySelectorAll('input[type=color][data-n]').forEach(function (e) { e.onchange = function () { var a = (S.settings.bulanCol || BC0).slice(); a[+e.getAttribute('data-n') - 1] = e.value; S.settings.bulanCol = a; save(); }; });
+    $('btR').onclick = function () { S.settings.bulanCol = null; save(); btOpen(); };
+  }
 
   function all() {
     var a = S.settings.lyb;
@@ -20,9 +57,17 @@
       a = S.settings.lyb = [
         { id: 'status', name: 'Status tanaman', mode: 'sym', on: true, items: [
           { id: 'pc', name: 'PC', sym: '±', col: '#1F4E9E' }, { id: 'rc1', name: 'RC1', sym: '•', col: '#1F4E9E' },
-          { id: 'rc2', name: 'RC2', sym: '••', col: '#1F4E9E' }, { id: 'rc3', name: 'RC3', sym: '•••', col: '#1F4E9E' }] },
+          { id: 'rc2', name: 'RC2', sym: '••', col: '#1F4E9E' }, { id: 'rc3', name: 'RC3', sym: '•••', col: '#1F4E9E' },
+          { id: 'rc4', name: 'RC4', sym: 'D4', col: '#1F4E9E' }, { id: 'rc5', name: 'RC5', sym: 'D5', col: '#1F4E9E' }] },
         { id: 'varietas', name: 'Varietas', mode: 'fill', on: true, items: [] }
       ];
+    }
+    if (!a.rcMig) {
+      a.rcMig = 1;
+      var st = null; a.forEach(function (l) { if (l.id === 'status') st = l; });
+      if (st && st.items.length && st.items[st.items.length - 1].id === 'rc3') {
+        st.items.push({ id: 'rc4', name: 'RC4', sym: 'D4', col: '#1F4E9E' }, { id: 'rc5', name: 'RC5', sym: 'D5', col: '#1F4E9E' }); save();
+      }
     }
     return a;
   }
@@ -85,7 +130,7 @@
   // ---------- gambar layar: pratinjau item ----------
   var SV = 0;
   function prevSvg(l, it) {
-    if (l.mode === 'sym') return '<span class="lbSym">' + esc(it.sym || '-') + '</span>';
+    if (l.mode === 'sym') return '<span class="lbSym">' + symHtml(it.sym) + '</span>';
     var id = 'lbp' + (++SV), pat = it.pat || 'none', ink = it.pc || '#000000', body = '';
     if (pat !== 'none') {
       var ln = { d1: '<path d="M0 8L8 0" />', d2: '<path d="M0 0L8 8" />', x: '<path d="M0 8L8 0M0 0L8 8" />', h: '<path d="M0 4H8" />', v: '<path d="M4 0V8" />', dot: '<circle cx="4" cy="4" r="1" fill="' + ink + '" stroke="none"/>' }[pat];
@@ -105,6 +150,7 @@
           '<label class="lbOn"><input type="checkbox" data-on="' + l.id + '"' + (l.on ? ' checked' : '') + '> Ikut cetak</label></div>';
       }).join('') +
       (HA.obj ? '<div class="lbCard"><button type="button" class="lbOpen" id="lbObj"><b>Objek</b><span class="muted">' + HA.obj.jenis().length + ' jenis \u00B7 ' + HA.obj.objs().length + ' objek \u00B7 titik, garis, area</span></button><label class="lbOn"><input type="checkbox" id="lbObjOn"' + (HA.obj.on() ? ' checked' : '') + '> Ikut cetak</label></div>' : '') +
+      '<div class="lbCard"><button type="button" class="lbOpen" id="lbBt"><b>Bulan tanam</b><span class="muted">12 warna bulan \u00B7 garis tepi \u00B7 ' + btW() + ' pt</span></button><label class="lbOn"><input type="checkbox" id="lbBtOn"' + (btOn() ? ' checked' : '') + '> Ikut cetak</label></div>' +
       '<div class="lbCard" style="display:block"><b>Tebang otomatis</b><div class="muted" style="margin:2px 0 6px">Tanda tebang/panen menaikkan status blok otomatis (nama kategori berisi "bibit" = tebang bibit, selain itu produksi). Tebang berikutnya di blok yang sama dalam jumlah hari ini dianggap lanjutan, status tidak naik lagi.</div><div class="row" style="gap:8px"><label class="calL">Produksi (hari)<input type="number" id="lbWp" min="1" max="365" value="' + winDays('produksi') + '"></label><label class="calL">Bibit (hari)<input type="number" id="lbWb" min="1" max="365" value="' + winDays('bibit') + '"></label></div></div>' +
       '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="lbCx" style="flex:1">Ekspor CSV</button><button class="btn" id="lbCi" style="flex:1">Impor CSV</button></div>' +
       '<button class="btn" id="lbBulk" style="width:100%;margin-top:8px">Atur banyak blok</button>' +
@@ -113,6 +159,7 @@
     $('sheet').querySelectorAll('.lbOpen').forEach(function (e) { e.onclick = function () { lapOpen(e.getAttribute('data-l')); }; });
     $('sheet').querySelectorAll('[data-on]').forEach(function (e) { e.onchange = function () { lapBy(e.getAttribute('data-on')).on = e.checked; save(); }; });
     if ($('lbObj')) { $('lbObj').onclick = function () { HA.obj.open(); }; $('lbObjOn').onchange = function () { S.settings.objOn = this.checked; save(); }; }
+    $('lbBt').onclick = btOpen; $('lbBtOn').onchange = function () { S.settings.btOn = this.checked; save(); };
     $('lbBulk').onclick = function () { bulk(null); };
     function wv(id, k) { $(id).onchange = function () { var v = Math.max(1, Math.min(365, Math.round(+this.value) || 30)); this.value = v; (S.settings.lybWin = S.settings.lybWin || {})[k] = v; save(); }; }
     wv('lbWp', 'produksi'); wv('lbWb', 'bibit');
@@ -162,7 +209,7 @@
     function body() {
       var h = '<input type="text" id="ieN" maxlength="30" placeholder="' + (l.mode === 'sym' ? 'Nama, mis. RC4' : 'Nama varietas') + '" value="' + esc(d.name) + '" style="width:100%;margin-top:8px">';
       if (l.mode === 'sym') {
-        h += '<div class="h" style="margin-top:10px">SIMBOL DI CETAK</div><input type="text" id="ieS" maxlength="6" value="' + esc(d.sym) + '" style="width:100%"><div class="lbQ">' + SYMQ.map(function (s) { return '<button type="button" class="btn sm" data-s="' + esc(s) + '">' + esc(s) + '</button>'; }).join('') + '</div><div class="muted">Huruf, angka, ± dan • aman tercetak.</div>';
+        h += '<div class="h" style="margin-top:10px">SIMBOL DI CETAK</div><input type="text" id="ieS" maxlength="6" value="' + esc(d.sym) + '" style="width:100%"><div class="lbQ">' + SYMQ.map(function (s) { return '<button type="button" class="btn sm" data-s="' + esc(s) + '">' + symHtml(s) + '</button>'; }).join('') + '</div><div class="muted">Huruf, angka, ± dan • aman tercetak. D4 dan D5 = titik dadu (4 dan 5 titik).</div>';
       } else {
         h += '<div class="h" style="margin-top:10px">WARNA ISI</div><div class="lbQ">' + PAL.map(function (c) { return '<button type="button" class="lbC' + (d.col === c ? ' on' : '') + '" data-c="' + c + '" style="background:' + c + '" aria-label="' + c + '"></button>'; }).join('') + '<input type="color" id="ieC" value="' + esc(d.col) + '"></div>' +
           '<div class="h" style="margin-top:10px">POLA ARSIR</div><div class="lbQ">' + PATS.map(function (p) { return '<button type="button" class="btn sm' + (d.pat === p[0] ? ' pri' : '') + '" data-p="' + p[0] + '">' + p[1] + '</button>'; }).join('') + '</div>' +
@@ -399,7 +446,7 @@
     $('rhX').onclick = function () { if (back) back(); else closeSheet(); };
     if ($('rhUn')) $('rhUn').onclick = function () { if (undoLast(b)) { toast('Perubahan terakhir diurungkan'); hist(b, back); } };
   }
-  HA.lyb = { hist: hist, suggest: suggest, all: all, by: lapBy, of: of, set: setItem, umur: umur, txt: txt, next: nextItem, active: active, fillPdf: fillPdf, swatchPdf: swatchPdf, rgb: rgb, pathOf: pathOf, PATS: PATS, PAL: PAL, prevSvg: prevSvg, home: home, bulk: bulk, today: today };
+  HA.lyb = { hist: hist, suggest: suggest, all: all, by: lapBy, of: of, set: setItem, umur: umur, txt: txt, next: nextItem, active: active, fillPdf: fillPdf, swatchPdf: swatchPdf, rgb: rgb, pathOf: pathOf, PATS: PATS, PAL: PAL, prevSvg: prevSvg, diceN: diceN, dicePdf: dicePdf, symHtml: symHtml, symTxt: symTxt, bulanCol: bulanCol, bulanOf: bulanOf, btOn: btOn, btW: btW, BN: BN, home: home, bulk: bulk, today: today };
   document.addEventListener('DOMContentLoaded', wire); if (document.readyState !== 'loading') wire();
   function wire() {
     var a = document.querySelector('#drawer a[data-lyb]'); if (!a || a._w) return; a._w = 1;

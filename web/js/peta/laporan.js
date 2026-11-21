@@ -20,10 +20,11 @@
   var YR = +S.today.slice(0, 4);
   var DEF = function () { return { sel: null, jn: 'bulanan', scope: 'master', blk: '', from: addDays(S.today, -29), to: S.today, cs: [], k1: '', k2: '', mw: '', y1: YR, m1: 1, y2: YR, m2: 12, kNo: true, luas: true, kLeg: true, bw: 1, fs: 2, title: '', lt: {}, lr: {}, mc: null, lg: { x: null, y: null, fs: 8 } }; };
   var PS = Object.assign(DEF(), S.settings.lpPS || {});
+  if (PS.mc && !S.settings.bulanCol) { S.settings.bulanCol = PS.mc.slice(); }
   PS.lg = Object.assign({ x: null, y: null, fs: 8 }, PS.lg || {}); if (!PS.lt) PS.lt = {}; if (!PS.lr) PS.lr = {}; if (!Array.isArray(PS.cs)) PS.cs = [];
   var AC = { k1: false, k2: false };
   function persist() { S.settings.lpPS = JSON.parse(JSON.stringify(PS)); HA.saveSettings(); }
-  function mcol(n) { return (PS.mc && PS.mc[n - 1]) || MC0[n - 1]; }
+  function mcol(n) { return HA.lyb ? HA.lyb.bulanCol(n) : MC0[n - 1]; }
   function clampNum(v, a, b, d) { v = parseFloat(String(v).replace(',', '.')); if (!isFinite(v)) return d; return Math.max(a, Math.min(b, v)); }
   function cats() { return HA.tandaData().cats; }
   function catById(id) { return HA.tandaCatOf(id); }
@@ -83,7 +84,7 @@
     var lp = mwLap(); if (!lp) return { fills: [], leg: [], by: {} };
     var fills = [], used = {}, by = {};
     list.forEach(function (b) { var it = HA.lyb.of(b, lp.id); if (!it) return; used[it.id] = it; by[b.id] = mwCol(lp, it); fills.push({ pts: b.pts, mode: 'full', col: by[b.id] }); });
-    var leg = lp.items.filter(function (it) { return used[it.id]; }).map(function (it) { var t = lp.name + ': ' + (it.sym ? it.sym + ' ' : '') + it.name; return { key: 'w:' + it.id, base: t, col: mwCol(lp, it), txt: PS.lr['w:' + it.id] || t }; });
+    var leg = lp.items.filter(function (it) { return used[it.id]; }).map(function (it) { var t = lp.name + ': ' + (it.sym && HA.lyb.symTxt(it.sym) ? HA.lyb.symTxt(it.sym) + ' ' : '') + it.name; return { key: 'w:' + it.id, base: t, col: mwCol(lp, it), txt: PS.lr['w:' + it.id] || t }; });
     return { fills: fills, leg: leg, by: by };
   }
   // ---------- susun laporan ----------
@@ -95,13 +96,13 @@
       var byB = {}; recs.forEach(function (r) { var k = r.b.id + '|' + r.it.cat; (byB[k] = byB[k] || { b: r.b, cat: r.it.cat, ms: {} }); var mk = r.d.slice(0, 7), o = byB[k].ms[mk] || (byB[k].ms[mk] = { a: 0 }); o.a += areaOf(r.it); });
       var fills = []; Object.keys(byB).forEach(function (k) {
         var o = byB[k], best = null; Object.keys(o.ms).forEach(function (mk) { if (!best || o.ms[mk].a > o.ms[best].a || (o.ms[mk].a === o.ms[best].a && mk > best)) best = mk; });
-        fills.push({ pts: o.b.pts, mode: o.cat === PS.k1 ? 'ring' : 'inner', col: mcol(+best.slice(5, 7)) });
+        fills.push({ pts: o.b.pts, mode: !PS.k2 ? 'full' : o.cat === PS.k1 ? 'ring' : 'inner', col: mcol(+best.slice(5, 7)) });
       });
       var W = mwFills(list); fills = W.fills.concat(fills);
       var leg = [], y = PS.y1, mo = PS.m1, cross = PS.y1 !== PS.y2;
       for (i = 0; i < monthsN(); i++) { var key = y + '-' + ('0' + mo).slice(-2), base = PS.lr['m:' + key] || (MN[mo - 1] + (cross ? ' ' + String(y).slice(2) : '')); leg.push({ key: 'm:' + key, base: base, col: mcol(mo), txt: base }); mo++; if (mo > 12) { mo = 1; y++; } }
       leg = leg.concat(W.leg);
-      var keter = [{ kind: 'ring', txt: 'Garis tepi = ' + catName(PS.k1) }]; if (PS.k2) keter.push({ kind: 'fill', txt: 'Warna dalam = ' + catName(PS.k2) });
+      var keter = [PS.k2 ? { kind: 'ring', txt: 'Garis tepi = ' + catName(PS.k1) } : { kind: 'fill', txt: 'Warna blok = ' + catName(PS.k1) + ' (menurut bulan)' }]; if (PS.k2) keter.push({ kind: 'fill', txt: 'Warna dalam = ' + catName(PS.k2) });
       var sum = {}; recs.forEach(function (r) { var mk = r.d.slice(0, 7); sum[mk] = sum[mk] || [0, 0]; sum[mk][r.it.cat === PS.k1 ? 0 : 1] += areaOf(r.it); });
       var srows = [], t1 = 0, t2 = 0; y = PS.y1; mo = PS.m1;
       for (i = 0; i < monthsN(); i++) { var mk2 = y + '-' + ('0' + mo).slice(-2), v = sum[mk2] || [0, 0]; t1 += v[0]; t2 += v[1]; srows.push({ c: [MN[mo - 1] + (cross ? ' ' + y : ''), fmtHa(v[0]) + ' ha', PS.k2 ? fmtHa(v[1]) + ' ha' : ''], sw: { 0: mcol(mo) } }); mo++; if (mo > 12) { mo = 1; y++; } }
@@ -153,9 +154,9 @@
       (PS.scope === 'blok' ? '<input type="text" id="pmBlk" placeholder="No blok, pisahkan koma (mis. 04 TS 16, 04 TS 17)" value="' + esc(PS.blk) + '" style="width:100%;margin-top:6px">' : '') +
       '<div class="muted" id="pmN" style="margin-top:4px">' + list.length + ' blok akan dicetak</div>' +
       (thn ? '<div class="h">BULAN (maksimal 12 bulan)</div><div class="row" style="gap:8px"><label class="calL">Dari bulan' + monSel('pmM1', PS.m1) + '</label><label class="calL">Tahun' + yrSel('pmY1', PS.y1) + '</label></div><div class="row" style="gap:8px;margin-top:4px"><label class="calL">Sampai bulan' + monSel('pmM2', PS.m2) + '</label><label class="calL">Tahun' + yrSel('pmY2', PS.y2) + '</label></div>' +
-        '<div class="h">WARNA BULAN</div><div class="pmMc" id="pmMc">' + MN.map(function (n, i) { return '<label><input type="color" data-n="' + (i + 1) + '" value="' + mcol(i + 1) + '"><span>' + n.slice(0, 3) + '</span></label>'; }).join('') + '</div><button class="btn" id="pmMcR" style="width:100%;margin-top:4px">Kembalikan warna bulan</button>'
+        ''
         : '<div class="h">TANGGAL (maksimal 1 bulan)</div><div class="row" style="gap:8px"><label class="calL">Dari<input type="date" id="pmFr" max="' + S.today + '" value="' + PS.from + '"></label><label class="calL">Sampai<input type="date" id="pmTo" max="' + S.today + '" value="' + PS.to + '"></label></div><div class="muted" style="margin-top:4px">Warna blok mengikuti warna kategori.</div>') +
-      '<div class="h">TAMPILKAN</div><label><input type="checkbox" id="pmKn"' + (PS.kNo ? ' checked' : '') + '> No blok</label><label><input type="checkbox" id="pmLuas"' + (PS.luas ? ' checked' : '') + '> Luas blok (ha)</label><label><input type="checkbox" id="pmKg"' + (PS.kLeg ? ' checked' : '') + '> Legenda</label>' +
+      '<div class="h">TAMPILKAN</div><label><input type="checkbox" id="pmHalo"' + (S.settings.halo !== false ? ' checked' : '') + '> Halo teks (garis putih di sekeliling teks)</label><label><input type="checkbox" id="pmKn"' + (PS.kNo ? ' checked' : '') + '> No blok</label><label><input type="checkbox" id="pmLuas"' + (PS.luas ? ' checked' : '') + '> Luas blok (ha)</label><label><input type="checkbox" id="pmKg"' + (PS.kLeg ? ' checked' : '') + '> Legenda</label>' +
       '<div class="h">UKURAN</div><div class="row" style="gap:8px"><label class="calL">Garis blok (px)<input type="number" id="pmBw" min="0.5" max="9" step="0.5" value="' + PS.bw + '"></label><label class="calL">Teks (pt)<input type="number" id="pmFs" min="1" max="12" step="0.5" value="' + PS.fs + '"></label></div>' +
       '<div class="h">JUDUL</div><input type="text" id="pmTtl" maxlength="60" placeholder="Kosong = nama master" value="' + esc(PS.title) + '" style="width:100%">' +
       '<div class="h">DRAFT LAPORAN</div><div class="row" style="gap:6px"><select id="pmDr" style="flex:1">' + (S.settings.lpDrafts || []).map(function (d) { return '<option value="' + d.id + '">' + esc(d.name) + '</option>'; }).join('') + '</select><button class="btn" id="pmDrL">Muat</button><button class="btn" id="pmDrS">Simpan</button><button class="btn" id="pmDrD">Hapus</button></div>' +
@@ -185,7 +186,7 @@
     if ($('pmBlk')) { $('pmBlk').oninput = function () { PS.blk = this.value; cnt(); }; $('pmBlk').onchange = persist; }
     if ($('pmFr')) { $('pmFr').onchange = function () { if (this.value) { PS.from = this.value; persist(); } }; $('pmTo').onchange = function () { if (this.value) { PS.to = this.value; persist(); } }; }
     if ($('pmM1')) { [['pmM1', 'm1'], ['pmY1', 'y1'], ['pmM2', 'm2'], ['pmY2', 'y2']].forEach(function (p) { $(p[0]).onchange = function () { PS[p[1]] = +this.value; persist(); }; }); }
-    if ($('pmMc')) { $('pmMc').onchange = function (e) { var n = +e.target.getAttribute('data-n'); if (!n) return; if (!PS.mc) PS.mc = MC0.slice(); PS.mc[n - 1] = e.target.value; persist(); }; $('pmMcR').onclick = function () { PS.mc = null; persist(); rerender(); }; }
+    if ($('pmHalo')) $('pmHalo').onchange = function () { S.settings.halo = this.checked; HA.saveSettings(); };
     [['pmKn', 'kNo'], ['pmLuas', 'luas'], ['pmKg', 'kLeg']].forEach(function (p) { $(p[0]).onchange = function () { PS[p[1]] = this.checked; persist(); }; });
     $('pmBw').onchange = function () { PS.bw = Math.round(clampNum(this.value, 0.5, 9, 1) * 2) / 2; this.value = PS.bw; persist(); };
     $('pmFs').onchange = function () { PS.fs = Math.round(clampNum(this.value, 1, 12, 2) * 2) / 2; this.value = PS.fs; persist(); };
