@@ -254,7 +254,58 @@
     draw();
   }
 
-  HA.lyb = { all: all, by: lapBy, of: of, set: setItem, umur: umur, txt: txt, next: nextItem, active: active, fillPdf: fillPdf, swatchPdf: swatchPdf, rgb: rgb, pathOf: pathOf, PATS: PATS, PAL: PAL, prevSvg: prevSvg, home: home, bulk: bulk, today: today };
+  // ---------- usul naik status: kategori Panen/Tebang tercatat di blok ----------
+  var sq = {}, sqT = null;
+  function blockOfItem(it) {
+    var bl = HA.blocksList(), i;
+    if (it.bid != null) for (i = 0; i < bl.length; i++) if (String(bl[i].id) === String(it.bid)) return bl[i];
+    if (it.pts && it.pts[0] && HA.blockAt) { try { return HA.blockAt(L.latLng(it.pts[0][0], it.pts[0][1])); } catch (e) {} }
+    return null;
+  }
+  function suggest(it) {
+    if (!it || !it.cat) return;
+    var c = HA.tandaCatOf ? HA.tandaCatOf(it.cat) : null;
+    if (!c || !/panen|tebang/i.test(c.name || '')) return;
+    var l = lapBy('status'); if (!l || !l.items.length) return;
+    var b = blockOfItem(it); if (!b || !of(b, 'status') || !nextItem(b, l)) return;
+    var d = it.date || today(); if (d <= (b.stSug || '')) return;
+    if (!sq[b.id] || sq[b.id].d < d) sq[b.id] = { b: b, d: d };
+    clearTimeout(sqT); sqT = setTimeout(function () { flush(0); }, 1500);
+  }
+  function flush(n) {
+    var ks = Object.keys(sq); if (!ks.length) return;
+    var busy = $('sheet').classList.contains('on') || (HA.DM && HA.DM.edit);
+    if (busy) { if (n < 40) sqT = setTimeout(function () { flush(n + 1); }, 2500); return; }
+    var l = lapBy('status'), rows = ks.map(function (k) {
+      var q = sq[k], cur = of(q.b, 'status'), nx = nextItem(q.b, l); if (!cur || !nx) return '';
+      return '<label class="lsR"><input type="checkbox" data-sb="' + k + '" checked><span class="lsT"><b>Blok ' + esc(String(q.b.name)) + '</b> <span class="muted">' + esc(cur.name) + ' \u2192 ' + esc(nx.name) + ' \u00B7 panen ' + esc(q.d) + '</span></span></label>';
+    }).filter(Boolean);
+    if (!rows.length) { sq = {}; return; }
+    openSheet('<div class="grab"></div><div class="st">NAIK STATUS?</div><div class="muted" style="margin:6px 0">Kategori panen/tebang baru dicatat. Naikkan status tanam blok berikut?</div><div class="plist" style="max-height:40vh;overflow:auto">' + rows.join('') + '</div>' +
+      '<button class="btn pri" id="nsGo" style="width:100%;margin-top:10px;height:50px">Naik status</button><button class="btn" id="nsNo" style="width:100%;margin-top:8px">Lewati</button>');
+    function done(apply) {
+      var pick = {}; $('sheet').querySelectorAll('[data-sb]').forEach(function (e) { pick[e.getAttribute('data-sb')] = e.checked; });
+      var n2 = 0;
+      Object.keys(sq).forEach(function (k) {
+        var q = sq[k], nx = nextItem(q.b, l); q.b.stSug = q.d;
+        if (apply && pick[k] && nx && setItem(q.b, 'status', nx.id)) { q.b.tn = q.d.slice(0, 7); n2++; }
+      });
+      sq = {}; save(); closeSheet(); if (apply) toast(n2 + ' blok naik status');
+    }
+    $('nsGo').onclick = function () { done(true); }; $('nsNo').onclick = function () { done(false); };
+  }
+  var hk = setInterval(function () {
+    if (!HA.tandaAdd || HA.tandaAdd._lyb) return;
+    var o = HA.tandaAdd; HA.tandaAdd = function (it) { var r = o.apply(this, arguments); try { suggest(it); } catch (e) {} return r; }; HA.tandaAdd._lyb = 1; clearInterval(hk);
+  }, 700);
+  function hist(b, back) {
+    var h = (b.lyh || []).slice().reverse();
+    openSheet('<div class="grab"></div><div class="bth"><div class="st">RIWAYAT STATUS \u00B7 BLOK ' + esc(String(b.name)).toUpperCase() + '</div><button class="btn pri" id="rhX">Tutup</button></div>' +
+      (h.length ? '<div class="lbList">' + h.map(function (x) { var l = lapBy(x.l), it = l && itemBy(l, x.i); return '<div class="lbRow" style="min-height:2.75rem;align-items:center"><span class="muted" style="width:6.5rem;flex:none">' + esc(x.d) + '</span><span><b>' + esc(l ? l.name : x.l) + '</b>: ' + esc(it ? it.name : 'dikosongkan') + '</span></div>'; }).join('') + '</div>' : '<div class="muted" style="margin:10px 0">Belum ada perubahan.</div>') +
+      (b.tn ? '<div class="muted" style="margin-top:8px">Bulan tanam/tebang terakhir: ' + esc(b.tn) + '</div>' : ''));
+    $('rhX').onclick = function () { if (back) back(); else closeSheet(); };
+  }
+  HA.lyb = { hist: hist, suggest: suggest, all: all, by: lapBy, of: of, set: setItem, umur: umur, txt: txt, next: nextItem, active: active, fillPdf: fillPdf, swatchPdf: swatchPdf, rgb: rgb, pathOf: pathOf, PATS: PATS, PAL: PAL, prevSvg: prevSvg, home: home, bulk: bulk, today: today };
   document.addEventListener('DOMContentLoaded', wire); if (document.readyState !== 'loading') wire();
   function wire() {
     var a = document.querySelector('#drawer a[data-lyb]'); if (!a || a._w) return; a._w = 1;

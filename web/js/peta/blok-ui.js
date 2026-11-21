@@ -793,7 +793,7 @@
     var ls = HA.lyb.all();
     return '<div class="lbG2">' + ls.map(function (l) {
       return '<div><div class="muted">' + esc(l.name) + '</div><select id="beLy_' + l.id + '"><option value="">\u2014</option>' + l.items.map(function (x) { return '<option value="' + x.id + '"' + (b.ly && b.ly[l.id] === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>';
-    }).join('') + '</div><div class="lbG"><div><div class="muted">Bulan tanam</div><input type="month" id="beTn" value="' + esc(b.tn || '') + '"></div><div><div class="muted">Umur</div><div id="beUm" style="min-height:2.5rem;display:flex;align-items:center">' + (HA.lyb.umur(b) || '\u2014') + '</div></div><div><div class="muted">&nbsp;</div><button class="btn" id="beUp" style="width:100%">Naik status</button></div></div>';
+    }).join('') + '</div><div class="lbG"><div><div class="muted">Bulan tanam</div><input type="month" id="beTn" value="' + esc(b.tn || '') + '"></div><div><div class="muted">Umur</div><div id="beUm" style="min-height:2.5rem;display:flex;align-items:center">' + (HA.lyb.umur(b) || '\u2014') + '</div></div><div><div class="muted">&nbsp;</div><button class="btn" id="beUp" style="width:100%">Naik status</button></div></div>' + ((b.lyh && b.lyh.length) ? '<button class="btn sm" id="beLh" style="margin-top:8px">Riwayat status</button>' : '');
   }
   function openBlockEdit(b) {
     HA.pbStopForEdit(); if (HA.DM.closePanel) HA.DM.closePanel(); if (HA.closeLinePop) HA.closeLinePop();
@@ -855,6 +855,7 @@
     if (HA.lyb) {
       HA.lyb.all().forEach(function (l) { var e = $('beLy_' + l.id); if (e) e.onchange = function () { HA.lyb.set(b, l.id, e.value); live(); }; });
       if ($('beTn')) $('beTn').onchange = function () { b.tn = this.value || ''; $('beUm').textContent = HA.lyb.umur(b) || '\u2014'; live(); };
+      if ($('beLh')) $('beLh').onclick = function () { HA.onSheetClose = null; HA.lyb.hist(b, function () { openBlockEdit(b); if ($('beMo')) $('beMo').click(); }); };
       if ($('beUp')) $('beUp').onclick = function () {
         var l = HA.lyb.by('status'), nx = l && HA.lyb.next(b, l), cur = HA.lyb.of(b, 'status');
         if (!l || !l.items.length) { toast('Isi dulu jenis status di menu Lapisan'); return; }
