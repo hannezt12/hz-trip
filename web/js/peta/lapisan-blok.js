@@ -129,15 +129,15 @@
   function rgb(h) { h = String(h || '#888888').replace('#', ''); if (h.length !== 6) h = '888888'; var f = function (i) { return (Math.round(parseInt(h.slice(i, i + 2), 16) / 255 * 1000) / 1000); }; return f(0) + ' ' + f(2) + ' ' + f(4); }
   function n2(v) { return (Math.round(v * 100) / 100); }
   function pathOf(xy) { var s = ''; xy.forEach(function (p, i) { s += n2(p[0]) + ' ' + n2(p[1]) + (i ? ' l ' : ' m '); }); return s + 'h '; }
-  function fillPdf(item, xy, gs) {
+  function fillPdf(item, xy, gs, hsp) {
     if (!item || !xy || xy.length < 3) return '';
     var s = '', x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     xy.forEach(function (p) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; });
     if (item.col) s += 'q ' + (gs ? gs + ' gs ' : '') + rgb(item.col) + ' rg ' + pathOf(xy) + 'f Q\n';
     var pat = item.pat || 'none';
     if (pat !== 'none') {
-      var w = x1 - x0, h = y1 - y0, sp = 4.2, ink = rgb(item.pc || '#000000'), k;
-      s += 'q ' + pathOf(xy) + 'W n ' + ink + ' RG ' + ink + ' rg 0.45 w ';
+      var w = x1 - x0, h = y1 - y0, sp = hsp > 0 ? hsp : 4.2, ink = rgb(item.pc || '#000000'), k;
+      s += 'q ' + pathOf(xy) + 'W n ' + ink + ' RG ' + ink + ' rg ' + n2(Math.max(0.45, Math.min(1.1, sp / 9))) + ' w ';
       if (pat === 'd1' || pat === 'x') for (k = -h; k <= w; k += sp) s += n2(x0 + k) + ' ' + n2(y0) + ' m ' + n2(x0 + k + h) + ' ' + n2(y1) + ' l S ';
       if (pat === 'd2' || pat === 'x') for (k = -h; k <= w; k += sp) s += n2(x0 + k) + ' ' + n2(y1) + ' m ' + n2(x0 + k + h) + ' ' + n2(y0) + ' l S ';
       if (pat === 'h') for (k = 0; k <= h; k += sp) s += n2(x0) + ' ' + n2(y0 + k) + ' m ' + n2(x1) + ' ' + n2(y0 + k) + ' l S ';

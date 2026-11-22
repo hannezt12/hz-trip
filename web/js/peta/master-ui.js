@@ -62,8 +62,15 @@
   function mById(id) { return masters().filter(function (m) { return String(m.id) === String(id); })[0]; }
   function renderMaster(box) {
     var ms = masters(); ms.forEach(function (m, i) { if (m.id == null) m.id = Date.now() + i; });
-    box.innerHTML = '<button class="btn pri" id="mkNew" style="width:100%;height:50px">Buat master baru</button><div id="mkList" style="margin-top:10px"></div>' +
+    box.innerHTML = '<button class="btn pri" id="mkNew" style="width:100%;height:50px">Buat master baru</button>' + (ms.length ? '<button class="btn" id="mkIsi" style="width:100%;height:50px;margin-top:8px">Isi data (varietas, status, bulan tanam)</button>' : '') + '<div id="mkList" style="margin-top:10px"></div>' +
       '<div class="muted" style="margin:8px 2px">Master = poligon kawasan untuk cetak PDF. Hanya blok Terkonfirmasi yang seluruh bentuknya ada di dalam poligon yang tercetak; blok di perbatasan Han putuskan sendiri. Tampilan blok di peta tidak dibatasi master.</div>';
+    if ($('mkIsi')) $('mkIsi').onclick = function () {
+      var bk = function () { S.dpTab = 'master'; go('data'); };
+      if (ms.length === 1) { HA.isiData(ms[0], bk); return; }
+      openSheet('<div class="grab"></div><div class="st">ISI DATA: PILIH MASTER</div>' + ms.map(function (x) { var mm = members(x); return '<button class="btn" data-m="' + esc(String(x.id)) + '" style="width:100%;margin-top:6px;text-align:left">' + esc(x.name) + ' <span class="muted">· ' + (mm.in.length + mm.man.length) + ' blok</span></button>'; }).join('') + '<button class="btn" id="mkIsiX" style="width:100%;margin-top:10px">Batal</button>');
+      $('mkIsiX').onclick = closeSheet;
+      document.querySelectorAll('#sheet button[data-m]').forEach(function (b) { b.onclick = function () { var m2 = mById(b.getAttribute('data-m')); closeSheet(); if (m2) HA.isiData(m2, bk); }; });
+    };
     $('mkNew').onclick = function () { HA.mapKeep = true; go('lintasan'); setTimeout(function () { HA.closeAll(); HA.drawFlow('master'); }, 800); };
     HA.lpList($('mkList'), 'master', {
       items: ms.map(function (m) {
@@ -391,25 +398,40 @@
     })();
   }
   function layEd(m, back) {
-    toast('Menyusun…');
+    toast('Menyiapkan…');
     prep(m, function (list, lj, mem) {
       function cl(o) { return JSON.parse(JSON.stringify(o)); }
       var lay = cl(S.settings.mLay || {}); lay.obj = lay.obj || {}; lay.hide = {}; lay.map = lay.map || {}; lay.mapPos = lay.mapPos || 'c';
-      var init = JSON.stringify(lay), hist = [init], hi = 0, out = {}, F = {}, sel = null, zoom = 1, busy = false, again = false, SC = 1, bmp = null;
+      var init = JSON.stringify(lay), hist = [init], hi = 0, out = {}, F = {}, sel = null, zoom = 1, first = 0, busy = false, again = false, SC = 1, bmp = null;
       var old = document.getElementById('lyEd'); if (old) old.remove();
       var el = document.createElement('div'); el.id = 'lyEd'; el.className = 'lyEd';
       el.innerHTML = '<div class="lyh"><button class="btn sm" id="lyBk">Batal</button><button class="btn sm" id="lyUn">Urung</button><div class="seg lyps" id="lyPs"><button data-p="l">Kiri</button><button data-p="c">Tengah</button><button data-p="r">Kanan</button></div><button class="btn pri sm" id="lyGo">Simpan</button></div>' +
-        '<div class="lyw" id="lyW"><div class="lyp" id="lyP"></div></div><div class="lymsg" id="lyMsg">Menyusun…</div><div class="lyhint">Seret frame. Cubit frame = ubah ukuran. Cubit di ruang kosong = zoom. Posisi peta: Kiri / Tengah / Kanan.</div>';
+        '<div class="lyw" id="lyW"><div class="lyp" id="lyP"></div></div><div class="lymsg" id="lyMsg">Menyiapkan…</div><div class="lyhint">Seret frame. Cubit frame = ubah ukuran. Cubit di ruang kosong = zoom. Posisi peta: Kiri / Tengah / Kanan.</div>';
       document.body.appendChild(el);
       var $e = function (id) { return el.querySelector('#' + id); }, P = $e('lyP'), W = $e('lyW');
       function dirty() { return JSON.stringify(lay) !== init; }
-      function push() { var j = JSON.stringify(lay); if (j === hist[hi]) return; hist = hist.slice(0, hi + 1); hist.push(j); hi = hist.length - 1; ui(); }
+      function snapF() { var o = {}; Object.keys(F).forEach(function (k) { o[k] = [F[k].x0, F[k].y0, F[k].x1, F[k].y1]; }); return o; }
+      function setMapPos(p) {
+        var mf = F.map; if (!mf) return; var old = lay.mapPos, w = mf.x1 - mf.x0, M0 = out.M || 24, PWp = out.PW, nx = p === 'l' ? M0 : p === 'r' ? PWp - M0 - w : (PWp - w) / 2, dxm = nx - mf.x0;
+        Object.keys(F).forEach(function (k) {
+          var f = F[k], ww = f.x1 - f.x0; if (k === 'map' || k === 'judul' || (lay.obj[k] && lay.obj[k].x != null)) return;
+          if (k.indexOf('kt:') === 0) {
+            if (out.paper === 'auto' || !out.paper) { var nowL = (out.OX || 0) < 0, wantL = p === 'r'; if (nowL !== wantL && out.TW) { var dl = wantL ? -(out.TW + PWp + 10) : (out.TW + PWp + 10); f.x0 += dl; f.x1 += dl; } }
+            else if ((old === 'l' && p === 'r') || (old === 'r' && p === 'l')) { f.x0 = PWp - f.x1; f.x1 = f.x0 + ww; }
+            return;
+          }
+          f.x0 = Math.max(M0, Math.min(PWp - M0 - ww, f.x0 + dxm)); f.x1 = f.x0 + ww;
+        });
+        if (out.paper === 'auto' || !out.paper) out.OX = p === 'r' ? -(out.TW || 0) : 0;
+        mf.x0 = nx; mf.x1 = nx + w; lay.mapPos = p; delete lay.map.dx; delete lay.map.dy; layout(); push();
+      }
+      function push() { var j = JSON.stringify({ l: lay, f: snapF(), ox: out.OX || 0 }); if (j === hist[hi]) return; hist = hist.slice(0, hi + 1); hist.push(j); hi = hist.length - 1; ui(); }
       function ui() {
         $e('lyUn').disabled = hi <= 0;
         el.querySelectorAll('#lyPs button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-p') === lay.mapPos); });
       }
       function closeEd() { HA.layBack = null; el.remove(); }
-      function dims() { var PWt = (out.PW || 1190) + (out.TW || 0), PH = out.PH || 842, aw = Math.max(200, W.clientWidth - 8), ah = Math.max(200, W.clientHeight - 8), k = Math.min(aw / PWt, ah / PH) * zoom; return { PWt: PWt, PH: PH, k: k }; }
+      function dims() { var PWt = (out.PW || 1190) + (out.TW || 0), PH = out.PH || 842, k = Math.max(0.05, 0.8 * (W.clientWidth || 360) / (out.PW || 1190)) * zoom; return { PWt: PWt, PH: PH, k: k, ox: -(out.OX || 0) }; }
       function toU8(b) { var u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i) & 255; return u; }
       function rend(u8, cv) {
         return HA.loadPdfJs().then(function (lib) { return lib.getDocument({ data: u8 }).promise; }).then(function (doc) { return doc.getPage(1); }).then(function (pg) {
@@ -419,8 +441,8 @@
         });
       }
       function layout() {
-        var d = dims(); P.style.width = (d.PWt * d.k) + 'px'; P.style.height = (d.PH * d.k) + 'px';
-        Object.keys(F).forEach(function (id) { var f = F[id]; f.el.style.left = (f.x0 * d.k) + 'px'; f.el.style.top = ((d.PH - f.y1) * d.k) + 'px'; f.el.style.width = ((f.x1 - f.x0) * d.k) + 'px'; f.el.style.height = ((f.y1 - f.y0) * d.k) + 'px'; f.el.classList.toggle('on', sel === id); });
+        var d = dims(), ph = d.PH * d.k; P.style.width = (d.PWt * d.k) + 'px'; P.style.height = ph + 'px'; P.style.marginTop = Math.max(0, ((W.clientHeight || 0) - ph) / 2) + 'px';
+        Object.keys(F).forEach(function (id) { var f = F[id]; f.el.style.left = ((f.x0 + d.ox) * d.k) + 'px'; f.el.style.top = ((d.PH - f.y1) * d.k) + 'px'; f.el.style.width = ((f.x1 - f.x0) * d.k) + 'px'; f.el.style.height = ((f.y1 - f.y0) * d.k) + 'px'; f.el.classList.toggle('on', sel === id); });
       }
       function frames(cm, co) {
         P.innerHTML = ''; F = {};
@@ -428,14 +450,14 @@
           var r = out.rects[id]; if (r.hid || r.x0 == null) return;
           var f = { id: id, name: r.name, map: !!r.map, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, bw: r.bw, bh: r.bh }, src = r.map ? cm : co;
           var cv = document.createElement('canvas'), w = Math.max(1, Math.round((r.x1 - r.x0) * SC)), h = Math.max(1, Math.round((r.y1 - r.y0) * SC));
-          cv.width = w; cv.height = h; try { cv.getContext('2d').drawImage(src, Math.round(r.x0 * SC), Math.round(src.height - r.y1 * SC), w, h, 0, 0, w, h); } catch (e) {}
+          cv.width = w; cv.height = h; try { cv.getContext('2d').drawImage(src, Math.round((r.x0 - (out.OX || 0)) * SC), Math.round(src.height - r.y1 * SC), w, h, 0, 0, w, h); } catch (e) {}
           var d = document.createElement('div'); d.className = 'lyf' + (f.map ? ' lyMap' : ''); d.setAttribute('data-id', id); d.appendChild(cv);
           var sp = document.createElement('span'); sp.textContent = r.name; d.appendChild(sp); P.appendChild(d); f.el = d; F[id] = f;
         });
-        layout(); ui();
+        layout(); if (!first) { first = 1; hist = [JSON.stringify({ l: lay, f: snapF(), ox: out.OX || 0 })]; hi = 0; } ui();
       }
       function rebuild() {
-        if (busy) { again = true; return; } busy = true; $e('lyMsg').style.display = ''; $e('lyMsg').textContent = 'Menyusun…';
+        if (busy) { again = true; return; } busy = true; $e('lyMsg').style.display = ''; $e('lyMsg').textContent = 'Menyiapkan…';
         setTimeout(function () {
           var o1 = Object.assign({}, curOpts(), { lay: cl(lay), layOut: {}, edNoObj: true }), o2 = Object.assign({}, curOpts(), { lay: cl(lay), layOut: {}, edNoMap: true }), b1, b2;
           try { b1 = buildPdfBytes(m, list, lj, mem, o1); b2 = buildPdfBytes(m, list, lj, mem, o2); } catch (e) { $e('lyMsg').textContent = 'Gagal menyusun: ' + (e && e.message || e); busy = false; return; }
@@ -456,7 +478,7 @@
             if (a.x0 < b.x1 + gap && a.x1 + gap > b.x0 && a.y0 < b.y1 + gap && a.y1 + gap > b.y0) {
               var px = Math.min(a.x1 + gap - b.x0, b.x1 + gap - a.x0), py = Math.min(a.y1 + gap - b.y0, b.y1 + gap - a.y0), w = b.x1 - b.x0, h = b.y1 - b.y0;
               if (px < py) { var sx = (b.x0 + b.x1) / 2 >= (a.x0 + a.x1) / 2 ? 1 : -1; b.x0 += sx * px; } else { var sy = (b.y0 + b.y1) / 2 >= (a.y0 + a.y1) / 2 ? 1 : -1; b.y0 += sy * py; }
-              b.x0 = Math.max(0, Math.min(d.PWt - w, b.x0)); b.y0 = Math.max(0, Math.min(d.PH - h, b.y0)); b.x1 = b.x0 + w; b.y1 = b.y0 + h; rec(k); again2 = true;
+              b.x0 = Math.max(-d.ox, Math.min(d.PWt - d.ox - w, b.x0)); b.y0 = Math.max(0, Math.min(d.PH - h, b.y0)); b.x1 = b.x0 + w; b.y1 = b.y0 + h; rec(k); again2 = true;
             }
           });
         }
@@ -480,8 +502,8 @@
         if (!ptr[e.pointerId] || !g) return; ptr[e.pointerId] = { x: e.clientX, y: e.clientY }; var d = dims();
         if (g.mode === 'drag' && np() === 1) {
           var dx = e.clientX - g.sx, dy = e.clientY - g.sy; if (Math.abs(dx) + Math.abs(dy) > 4) g.moved = true; if (!g.moved) return;
-          if (F[g.id].map) return; var f = F[g.id], w = g.r.x1 - g.r.x0, h = g.r.y1 - g.r.y0;
-          f.x0 = Math.max(0, Math.min(d.PWt - w, g.r.x0 + dx / d.k)); f.y0 = Math.max(0, Math.min(d.PH - h, g.r.y0 - dy / d.k)); f.x1 = f.x0 + w; f.y1 = f.y0 + h; layout();
+          var f = F[g.id], w = g.r.x1 - g.r.x0, h = g.r.y1 - g.r.y0;
+          f.x0 = Math.max(-d.ox, Math.min(d.PWt - d.ox - w, g.r.x0 + dx / d.k)); f.y0 = f.map ? g.r.y0 : Math.max(0, Math.min(d.PH - h, g.r.y0 - dy / d.k)); f.x1 = f.x0 + w; f.y1 = f.y0 + h; layout();
         } else if (g.mode === 'pan' && np() === 1) { W.scrollLeft = g.sl - (e.clientX - g.sx); W.scrollTop = g.st - (e.clientY - g.sy); }
         else if (g.mode === 'pinch' && np() >= 2) {
           var f2 = F[g.id], r = dist() / g.d0, cx = (g.r.x0 + g.r.x1) / 2, cy = (g.r.y0 + g.r.y1) / 2, w2 = (g.r.x1 - g.r.x0) * r, h2 = (g.r.y1 - g.r.y0) * r;
@@ -495,19 +517,19 @@
         if (!ptr[e.pointerId]) return; delete ptr[e.pointerId]; if (!g) return;
         if (g.mode === 'drag' && np() === 0) {
           if (g.moved && !F[g.id].map) { rec(g.id); pushAway(g.id); Object.keys(F).forEach(function (k) { if (lay.obj[k] && lay.obj[k].x != null) rec(k); }); layout(); push(); }
-          else if (g.moved && F[g.id].map) toast('Posisi peta: pilih Kiri / Tengah / Kanan');
+          else if (g.moved && F[g.id].map) { var mf = F[g.id], cxm = (mf.x0 + mf.x1) / 2; setMapPos(cxm < out.PW / 3 ? 'l' : cxm > out.PW * 2 / 3 ? 'r' : 'c'); }
           g = null;
         } else if (g.mode === 'pinch' && np() < 2) {
           var id = g.id, f = F[id]; g = null;
-          if (f.map) { var r0 = out.rects.map, cur = lay.map.s > 0 ? lay.map.s : 1; lay.map.s = Math.max(0.4, Math.min(1, cur * (f.x1 - f.x0) / (r0.x1 - r0.x0))); if (Math.abs(lay.map.s - 1) < 0.02) delete lay.map.s; push(); rebuild(); }
+          if (f.map) { var r0 = out.rects.map, cur = lay.map.s > 0 ? lay.map.s : 1; lay.map.s = Math.max(0.4, Math.min(1, cur * (f.x1 - f.x0) / (r0.x1 - r0.x0))); if (Math.abs(lay.map.s - 1) < 0.02) delete lay.map.s; push(); }
           else { rec(id); pushAway(id); layout(); push(); }
           ptr = {};
         } else if (g.mode === 'zoom' && np() < 2) { g = null; ptr = {}; }
         else if (np() === 0) g = null;
       }
       P.addEventListener('pointerup', up); P.addEventListener('pointercancel', up);
-      $e('lyPs').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-p]'); if (!b) return; var p = b.getAttribute('data-p'); if (p === lay.mapPos) return; lay.mapPos = p; delete lay.map.dx; delete lay.map.dy; push(); rebuild(); };
-      $e('lyUn').onclick = function () { if (hi <= 0) return; hi--; lay = JSON.parse(hist[hi]); ui(); rebuild(); };
+      $e('lyPs').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-p]'); if (!b) return; var p = b.getAttribute('data-p'); if (p === lay.mapPos) return; setMapPos(p); };
+      $e('lyUn').onclick = function () { if (hi <= 0) return; hi--; var o = JSON.parse(hist[hi]); lay = o.l; out.OX = o.ox || 0; Object.keys(o.f).forEach(function (k) { if (F[k]) { F[k].x0 = o.f[k][0]; F[k].y0 = o.f[k][1]; F[k].x1 = o.f[k][2]; F[k].y1 = o.f[k][3]; } }); layout(); ui(); };
       function dlg(html, wire) { var q = document.createElement('div'); q.className = 'lyq'; q.innerHTML = '<div class="lyqc">' + html + '</div>'; el.appendChild(q); wire(q, function () { q.remove(); }); }
       function batal() {
         if (!dirty()) { closeEd(); if (back) back(); return; }
@@ -780,12 +802,13 @@
       c.push('0 0 0 RG 0 0 0 rg ' + f2(bwPt) + ' w');
       var ttl = asc((opts.title || m.name) + (sh && sh.name ? ' - ' + sh.name : '')), tw = ttl.length * 13 * 0.56;
       var ttlOps = 'BT /F2 13 Tf ' + f2(PW / 2 - tw / 2) + ' ' + f2(PH - 17) + ' Td (' + pe(ttl) + ') Tj ET';
+      var HSP = 0; if (HA.lyb) { var shs = []; list.forEach(function (b) { var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; b.pts.forEach(function (p) { var vx = X(p[1]), vy = Y(p[0]); x0 = Math.min(x0, vx); x1 = Math.max(x1, vx); y0 = Math.min(y0, vy); y1 = Math.max(y1, vy); }); shs.push(Math.min(x1 - x0, y1 - y0)); }); shs.sort(function (a, b) { return a - b; }); HSP = shs.length ? Math.max(1.8, shs[Math.floor(shs.length / 2)] / 8) : 0; }
       list.forEach(function (b) {
         var s = ''; b.pts.forEach(function (p, i) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); });
         lapA.forEach(function (lp) {
           if (lp.mode !== 'fill') return; var li = HA.lyb.of(b, lp.id); if (!li) return;
           (lapUsed[lp.id] = lapUsed[lp.id] || {})[li.id] = 1;
-          c.push(L('Lapisan: ' + lp.name, HA.lyb.fillPdf(li, b.pts.map(function (p) { return [X(p[1]), Y(p[0])]; }), '/GS1')));
+          c.push(L('Lapisan: ' + lp.name, HA.lyb.fillPdf(li, b.pts.map(function (p) { return [X(p[1]), Y(p[0])]; }), '/GS1', HSP)));
         });
         if (!sh && opts.bt !== false && HA.lyb.btOn()) { var bm = HA.lyb.bulanOf(b); if (bm) c.push(L('Bulan tanam', 'q ' + s + 'h W n ' + rgbc(HA.lyb.bulanCol(bm)) + ' RG 1 j ' + f2(HA.lyb.btW() * 2) + ' w ' + s + 'h S Q')); }
         c.push(L('Tepi blok', s + 'h S'));
@@ -897,19 +920,20 @@
         }
       }
       if (sh && opts.layers !== false && opts.legend !== false && c.length > lgStart) { var lgs = c.splice(lgStart).join('\n'); c.push(L('Legenda dan tabel', lgs)); }
-      var TWk = 0;
+      var TWk = 0, LEFTW = 0;
       if (!sh && opts.kt !== false && kc.on && (kc.tabs || []).length) {
         var kd = kd0 || ktDraw(list, PW, PH, M, kc, f2, lhide); TWk = kd0 ? 0 : kd.w;
+        if (!kd0 && MP === 'r') { LEFTW = kd.w; kd.items.forEach(function (it) { AP['kt:' + it.id] = { x: -kd.w, y: it.bb[3], s: 1 }; }); }
         kd.items.forEach(function (it) { c.push(OB('kt:' + it.id, it.name, it.bb, it.ops, 'Keterangan')); });
         (kc.tabs || []).forEach(function (id) { if (lhide['kt:' + id]) { var nm = id; KT_ALL.forEach(function (a) { if (a[0] === id) nm = a[1]; }); lrect['kt:' + id] = { name: nm, hid: true }; } });
       }
-      if (opts.layOut && !sh) { opts.layOut.rects = lrect; opts.layOut.PW = PW; opts.layOut.PH = PH; opts.layOut.M = M; opts.layOut.TW = TWk; opts.layOut.paper = pk; opts.layOut.land = land; }
+      if (opts.layOut && !sh) { opts.layOut.rects = lrect; opts.layOut.PW = PW; opts.layOut.PH = PH; opts.layOut.M = M; opts.layOut.TW = TWk; opts.layOut.OX = -LEFTW; opts.layOut.paper = pk; opts.layOut.land = land; }
       var resP = res; if (ocgs.length) resP = res.replace(/ >>$/, ' /Properties << ' + ocgs.map(function (nm) { return '/' + ocmap[nm].k + ' ' + ocmap[nm].n + ' 0 R'; }).join(' ') + ' >> >>');
       var cs = add(stream('', c.join('\n')));
       var corners = [[M, M], [M, PH - M], [PW - M, PH - M], [PW - M, M]], lp = [0, 0, 0, 1, 1, 1, 1, 0], gp = [];
       corners.forEach(function (q) { gp.push(latAt((q[1] - MT.ty) / MT.s).toFixed(7), lngAt((q[0] - MT.tx) / MT.s).toFixed(7)); });
       var vp = '/VP [ << /Type /Viewport /Name (Peta) /BBox [' + f2(M) + ' ' + f2(M) + ' ' + f2(PW - M) + ' ' + f2(PH - M) + '] /Measure << /Type /Measure /Subtype /GEO /Bounds [0 0 0 1 1 1 1 0] /GPTS [' + gp.join(' ') + '] /LPTS [' + lp.join(' ') + '] /GCS << /Type /GEOGCS /WKT (GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]) /EPSG 4326 >> /PDU [/M /DEG /DEG] >> >> ]';
-      kids.push(add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW + TWk) + ' ' + f2(PH) + '] /Resources ' + resP + ' /Contents ' + cs + ' 0 R ' + vp + ' >>'));
+      kids.push(add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [' + f2(-LEFTW) + ' 0 ' + f2(PW + (LEFTW ? 0 : TWk)) + ' ' + f2(PH) + '] /Resources ' + resP + ' /Contents ' + cs + ' 0 R ' + vp + ' >>'));
     });
     (opts.tables || []).forEach(function (tb) {
       var PER = 46, np = Math.max(1, Math.ceil(tb.rows.length / PER)), k;

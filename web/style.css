@@ -1010,3 +1010,18 @@ details[data-pd][open]{padding-bottom:8px}
 .idtt{font-weight:700;font-size:.8rem;margin:8px 0 2px}.idtb{width:100%;border-collapse:collapse;font-size:.78rem}.idtb th,.idtb td{padding:2px 4px;text-align:right;border-bottom:1px solid #8883}.idtb th:first-child,.idtb td:first-child{text-align:left}
 .idEd .lyq{position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:5}
 .idEd{padding-bottom:max(env(safe-area-inset-bottom),56px)}
+.idEd .lyq{padding-bottom:max(env(safe-area-inset-bottom),64px)}
+.idrow{display:flex;gap:8px}.idrow .btn{flex:1;min-height:48px}
+.idpl{max-height:34vh;overflow:auto;display:flex;flex-direction:column;gap:4px}
+.idpr{display:flex;align-items:center;gap:10px;text-align:left;padding:4px 8px;min-height:40px;border:1px solid #8886;border-radius:8px;background:none;color:inherit;font:inherit}
+.idpr.on{border-color:#2e7dff;box-shadow:0 0 0 2px #2e7dff66}.idsw0{display:inline-block;width:44px;height:26px;border:1px dashed #8888;border-radius:2px}
+.lyqc .idrow{margin-top:4px}
+.lyEd .lyq{padding-bottom:max(env(safe-area-inset-bottom),64px)}
+/* v0.26.1 editor tata letak: 1/10 atas, 8/10 kertas, 1/10 bawah */
+.lyEd{position:fixed!important;inset:0!important;z-index:9000;display:flex!important;flex-direction:column;padding:0!important}
+.lyEd .lyh{flex:0 0 10vh;box-sizing:border-box;display:flex;gap:6px;align-items:flex-end;padding:0 8px 8px;border-bottom:1px solid #8884}
+.lyEd .lyh .btn{min-height:44px}
+.lyEd .lyw{padding:0!important;flex:0 0 80vh;height:80vh;overflow:auto;position:relative;touch-action:none;background:#2b2b2b}
+.lyEd .lyp{position:relative;margin-left:0;margin-right:0;touch-action:none}
+.lyEd .lyhint{flex:0 0 10vh;box-sizing:border-box;padding:6px 10px 0!important;font-size:.72rem}
+.lyEd .lymsg{position:absolute;left:0;right:0;top:50%;text-align:center;z-index:3;pointer-events:none;color:#fff;background:rgba(0,0,0,.6);padding:8px}

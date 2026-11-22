@@ -1156,7 +1156,7 @@
     var lapA = (blk && o.lap !== false && HA.lyb) ? HA.lyb.active().filter(function (lp) { return HA.lyb.of(blk, lp.id); }) : [];
     lapA.forEach(function (lp) {
       if (lp.mode !== 'fill') return; var li = HA.lyb.of(blk, lp.id), gk = gsFor(hasImg ? 0.45 : 0.55); usedGs[gk] = 1;
-      LB(c, 'Lapisan: ' + lp.name); c.push(HA.lyb.fillPdf(li, blk.pts.map(function (p) { return [X(p[1]), Y(p[0])]; }), '/G' + gk)); LE(c);
+      LB(c, 'Lapisan: ' + lp.name); var BHSP = 0; (function () { var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; blk.pts.forEach(function (p) { var vx = X(p[1]), vy = Y(p[0]); x0 = Math.min(x0, vx); x1 = Math.max(x1, vx); y0 = Math.min(y0, vy); y1 = Math.max(y1, vy); }); BHSP = Math.max(1.8, Math.min(x1 - x0, y1 - y0) / 8); })(); c.push(HA.lyb.fillPdf(li, blk.pts.map(function (p) { return [X(p[1]), Y(p[0])]; }), '/G' + gk, BHSP)); LE(c);
     });
     if (blk) { var bs = ''; blk.pts.forEach(function (p, i) { bs += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); }); LB(c, 'Tepi blok'); c.push(hasImg ? '1 0.9 0 RG 2.2 w ' + bs + 'h S' : '0 G 1.6 w ' + bs + 'h S'); LE(c); }
     var fits = [];
