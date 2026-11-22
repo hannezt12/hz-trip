@@ -981,3 +981,9 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .lyt{padding:8px;background:#262626}.lyn{font-size:.85rem;margin-bottom:6px;min-height:1.2em}.lyb{display:flex;gap:6px;flex-wrap:wrap}
 .lyq{position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:5}
 .lyqc{background:var(--bg,#fff);color:var(--tx,#111);width:100%;padding:14px;border-radius:14px 14px 0 0;max-height:80%;overflow:auto}
+.lyt{padding-bottom:max(env(safe-area-inset-bottom),64px)}
+.lyc{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+.lyc .btn{white-space:nowrap;flex:0 0 auto}.lyc .btn.on{outline:2px solid #2e7dff}.lyc .btn.park{opacity:.55;border-style:dashed}
+.lyr{display:flex;align-items:center;gap:6px}.lyr .lyn{flex:1}
+.lyk .lyb{margin-bottom:6px}.lyk .btn{min-height:44px;min-width:44px}
+.lyEd.lyfold .lyk{display:none}

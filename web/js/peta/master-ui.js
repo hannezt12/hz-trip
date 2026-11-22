@@ -391,17 +391,23 @@
     toast('Menyusun preview…');
     prep(m, function (list, lj, mem) {
       var lay = JSON.parse(JSON.stringify(S.settings.mLay || {})); lay.obj = lay.obj || {}; lay.hide = lay.hide || {}; lay.map = lay.map || {};
-      var hist = [JSON.stringify(lay)], hi = 0, sel = null, out = {}, pdoc = null, busy = false, again = false, zoom = 1, G = { x: [], y: [] };
+      var hist = [JSON.stringify(lay)], hi = 0, sel = null, out = {}, pdoc = null, busy = false, again = false, zoom = 1, G = { x: [], y: [] }, tm = null;
       var old = document.getElementById('lyEd'); if (old) old.remove();
       var el = document.createElement('div'); el.id = 'lyEd'; el.className = 'lyEd';
       el.innerHTML = '<div class="lyh"><button class="btn sm" id="lyBk">Kembali</button><button class="btn sm" id="lyUn" aria-label="Urung">↶</button><button class="btn sm" id="lyRe" aria-label="Ulang">↷</button><button class="btn sm" id="lyZm">Zoom</button><button class="btn sm" id="lyHd">Tersembunyi</button><button class="btn sm" id="lyTp">Template</button><button class="btn pri sm" id="lyGo">Cetak</button></div>' +
         '<div class="lyw" id="lyW"><div class="lyp" id="lyP"><canvas id="lyCv"></canvas><div class="lyo" id="lyO"></div></div></div><div class="lymsg" id="lyMsg">Menyusun…</div>' +
-        '<div class="lyt" id="lyT"><div class="lyn" id="lyNm">Ketuk objek untuk memilih, lalu seret.</div><div class="lyb"><button class="btn sm" id="lyS1">−</button><button class="btn sm" id="lyS2">+</button><button class="btn sm" id="lyL">←</button><button class="btn sm" id="lyU">↑</button><button class="btn sm" id="lyD">↓</button><button class="btn sm" id="lyR">→</button><button class="btn sm" id="lyHi">Sembunyikan</button><button class="btn sm" id="lyRs">Reset</button></div></div>';
+        '<div class="lyt" id="lyT"><div class="lyc" id="lyCh"></div><div class="lyr"><div class="lyn" id="lyNm">Ketuk chip atau objek untuk memilih.</div><button class="btn sm lyf" id="lyFold" aria-label="Lipat">\u25BE</button></div><div class="lyk" id="lyK">' +
+        '<div class="lyb"><button class="btn sm" id="lyS1">\u2212</button><button class="btn sm" id="lyS2">+</button><button class="btn sm" id="lyL">\u2190</button><button class="btn sm" id="lyU">\u2191</button><button class="btn sm" id="lyD">\u2193</button><button class="btn sm" id="lyR">\u2192</button></div>' +
+        '<div class="lyb"><button class="btn sm" id="lyP50">50%</button><button class="btn sm" id="lyP75">75%</button><button class="btn sm" id="lyP100">100%</button><button class="btn sm" id="lyC1">\u2196</button><button class="btn sm" id="lyC2">\u2197</button><button class="btn sm" id="lyC3">\u2199</button><button class="btn sm" id="lyC4">\u2198</button><button class="btn sm" id="lyC5">\u25CE</button></div>' +
+        '<div class="lyb"><button class="btn sm" id="lyHi">Parkir</button><button class="btn sm" id="lyRs">Reset</button><button class="btn sm" id="lySt">Susun tabel</button></div></div></div>';
       document.body.appendChild(el);
       var $e = function (id) { return el.querySelector('#' + id); };
       function persist() { S.settings.mLay = JSON.parse(JSON.stringify(lay)); saveSettings(); }
-      function commit() { var j = JSON.stringify(lay); if (j === hist[hi]) return; hist = hist.slice(0, hi + 1); hist.push(j); hi = hist.length - 1; persist(); rebuild(); }
-      function go(n) { hi = Math.max(0, Math.min(hist.length - 1, n)); lay = JSON.parse(hist[hi]); persist(); rebuild(); }
+      function schedule(ms) { clearTimeout(tm); tm = setTimeout(rebuild, ms); }
+      // local = ubah posisi/ukuran kotak langsung (tanpa menyusun ulang PDF dulu), render ulang setelah jeda
+      function commit(local) { var j = JSON.stringify(lay); if (j === hist[hi]) return; hist = hist.slice(0, hi + 1); hist.push(j); hi = hist.length - 1; persist(); if (local) { boxes(); schedule(900); } else { clearTimeout(tm); rebuild(); } }
+      function go(n) { hi = Math.max(0, Math.min(hist.length - 1, n)); lay = JSON.parse(hist[hi]); persist(); clearTimeout(tm); rebuild(); }
+      function loc(id, ddx, ddy, f) { var r = out.rects && out.rects[id]; if (!r || r.x0 == null) return; var w = (r.x1 - r.x0) * f, h = (r.y1 - r.y0) * f; r.x0 += ddx; r.y1 += ddy; r.x1 = r.x0 + w; r.y0 = r.y1 - h; }
       function close() { el.remove(); }
       function dims() { var PWt = (out.PW || 1190) + (out.TW || 0), PH = out.PH || 842, W = Math.max(280, (window.innerWidth - 8) * zoom); return { PWt: PWt, PH: PH, W: W, k: W / PWt }; }
       function build() {
@@ -410,7 +416,7 @@
         var u8 = new Uint8Array(bytes.length); for (var i = 0; i < bytes.length; i++) u8[i] = bytes.charCodeAt(i) & 255; return u8;
       }
       function paint() {
-        if (!pdoc) return; var d = dims(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+        if (!pdoc) return; var d = dims(), dpr = zoom > 1 ? Math.min(window.devicePixelRatio || 1, 2) : 1.4;
         return pdoc.getPage(1).then(function (pg) {
           var v0 = pg.getViewport({ scale: 1 }), v = pg.getViewport({ scale: d.W / v0.width * dpr }), cv = $e('lyCv');
           cv.width = v.width; cv.height = v.height; cv.style.width = d.W + 'px'; cv.style.height = (v.height / dpr) + 'px';
@@ -434,13 +440,15 @@
           var c = rect2css(r, d), w = warnOf(id, r, d);
           html += '<div class="lyx' + (r.map ? ' lyMap' : '') + (sel === id ? ' on' : '') + (w ? ' warn' : '') + '" data-id="' + id + '" style="left:' + c.l + 'px;top:' + c.t + 'px;width:' + c.w + 'px;height:' + c.h + 'px"><span>' + esc(r.name) + '</span></div>';
         });
+        var ch = ''; Object.keys(out.rects || {}).forEach(function (id) { var r = out.rects[id]; ch += '<button type="button" class="btn sm' + (sel === id ? ' on' : '') + (r.hid ? ' park' : '') + '" data-c="' + id + '">' + esc(r.name) + '</button>'; });
+        $e('lyCh').innerHTML = ch;
         O.innerHTML = html; $e('lyHd').textContent = 'Tersembunyi' + (hid ? ' (' + hid + ')' : '');
         info(); $e('lyUn').disabled = hi <= 0; $e('lyRe').disabled = hi >= hist.length - 1;
       }
       function info() {
         var r = sel && out.rects ? out.rects[sel] : null, d = dims();
         $e('lyNm').textContent = r ? r.name + (r.map ? ' (geser = geser peta, + / − = zoom peta)' : '') + (warnOf(sel, r, d) ? ' · ' + warnOf(sel, r, d) : '') : 'Ketuk objek untuk memilih, lalu seret.';
-        ['lyS1', 'lyS2', 'lyL', 'lyU', 'lyD', 'lyR', 'lyRs'].forEach(function (i) { $e(i).disabled = !r; }); $e('lyHi').disabled = !r || r.map;
+        ['lyS1', 'lyS2', 'lyL', 'lyU', 'lyD', 'lyR', 'lyRs', 'lyP50', 'lyP75', 'lyP100'].forEach(function (i) { $e(i).disabled = !r || r.hid; }); ['lyC1', 'lyC2', 'lyC3', 'lyC4', 'lyC5', 'lyHi'].forEach(function (i) { $e(i).disabled = !r || r.map || r.hid; });
       }
       function rebuild() {
         if (busy) { again = true; return; } busy = true; $e('lyMsg').style.display = '';
@@ -476,18 +484,36 @@
         else { drag.bx.style.left = ((drag.r.x0 + dxp) * d.k) + 'px'; drag.bx.style.top = ((d.PH - drag.r.y1 - dyp) * d.k) + 'px'; }
         guides(xs, ys);
       });
-      function up() { if (!drag) return; var dd = drag; drag = null; guides([], []); $e('lyCv').style.transform = ''; if (dd.moved) { sel = dd.id; nudge(dd.dx, dd.dy); commit(); } else boxes(); }
+      function up() { if (!drag) return; var dd = drag; drag = null; guides([], []); $e('lyCv').style.transform = ''; if (dd.moved) { sel = dd.id; nudge(dd.dx, dd.dy); if (dd.id !== 'map') loc(dd.id, dd.dx, dd.dy, 1); commit(dd.id !== 'map'); } else boxes(); }
       Gd.addEventListener('pointerup', up); Gd.addEventListener('pointercancel', up);
-      function scl(f) { var o = cur(sel), lo = sel === 'map' ? 0.5 : 0.3, hi2 = sel === 'map' ? 6 : 4; o.s = Math.max(lo, Math.min(hi2, (o.s > 0 ? o.s : 1) * f)); commit(); }
+      function setS(v) { var o = cur(sel), lo = sel === 'map' ? 0.5 : 0.3, hi2 = sel === 'map' ? 6 : 4, old = o.s > 0 ? o.s : 1; o.s = Math.max(lo, Math.min(hi2, v)); if (sel !== 'map') loc(sel, 0, 0, o.s / old); commit(sel !== 'map'); }
+      function scl(f) { var o = cur(sel); setS((o.s > 0 ? o.s : 1) * f); }
+      function nd(x, y) { nudge(x, y); if (sel !== 'map') loc(sel, x, y, 1); commit(sel !== 'map'); }
+      // tempel ke sudut/tengah halaman
+      function pre(k) {
+        var r = out.rects[sel]; if (!r || r.map || r.x0 == null) return; var g = cur(sel), d = dims(), w = r.x1 - r.x0, h = r.y1 - r.y0, mg = 12, ax = r.x0 - (g.dx || 0) * out.PW, ay = r.y1 - (g.dy || 0) * out.PH, nx, ny;
+        nx = k === 1 || k === 3 ? mg : k === 5 ? (d.PWt - w) / 2 : d.PWt - mg - w; ny = k === 1 || k === 2 ? d.PH - mg : k === 5 ? (d.PH + h) / 2 : mg + h;
+        loc(sel, nx - r.x0, ny - r.y1, 1); g.dx = (nx - ax) / out.PW; g.dy = (ny - ay) / out.PH; commit(true);
+      }
       $e('lyS1').onclick = function () { scl(1 / 1.1); }; $e('lyS2').onclick = function () { scl(1.1); };
-      $e('lyL').onclick = function () { nudge(-2, 0); commit(); }; $e('lyR').onclick = function () { nudge(2, 0); commit(); };
-      $e('lyU').onclick = function () { nudge(0, 2); commit(); }; $e('lyD').onclick = function () { nudge(0, -2); commit(); };
-      $e('lyHi').onclick = function () { if (!sel || sel === 'map') return; lay.hide[sel] = true; sel = null; commit(); };
+      $e('lyL').onclick = function () { nd(-2, 0); }; $e('lyR').onclick = function () { nd(2, 0); };
+      $e('lyU').onclick = function () { nd(0, 2); }; $e('lyD').onclick = function () { nd(0, -2); };
+      $e('lyP50').onclick = function () { setS(0.5); }; $e('lyP75').onclick = function () { setS(0.75); }; $e('lyP100').onclick = function () { setS(1); };
+      [1, 2, 3, 4, 5].forEach(function (k) { $e('lyC' + k).onclick = function () { pre(k); }; });
+      $e('lyHi').onclick = function () { if (!sel || sel === 'map') return; lay.hide[sel] = true; commit(); };
+      $e('lySt').onclick = function () { Object.keys(lay.obj).forEach(function (k) { if (k.indexOf('kt:') === 0) delete lay.obj[k]; }); Object.keys(lay.hide).forEach(function (k) { if (k.indexOf('kt:') === 0) delete lay.hide[k]; }); commit(); toast('Tabel disusun ulang di lajur kanan'); };
+      $e('lyFold').onclick = function () { var f = el.classList.toggle('lyfold'); this.textContent = f ? '\u25B4' : '\u25BE'; };
+      $e('lyCh').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-c]'); if (!b) return; var id = b.getAttribute('data-c'), r = out.rects[id]; if (r && r.hid) { delete lay.hide[id]; sel = id; commit(); } else { sel = id; boxes(); } };
       $e('lyRs').onclick = function () { if (!sel) return; if (sel === 'map') lay.map = {}; else delete lay.obj[sel]; commit(); };
       $e('lyUn').onclick = function () { go(hi - 1); }; $e('lyRe').onclick = function () { go(hi + 1); };
       $e('lyZm').onclick = function () { zoom = zoom === 1 ? 2.2 : 1; $e('lyZm').classList.toggle('on', zoom !== 1); paint(); };
-      $e('lyBk').onclick = function () { close(); if (back) back(); };
-      $e('lyGo').onclick = function () { close(); (S.settings.mTplBy = S.settings.mTplBy || {})[String(PS.sel)] = tplCur(); saveSettings(); cetak(m, 'pdf', curOpts()); };
+      $e('lyBk').onclick = function () { clearTimeout(tm); close(); if (back) back(); };
+      $e('lyGo').onclick = function () {
+        var pk = Object.keys(out.rects || {}).filter(function (k) { return out.rects[k].hid; });
+        if (pk.length) { dlg('<div class="st">ADA OBJEK DIPARKIR</div><div class="muted" style="margin:8px 0">' + esc(pk.map(function (k) { return out.rects[k].name; }).join(', ')) + ' tidak ikut tercetak.</div><button class="btn pri" id="lqG" style="width:100%">Tetap cetak</button><button class="btn" id="lqX" style="width:100%;margin-top:6px">Kembali ke editor</button>', function (q, cl) { q.querySelector('#lqX').onclick = cl; q.querySelector('#lqG').onclick = function () { cl(); doPrint(); }; }); return; }
+        doPrint();
+      };
+      function doPrint() { clearTimeout(tm); close(); (S.settings.mTplBy = S.settings.mTplBy || {})[String(PS.sel)] = tplCur(); saveSettings(); cetak(m, 'pdf', curOpts()); }
       function dlg(html, wire) { var q = document.createElement('div'); q.className = 'lyq'; q.innerHTML = '<div class="lyqc">' + html + '</div>'; el.appendChild(q); wire(q, function () { q.remove(); }); }
       $e('lyHd').onclick = function () {
         var hs = Object.keys(out.rects || {}).filter(function (k) { return out.rects[k].hid; });
