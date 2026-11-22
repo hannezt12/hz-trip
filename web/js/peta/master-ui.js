@@ -177,13 +177,15 @@
     return { tot: tot, tabs: out };
   }
   // gambar lajur; kembalikan { ops, w } (w = lebar lajur total pt)
-  function ktDraw(list, PW, PH, M, cfg, f2) {
-    var D = ktData(list, cfg), cols = cfg.cols || {}, RH = 11, FS = 7.5, ops = [], cx = PW + 10, y = PH - M, maxX = cx;
+  function ktDraw(list, PW, PH, M, cfg, f2, hide) {
+    var D = ktData(list, cfg), cols = cfg.cols || {}, RH = 11, FS = 7.5, cx = PW + 10, y = PH - M, maxX = cx, items = [];
+    hide = hide || {};
     var pctF = function (v) { return D.tot > 0 ? (Math.round(v / D.tot * 1000) / 10).toFixed(1).replace('.', ',') + '%' : '-'; };
     var hf = function (v) { return v > 0.0001 ? fmtHa(v) : '-'; };
     var colw = 118, nw = 44;
     D.tabs.forEach(function (t) {
-      var hd = ['Nama'], keys = [];
+      if (hide['kt:' + t.id]) return;
+      var hd = ['Nama'], keys = [], ops = [], bb = [1e9, 1e9, -1e9, -1e9];
       if (t.kind === 'pcrc') { if (cols.pc !== false) { hd.push('PC'); keys.push('pc'); } if (cols.rc !== false) { hd.push('RC'); keys.push('rc'); } if (cols.tot !== false) { hd.push('Total'); keys.push('tot'); } }
       else { hd.push('ha'); keys.push('tot'); }
       if (cols.pct !== false) { hd.push('%'); keys.push('pct'); }
@@ -195,6 +197,7 @@
         if (avail < 3 && y < PH - M - 1) { cx = maxX + 8; y = PH - M; continue; }
         var take = rows.splice(0, Math.max(3, Math.min(rows.length, avail)));
         var H = 14 + RH * (take.length + 1), top = y;
+        bb[0] = Math.min(bb[0], cx); bb[2] = Math.max(bb[2], cx + tw); bb[3] = Math.max(bb[3], top); bb[1] = Math.min(bb[1], top - H);
         ops.push('0 g BT /F2 9 Tf ' + f2(cx) + ' ' + f2(top - 9) + ' Td (' + pe(t.title) + ') Tj ET');
         var ty = top - 14 - RH;
         ops.push('0.9 g ' + f2(cx) + ' ' + f2(ty) + ' ' + f2(tw) + ' ' + f2(RH) + ' re f 0 g 0.4 w 0 G ' + f2(cx) + ' ' + f2(ty) + ' ' + f2(tw) + ' ' + f2(RH) + ' re S');
@@ -206,9 +209,8 @@
           if (g.r && g.r.col) { ops.push('q ' + HA.lyb.rgb(g.r.col) + ' rg ' + f2(cx + 2) + ' ' + f2(ry + 2) + ' 12 7 re f 0 G 0.3 w ' + f2(cx + 2) + ' ' + f2(ry + 2) + ' 12 7 re S Q'); nx = cx + 17; }
           else if (g.r && g.r.it) { ops.push(HA.lyb.swatchPdf(g.r.it, cx + 2, ry + 2, 12, 7)); nx = cx + 17; }
           else if (g.r && g.r.sym) {
-            var dn = HA.lyb.diceN(g.r.sym);
-            if (dn) ops.push(HA.lyb.dicePdf(cx + 8, ry + RH / 2, 8, dn, 0, '0 g')); else ops.push('0 g BT /F2 ' + FS + ' Tf ' + f2(cx + 2) + ' ' + f2(ry + 3) + ' Td (' + pe(g.r.sym) + ') Tj ET');
-            nx = cx + 17;
+            if (HA.lyb.isVec(g.r.sym)) ops.push(HA.lyb.symPdf(cx + 9, ry + RH / 2, 8, g.r.sym, 0)); else ops.push('0 g BT /F2 ' + FS + ' Tf ' + f2(cx + 2) + ' ' + f2(ry + 3) + ' Td (' + pe(g.r.sym) + ') Tj ET');
+            nx = cx + 19;
           }
           var nm = String(g.r ? g.r.name : ''), maxc = Math.floor((colw - (nx - cx) - 2) / (FS * 0.5)); if (nm.length > maxc) nm = nm.slice(0, Math.max(1, maxc - 1)) + '.';
           ops.push('0 g BT /F' + (r.bold ? 2 : 1) + ' ' + FS + ' Tf ' + f2(nx) + ' ' + f2(ry + 3) + ' Td (' + pe(asc(nm)) + ') Tj ET');
@@ -219,8 +221,9 @@
         });
         y = top - H - 8; if (cx + tw > maxX) maxX = cx + tw;
       }
+      items.push({ id: t.id, name: t.title, ops: ops.join('\n'), bb: bb });
     });
-    return { ops: ops.join('\n'), w: D.tabs.length ? (maxX - PW) + 10 : 0 };
+    return { items: items, w: items.length ? (maxX - PW) + 10 : 0 };
   }
 
   // ---------- cetak (drawer > Cetak > Master) ----------
@@ -261,7 +264,7 @@
     var m = mById(PS.sel), mem = m ? members(m) : null;
     openSheet('<div class="grab"></div><div class="st">CETAK</div>' +
       '<div class="seg" id="pmMode" style="margin:6px 0 10px"><button data-m="trip">Trip</button><button data-m="master" class="on">Master</button><button data-m="laporan">Laporan</button></div>' +
-      (ms.length ? '<div class="plist"><div class="h">MASTER</div>' + ms.map(function (x) {
+      (ms.length ? tplRow() + '<div class="plist"><div class="h">MASTER</div>' + ms.map(function (x) {
         var mm = members(x), n = mm.in.length + mm.man.length;
         return '<label><input type="radio" name="pmSel" value="' + esc(String(x.id)) + '"' + (String(x.id) === String(PS.sel) ? ' checked' : '') + '> ' + esc(x.name) + ' <span class="muted">· ' + n + ' blok · ' + fmtHa(haOf(mm.in.concat(mm.man))) + ' ha' + (mm.pend.length ? ' · ' + mm.pend.length + ' perlu diatur' : '') + '</span></label>';
       }).join('') +
@@ -277,14 +280,14 @@
         '<div class="muted" id="pmInfo" style="margin-top:8px">' + (mem ? (mem.in.length + mem.man.length) + ' blok akan dicetak' + (mem.pend.length ? ' · ' + mem.pend.length + ' blok perbatasan belum diputuskan' : '') : '') + '</div>' +
         '<button class="btn" id="pmAtur" style="width:100%;margin-top:6px">Atur blok perbatasan</button><button class="btn" id="pmVer" style="width:100%;margin-top:6px">Versi simpanan master</button>' +
         (PS.fmt === 'pdf' && PS.map ? '<button class="btn" id="pmPosB" style="width:100%;margin-top:6px">Atur posisi teks blok</button>' : '') +
-        (PS.fmt === 'pdf' ? '<button class="btn" id="pmPrev" style="width:100%;margin-top:8px">Preview</button>' : '') + '<button class="btn pri" id="pmGo" style="width:100%;margin-top:8px;height:52px">' + (PS.fmt === 'data' ? 'Kirim data blok' : 'Cetak ' + (PS.fmt === 'pdf' ? 'PDF' : 'KML')) + '</button>'
+        (PS.fmt === 'pdf' ? '<button class="btn" id="pmPrev" style="width:100%;margin-top:8px">Preview dan atur tata letak</button>' : '') + '<button class="btn pri" id="pmGo" style="width:100%;margin-top:8px;height:52px">' + (PS.fmt === 'data' ? 'Kirim data blok' : 'Cetak ' + (PS.fmt === 'pdf' ? 'PDF' : 'KML')) + '</button>'
         : '<div class="card muted" style="margin-top:6px">Belum ada master. Buat di Data peta > Master: gambar poligon kawasan, lalu kembali ke sini untuk mencetak.</div>') +
       '<button class="btn" id="pmX" style="width:100%;margin-top:8px">Tutup</button>');
     $('pmX').onclick = closeSheet;
-    ktWire(printPanel);
+    ktWire(printPanel); tplWire(m);
     $('pmMode').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-m]'); if (!b) return; var md = b.getAttribute('data-m'); if (md === 'trip') { closeSheet(); HA.openPrint({ day: S.hDay }); } else if (md === 'laporan' && HA.openLaporan) { closeSheet(); HA.openLaporan(); } };
     if (!ms.length) return;
-    $('sheet').querySelectorAll('input[name=pmSel]').forEach(function (r) { r.onchange = function () { PS.sel = r.value; printPanel(); }; });
+    $('sheet').querySelectorAll('input[name=pmSel]').forEach(function (r) { r.onchange = function () { PS.sel = r.value; var tid = (S.settings.mTplBy || {})[String(r.value)], tt = tid && tplBy(tid); if (tt) { applySnap(tt.v); S.settings.mTplCur = tt.id; saveSettings(); toast('Template "' + tt.name + '" dipakai'); } printPanel(); }; });
     $('pmFmt').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-f]'); if (b) { PS.fmt = b.getAttribute('data-f'); printPanel(); } };
     if ($('pmLuas')) $('pmLuas').onchange = function () { PS.luas = this.checked; try { localStorage.setItem('hz_pmluas', this.checked ? '1' : '0'); } catch (e) {} };
     if ($('pmTtl')) {
@@ -299,8 +302,8 @@
       })();
     }
     if ($('pmPrev')) $('pmPrev').onclick = function () {
-      if (!PS.map && !PS.list) { toast('Centang minimal Peta atau Daftar blok'); return; }
-      cetak(m, 'pdf', { map: PS.map, list: PS.list, luas: PS.luas, title: PS.title, fs: PS.fs, pos: PS.pos }, true);
+      if (!PS.map) { toast('Centang Peta untuk mengatur tata letak'); return; }
+      closeSheet(); layEd(m, printPanel);
     };
     $('sheet').querySelectorAll('[data-lyo]').forEach(function (e) { e.onchange = function () { var k = e.getAttribute('data-lyo'); if (k === '__obj') S.settings.objOn = e.checked; else HA.lyb.by(k).on = e.checked; saveSettings(); }; });
     if ($('pmMap')) { $('pmMap').onchange = function () { PS.map = this.checked; }; $('pmList').onchange = function () { PS.list = this.checked; }; }
@@ -319,8 +322,191 @@
         return;
       }
       if (PS.fmt === 'pdf' && !PS.map && !PS.list) { toast('Centang minimal Peta atau Daftar blok'); return; }
-      cetak(m, PS.fmt, { map: PS.map, list: PS.list, luas: PS.luas, title: PS.title, fs: PS.fs, pos: PS.pos });
+      (S.settings.mTplBy = S.settings.mTplBy || {})[String(PS.sel)] = tplCur(); saveSettings();
+      cetak(m, PS.fmt, curOpts());
     };
+  }
+  // ---------- template cetak (setelan hasil cetak) ----------
+  function tplList() { return S.settings.mTpl || (S.settings.mTpl = []); }
+  function snap() {
+    var ly = {}; HA.lyb.all().forEach(function (l) { ly[l.id] = !!l.on; }); ly.__obj = S.settings.objOn !== false;
+    var k = ktCfg();
+    return { map: !!PS.map, list: !!PS.list, luas: !!PS.luas, fs: PS.fs, pos: PS.pos, ly: ly, bt: !!S.settings.btOn, halo: S.settings.halo !== false,
+      kt: { on: !!k.on, tabs: (k.tabs || []).slice(), ord: k.ord ? k.ord.slice() : null, cols: { pc: k.cols.pc !== false, rc: k.cols.rc !== false, tot: k.cols.tot !== false, pct: k.cols.pct !== false } },
+      lay: JSON.parse(JSON.stringify(S.settings.mLay || {})) };
+  }
+  function stdSnap() {
+    var ly = {}; HA.lyb.all().forEach(function (l) { ly[l.id] = true; }); ly.__obj = true;
+    return { map: true, list: false, luas: true, fs: 'a', pos: 'c', ly: ly, bt: false, halo: true, kt: { on: false, tabs: ['var', 'bt', 'st'], ord: null, cols: { pc: true, rc: true, tot: true, pct: true } }, lay: {} };
+  }
+  function applySnap(v) {
+    PS.map = v.map !== false; PS.list = !!v.list; PS.luas = v.luas !== false; PS.fs = v.fs == null ? 'a' : v.fs; PS.pos = v.pos || 'c';
+    HA.lyb.all().forEach(function (l) { l.on = v.ly && v.ly[l.id] !== undefined ? !!v.ly[l.id] : true; });
+    S.settings.objOn = v.ly && v.ly.__obj !== undefined ? !!v.ly.__obj : true;
+    S.settings.btOn = !!v.bt; S.settings.halo = v.halo !== false;
+    var k = ktCfg(), kv = v.kt || {}; k.on = !!kv.on; k.tabs = (kv.tabs || []).slice(); k.ord = kv.ord ? kv.ord.slice() : null; k.cols = { pc: !kv.cols || kv.cols.pc !== false, rc: !kv.cols || kv.cols.rc !== false, tot: !kv.cols || kv.cols.tot !== false, pct: !kv.cols || kv.cols.pct !== false };
+    S.settings.mLay = JSON.parse(JSON.stringify(v.lay || {}));
+    try { localStorage.setItem('hz_pmluas', PS.luas ? '1' : '0'); } catch (e) {}
+    saveSettings();
+  }
+  function tplBy(id) { if (id === 'std') return { id: 'std', name: 'Standar', v: stdSnap() }; return tplList().filter(function (t) { return t.id === id; })[0]; }
+  function tplCur() { var c = S.settings.mTplCur || 'std'; return tplBy(c) ? c : 'std'; }
+  function tplDirty() { var t = tplBy(tplCur()); return t ? JSON.stringify(snap()) !== JSON.stringify(t.v) : false; }
+  function tplRow() {
+    var cur = tplCur(), dirty = tplDirty();
+    return '<div class="h">TEMPLATE</div><div class="row" style="gap:6px"><select id="pmTpl" style="flex:1;min-width:0">' +
+      [tplBy('std')].concat(tplList()).map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === cur ? ' selected' : '') + '>' + esc(x.name) + (x.id === cur && dirty ? ' (diubah)' : '') + '</option>'; }).join('') +
+      '</select><button class="btn sm" id="pmTpS">Simpan baru</button></div><div class="row" style="gap:6px;margin-top:6px"><button class="btn sm" id="pmTpU" style="flex:1"' + (cur === 'std' || !dirty ? ' disabled' : '') + '>Perbarui</button><button class="btn sm" id="pmTpD" style="flex:1"' + (cur === 'std' ? ' disabled' : '') + '>Hapus</button></div>';
+  }
+  function tplNameSheet(back, done) {
+    openSheet('<div class="grab"></div><div class="st">SIMPAN TEMPLATE</div><div class="muted" style="margin:6px 0">Menyimpan setelan cetak sekarang: isi PDF, lapisan, keterangan, dan tata letak.</div><input type="text" id="tpNm" maxlength="30" placeholder="Nama template, mis. A3 tiga tabel" style="width:100%"><button class="btn pri" id="tpOk" style="width:100%;margin-top:10px;height:48px">Simpan</button><button class="btn" id="tpNo" style="width:100%;margin-top:8px">Batal</button>');
+    $('tpNm').focus(); $('tpNo').onclick = back;
+    $('tpOk').onclick = function () { var n = $('tpNm').value.trim(); if (!n) { toast('Isi nama template'); return; } done(n); };
+  }
+  function tplWire(m) {
+    if (!$('pmTpl')) return;
+    function remember(id) { S.settings.mTplCur = id; (S.settings.mTplBy = S.settings.mTplBy || {})[String(PS.sel)] = id; saveSettings(); }
+    $('pmTpl').onchange = function () { var t = tplBy(this.value); if (!t) return; applySnap(t.v); remember(t.id); toast('Template "' + t.name + '" dipakai'); printPanel(); };
+    $('pmTpS').onclick = function () { tplNameSheet(printPanel, function (n) { var id = 't' + Date.now().toString(36); tplList().push({ id: id, name: n, v: snap() }); remember(id); toast('Template disimpan'); printPanel(); }); };
+    $('pmTpU').onclick = function () { var t = tplBy(tplCur()); if (!t || t.id === 'std') return; askConfirm('Perbarui template', 'Timpa "' + t.name + '" dengan setelan sekarang?', 'Perbarui', function () { t.v = snap(); saveSettings(); toast('Template diperbarui'); printPanel(); }); };
+    $('pmTpD').onclick = function () { var t = tplBy(tplCur()); if (!t || t.id === 'std') return; askConfirm('Hapus template', 'Hapus template "' + t.name + '"? Setelan cetak sekarang tidak berubah.', 'Hapus', function () { S.settings.mTpl = tplList().filter(function (x) { return x.id !== t.id; }); var by = S.settings.mTplBy || {}; Object.keys(by).forEach(function (k) { if (by[k] === t.id) delete by[k]; }); S.settings.mTplCur = 'std'; saveSettings(); printPanel(); }); };
+  }
+  function curOpts() { return { map: PS.map, list: PS.list, luas: PS.luas, title: PS.title, fs: PS.fs, pos: PS.pos, lay: S.settings.mLay || {} }; }
+  function slug(t) { var r = String(t || 'x').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/^master-(?=.)/, '').slice(0, 24); return r || 'x'; }
+  function pdfName(m) { return 'M-' + slug(m.name) + '-a3.pdf'; }
+
+  // ---------- editor tata letak (preview yang bisa digeser) ----------
+  function prep(m, cb) {
+    var mem = members(m);
+    if (!mem.in.length && !mem.man.length) { toast('Belum ada blok Terkonfirmasi yang seluruhnya di dalam master ini'); return; }
+    var list = mem.in.concat(mem.man).sort(nat), lj = {}, i = 0;
+    (function nx() {
+      if (i >= list.length) { cb(list, lj, mem); return; }
+      var b = list[i++];
+      if (b.dir != null) { try { var r = HA.rowsFor(b, b.dir, +(b.sp || S.settings.rowSp || 1.5), +b.margin || 0); lj[b.id] = { n: r.n, total: r.total }; } catch (e) {} }
+      if (i % 25 === 0) setTimeout(nx, 0); else nx();
+    })();
+  }
+  function layEd(m, back) {
+    toast('Menyusun preview…');
+    prep(m, function (list, lj, mem) {
+      var lay = JSON.parse(JSON.stringify(S.settings.mLay || {})); lay.obj = lay.obj || {}; lay.hide = lay.hide || {}; lay.map = lay.map || {};
+      var hist = [JSON.stringify(lay)], hi = 0, sel = null, out = {}, pdoc = null, busy = false, again = false, zoom = 1, G = { x: [], y: [] };
+      var old = document.getElementById('lyEd'); if (old) old.remove();
+      var el = document.createElement('div'); el.id = 'lyEd'; el.className = 'lyEd';
+      el.innerHTML = '<div class="lyh"><button class="btn sm" id="lyBk">Kembali</button><button class="btn sm" id="lyUn" aria-label="Urung">↶</button><button class="btn sm" id="lyRe" aria-label="Ulang">↷</button><button class="btn sm" id="lyZm">Zoom</button><button class="btn sm" id="lyHd">Tersembunyi</button><button class="btn sm" id="lyTp">Template</button><button class="btn pri sm" id="lyGo">Cetak</button></div>' +
+        '<div class="lyw" id="lyW"><div class="lyp" id="lyP"><canvas id="lyCv"></canvas><div class="lyo" id="lyO"></div></div></div><div class="lymsg" id="lyMsg">Menyusun…</div>' +
+        '<div class="lyt" id="lyT"><div class="lyn" id="lyNm">Ketuk objek untuk memilih, lalu seret.</div><div class="lyb"><button class="btn sm" id="lyS1">−</button><button class="btn sm" id="lyS2">+</button><button class="btn sm" id="lyL">←</button><button class="btn sm" id="lyU">↑</button><button class="btn sm" id="lyD">↓</button><button class="btn sm" id="lyR">→</button><button class="btn sm" id="lyHi">Sembunyikan</button><button class="btn sm" id="lyRs">Reset</button></div></div>';
+      document.body.appendChild(el);
+      var $e = function (id) { return el.querySelector('#' + id); };
+      function persist() { S.settings.mLay = JSON.parse(JSON.stringify(lay)); saveSettings(); }
+      function commit() { var j = JSON.stringify(lay); if (j === hist[hi]) return; hist = hist.slice(0, hi + 1); hist.push(j); hi = hist.length - 1; persist(); rebuild(); }
+      function go(n) { hi = Math.max(0, Math.min(hist.length - 1, n)); lay = JSON.parse(hist[hi]); persist(); rebuild(); }
+      function close() { el.remove(); }
+      function dims() { var PWt = (out.PW || 1190) + (out.TW || 0), PH = out.PH || 842, W = Math.max(280, (window.innerWidth - 8) * zoom); return { PWt: PWt, PH: PH, W: W, k: W / PWt }; }
+      function build() {
+        var o2 = Object.assign({}, curOpts(), { lay: lay, layOut: {} });
+        var bytes = buildPdfBytes(m, list, lj, mem, o2); out = o2.layOut;
+        var u8 = new Uint8Array(bytes.length); for (var i = 0; i < bytes.length; i++) u8[i] = bytes.charCodeAt(i) & 255; return u8;
+      }
+      function paint() {
+        if (!pdoc) return; var d = dims(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+        return pdoc.getPage(1).then(function (pg) {
+          var v0 = pg.getViewport({ scale: 1 }), v = pg.getViewport({ scale: d.W / v0.width * dpr }), cv = $e('lyCv');
+          cv.width = v.width; cv.height = v.height; cv.style.width = d.W + 'px'; cv.style.height = (v.height / dpr) + 'px';
+          var P = $e('lyP'); P.style.width = d.W + 'px'; P.style.height = (v.height / dpr) + 'px';
+          return pg.render({ canvasContext: cv.getContext('2d'), viewport: v }).promise;
+        }).then(function () { boxes(); });
+      }
+      function rect2css(r, d) { return { l: r.x0 * d.k, t: (d.PH - r.y1) * d.k, w: (r.x1 - r.x0) * d.k, h: (r.y1 - r.y0) * d.k }; }
+      function warnOf(id, r, d) {
+        if (id === 'map' || r.hid) return '';
+        if (r.x0 < -0.5 || r.y0 < -0.5 || r.x1 > d.PWt + 0.5 || r.y1 > d.PH + 0.5) return 'keluar halaman';
+        var ks = Object.keys(out.rects), i, o;
+        for (i = 0; i < ks.length; i++) { if (ks[i] === id || ks[i] === 'map') continue; o = out.rects[ks[i]]; if (o.hid || o.x0 == null) continue; if (r.x0 < o.x1 - 1 && r.x1 > o.x0 + 1 && r.y0 < o.y1 - 1 && r.y1 > o.y0 + 1) return 'menimpa ' + o.name; }
+        if (id.indexOf('kt:') === 0 && r.x1 > out.M && r.x0 < out.PW - out.M) return 'menutupi peta';
+        return '';
+      }
+      function boxes() {
+        var d = dims(), O = $e('lyO'), hid = 0, html = '';
+        Object.keys(out.rects || {}).forEach(function (id) {
+          var r = out.rects[id]; if (r.hid) { hid++; return; }
+          var c = rect2css(r, d), w = warnOf(id, r, d);
+          html += '<div class="lyx' + (r.map ? ' lyMap' : '') + (sel === id ? ' on' : '') + (w ? ' warn' : '') + '" data-id="' + id + '" style="left:' + c.l + 'px;top:' + c.t + 'px;width:' + c.w + 'px;height:' + c.h + 'px"><span>' + esc(r.name) + '</span></div>';
+        });
+        O.innerHTML = html; $e('lyHd').textContent = 'Tersembunyi' + (hid ? ' (' + hid + ')' : '');
+        info(); $e('lyUn').disabled = hi <= 0; $e('lyRe').disabled = hi >= hist.length - 1;
+      }
+      function info() {
+        var r = sel && out.rects ? out.rects[sel] : null, d = dims();
+        $e('lyNm').textContent = r ? r.name + (r.map ? ' (geser = geser peta, + / − = zoom peta)' : '') + (warnOf(sel, r, d) ? ' · ' + warnOf(sel, r, d) : '') : 'Ketuk objek untuk memilih, lalu seret.';
+        ['lyS1', 'lyS2', 'lyL', 'lyU', 'lyD', 'lyR', 'lyRs'].forEach(function (i) { $e(i).disabled = !r; }); $e('lyHi').disabled = !r || r.map;
+      }
+      function rebuild() {
+        if (busy) { again = true; return; } busy = true; $e('lyMsg').style.display = '';
+        setTimeout(function () {
+          var u8; try { u8 = build(); } catch (e) { $e('lyMsg').textContent = 'Gagal menyusun: ' + (e && e.message || e); busy = false; return; }
+          HA.loadPdfJs().then(function (lib) { return lib.getDocument({ data: u8 }).promise; }).then(function (dc) { pdoc = dc; return paint(); }).then(function () { $e('lyMsg').style.display = 'none'; }).catch(function (e) { $e('lyMsg').textContent = 'Preview tidak tersedia (' + (e && e.message || e) + ')'; }).then(function () { busy = false; if (again) { again = false; rebuild(); } });
+        }, 20);
+      }
+      function cur(id) { if (id === 'map') return lay.map; return lay.obj[id] || (lay.obj[id] = {}); }
+      function nudge(dxp, dyp) { var o = cur(sel), d = dims(); o.dx = (o.dx || 0) + dxp / (out.PW || 1); o.dy = (o.dy || 0) + dyp / (out.PH || 1); }
+      // seret dengan magnet
+      var drag = null, Gd = $e('lyO');
+      function guides(xs, ys) { Gd.querySelectorAll('.lyg').forEach(function (g) { g.remove(); }); var d = dims(); xs.forEach(function (x) { var g = document.createElement('div'); g.className = 'lyg v'; g.style.left = (x * d.k) + 'px'; Gd.appendChild(g); }); ys.forEach(function (y) { var g = document.createElement('div'); g.className = 'lyg h'; g.style.top = ((d.PH - y) * d.k) + 'px'; Gd.appendChild(g); }); }
+      function snapAxis(vals, targets, thr) { var best = null; vals.forEach(function (v) { targets.forEach(function (t) { var dd = t - v; if (Math.abs(dd) <= thr && (best == null || Math.abs(dd) < Math.abs(best.d))) best = { d: dd, t: t }; }); }); return best; }
+      Gd.addEventListener('pointerdown', function (e) {
+        var bx = e.target.closest && e.target.closest('.lyx'); if (!bx) { sel = null; boxes(); return; }
+        var id = bx.getAttribute('data-id'); sel = id; var r = out.rects[id], d = dims();
+        drag = { id: id, x: e.clientX, y: e.clientY, r: { x0: r.x0, x1: r.x1, y0: r.y0, y1: r.y1 }, dx: 0, dy: 0, bx: bx, moved: false };
+        try { Gd.setPointerCapture(e.pointerId); } catch (er) {} boxes(); e.preventDefault();
+      });
+      Gd.addEventListener('pointermove', function (e) {
+        if (!drag) return; var d = dims(), dxp = (e.clientX - drag.x) / d.k, dyp = -(e.clientY - drag.y) / d.k;
+        if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 3) drag.moved = true; if (!drag.moved) return;
+        var isMap = drag.id === 'map', xs = [], ys = [];
+        if (!isMap) {
+          var r = drag.r, w = r.x1 - r.x0, h = r.y1 - r.y0, nx0 = r.x0 + dxp, ny0 = r.y0 + dyp, thr = 6 / d.k, tx = [0, d.PWt, d.PWt / 2, out.M, out.PW - out.M], ty = [0, d.PH, d.PH / 2, out.M, d.PH - out.M];
+          Object.keys(out.rects).forEach(function (k) { var o = out.rects[k]; if (k === drag.id || k === 'map' || o.hid || o.x0 == null) return; tx.push(o.x0, o.x1, (o.x0 + o.x1) / 2); ty.push(o.y0, o.y1, (o.y0 + o.y1) / 2); });
+          var sx = snapAxis([nx0, nx0 + w / 2, nx0 + w], tx, thr), sy = snapAxis([ny0, ny0 + h / 2, ny0 + h], ty, thr);
+          if (sx) { dxp += sx.d; xs.push(sx.t); } if (sy) { dyp += sy.d; ys.push(sy.t); }
+        }
+        drag.dx = dxp; drag.dy = dyp;
+        if (isMap) { $e('lyCv').style.transform = 'translate(' + (dxp * d.k) + 'px,' + (-dyp * d.k) + 'px)'; }
+        else { drag.bx.style.left = ((drag.r.x0 + dxp) * d.k) + 'px'; drag.bx.style.top = ((d.PH - drag.r.y1 - dyp) * d.k) + 'px'; }
+        guides(xs, ys);
+      });
+      function up() { if (!drag) return; var dd = drag; drag = null; guides([], []); $e('lyCv').style.transform = ''; if (dd.moved) { sel = dd.id; nudge(dd.dx, dd.dy); commit(); } else boxes(); }
+      Gd.addEventListener('pointerup', up); Gd.addEventListener('pointercancel', up);
+      function scl(f) { var o = cur(sel), lo = sel === 'map' ? 0.5 : 0.3, hi2 = sel === 'map' ? 6 : 4; o.s = Math.max(lo, Math.min(hi2, (o.s > 0 ? o.s : 1) * f)); commit(); }
+      $e('lyS1').onclick = function () { scl(1 / 1.1); }; $e('lyS2').onclick = function () { scl(1.1); };
+      $e('lyL').onclick = function () { nudge(-2, 0); commit(); }; $e('lyR').onclick = function () { nudge(2, 0); commit(); };
+      $e('lyU').onclick = function () { nudge(0, 2); commit(); }; $e('lyD').onclick = function () { nudge(0, -2); commit(); };
+      $e('lyHi').onclick = function () { if (!sel || sel === 'map') return; lay.hide[sel] = true; sel = null; commit(); };
+      $e('lyRs').onclick = function () { if (!sel) return; if (sel === 'map') lay.map = {}; else delete lay.obj[sel]; commit(); };
+      $e('lyUn').onclick = function () { go(hi - 1); }; $e('lyRe').onclick = function () { go(hi + 1); };
+      $e('lyZm').onclick = function () { zoom = zoom === 1 ? 2.2 : 1; $e('lyZm').classList.toggle('on', zoom !== 1); paint(); };
+      $e('lyBk').onclick = function () { close(); if (back) back(); };
+      $e('lyGo').onclick = function () { close(); (S.settings.mTplBy = S.settings.mTplBy || {})[String(PS.sel)] = tplCur(); saveSettings(); cetak(m, 'pdf', curOpts()); };
+      function dlg(html, wire) { var q = document.createElement('div'); q.className = 'lyq'; q.innerHTML = '<div class="lyqc">' + html + '</div>'; el.appendChild(q); wire(q, function () { q.remove(); }); }
+      $e('lyHd').onclick = function () {
+        var hs = Object.keys(out.rects || {}).filter(function (k) { return out.rects[k].hid; });
+        dlg('<div class="st">OBJEK TERSEMBUNYI</div>' + (hs.length ? hs.map(function (k) { return '<div class="row" style="gap:8px;align-items:center;margin:6px 0"><span style="flex:1">' + esc(out.rects[k].name) + '</span><button class="btn sm" data-k="' + k + '">Tampilkan</button></div>'; }).join('') : '<div class="muted" style="margin:8px 0">Tidak ada objek tersembunyi.</div>') + '<button class="btn" id="lqRs" style="width:100%;margin-top:8px">Kembalikan tata letak awal</button><button class="btn" id="lqX" style="width:100%;margin-top:6px">Tutup</button>', function (q, cl) {
+          q.querySelectorAll('[data-k]').forEach(function (b) { b.onclick = function () { delete lay.hide[b.getAttribute('data-k')]; cl(); commit(); }; });
+          q.querySelector('#lqRs').onclick = function () { cl(); askConfirm('Tata letak awal', 'Semua posisi, ukuran, geseran peta, dan objek tersembunyi dikembalikan ke awal?', 'Kembalikan', function () { lay = { obj: {}, hide: {}, map: {} }; sel = null; commit(); }); };
+          q.querySelector('#lqX').onclick = cl;
+        });
+      };
+      $e('lyTp').onclick = function () {
+        var t = tplBy(tplCur()), canUp = t && t.id !== 'std';
+        dlg('<div class="st">SIMPAN TEMPLATE</div><input type="text" id="lqN" maxlength="30" placeholder="Nama template baru" style="width:100%;margin:8px 0"><button class="btn pri" id="lqS" style="width:100%">Simpan baru</button>' + (canUp ? '<button class="btn" id="lqU" style="width:100%;margin-top:6px">Perbarui "' + esc(t.name) + '"</button>' : '') + '<button class="btn" id="lqX" style="width:100%;margin-top:6px">Batal</button>', function (q, cl) {
+          q.querySelector('#lqS').onclick = function () { var n = q.querySelector('#lqN').value.trim(); if (!n) { toast('Isi nama template'); return; } persist(); var id = 't' + Date.now().toString(36); tplList().push({ id: id, name: n, v: snap() }); S.settings.mTplCur = id; (S.settings.mTplBy = S.settings.mTplBy || {})[String(PS.sel)] = id; saveSettings(); cl(); toast('Template disimpan'); };
+          if (canUp) q.querySelector('#lqU').onclick = function () { persist(); t.v = snap(); saveSettings(); cl(); toast('Template diperbarui'); };
+          q.querySelector('#lqX').onclick = cl;
+        });
+      };
+      rebuild();
+    });
   }
   HA.openPrintMaster = printPanel;
   HA.masterAtur = function (m, back) { return aturSheet(m, back); };
@@ -341,8 +527,8 @@
     (function nx() {
       if (i >= list.length) {
         var bytes = buildPdfBytes(m, list, lj, mem, opts);
-        if (prev && HA.pdfPreview) { HA.pdfPreview(bytes, function () { HA.saveFile(base + '.pdf', btoa(bytes), 'application/pdf'); }); return; }
-        HA.saveFile(base + '.pdf', btoa(bytes), 'application/pdf'); return;
+        if (prev && HA.pdfPreview) { HA.pdfPreview(bytes, function () { HA.saveFile(pdfName(m), btoa(bytes), 'application/pdf'); }); return; }
+        HA.saveFile(pdfName(m), btoa(bytes), 'application/pdf'); return;
       }
       var b = list[i++];
       if (b.dir != null) { try { var r = HA.rowsFor(b, b.dir, +(b.sp || S.settings.rowSp || 1.5), +b.margin || 0); lj[b.id] = { n: r.n, total: r.total }; } catch (e) {} }
@@ -463,6 +649,17 @@
       var X = function (lng) { return M + offx + (lng - mb[1]) * kx * sc; }, Y = function (lat) { return M + offy + (lat - mb[0]) * ky * sc; };
       var lngAt = function (x) { return mb[1] + (x - M - offx) / (kx * sc); }, latAt = function (y) { return mb[0] + (y - M - offy) / (ky * sc); };
       var c = [], infos = [];
+      var LAY = (!sh && opts.lay) ? opts.lay : null, lrect = {}, lhide = (LAY && LAY.hide) || {}, kc = ktCfg(), SK = HA.lyb.symK(), MT = { s: 1, tx: 0, ty: 0 }, mapStart = c.length;
+      function ktVis(id) { return !sh && opts.kt !== false && kc.on && (kc.tabs || []).indexOf(id) >= 0 && !lhide['kt:' + id]; }
+      // objek tata letak: dibungkus transform (geser dx,dy = pecahan halaman; skala s terhadap sudut kiri-atas) dan layer sendiri
+      function OB(id, nm, bb, ops, layer) {
+        if (!ops) return '';
+        if (sh) return ops;
+        var g = (LAY && LAY.obj && LAY.obj[id]) || {}, s0 = g.s > 0 ? g.s : 1, dx = (g.dx || 0) * PW, dy = (g.dy || 0) * PH, ax = bb[0], ay = bb[3];
+        lrect[id] = { name: nm, x0: ax + dx, y1: ay + dy, x1: ax + dx + (bb[2] - bb[0]) * s0, y0: ay + dy - (bb[3] - bb[1]) * s0, hid: !!lhide[id] };
+        if (lhide[id]) return '';
+        return L(layer, (s0 === 1 && !dx && !dy) ? ops : 'q ' + f2(s0) + ' 0 0 ' + f2(s0) + ' ' + f2(ax - s0 * ax + dx) + ' ' + f2(ay - s0 * ay + dy) + ' cm\n' + ops + '\nQ');
+      }
       var bwPt = opts.bw ? opts.bw * 0.2 : 0.6;
       function rgb(hex) { var h = String(hex || '#888888').replace('#', ''); if (h.length !== 6) h = '888888'; return f2(parseInt(h.slice(0, 2), 16) / 255) + ' ' + f2(parseInt(h.slice(2, 4), 16) / 255) + ' ' + f2(parseInt(h.slice(4, 6), 16) / 255); }
       ((sh ? sh.items : opts.items) || []).forEach(function (it) {
@@ -504,7 +701,7 @@
       if (opts.obj !== false && HA.obj) { var od = HA.obj.drawPdf({ mb: mb, X: X, Y: Y, f2: f2, pe: pe, gs: '/GS1', labels: false }); objU = od.used; if (od.s) c.push(L('Objek', od.s)); }
       c.push('0 0 0 RG 0 0 0 rg ' + f2(bwPt) + ' w');
       var ttl = asc((opts.title || m.name) + (sh && sh.name ? ' - ' + sh.name : '')), tw = ttl.length * 13 * 0.56;
-      c.push('BT /F2 13 Tf ' + f2(PW / 2 - tw / 2) + ' ' + f2(PH - 17) + ' Td (' + pe(ttl) + ') Tj ET');
+      var ttlOps = 'BT /F2 13 Tf ' + f2(PW / 2 - tw / 2) + ' ' + f2(PH - 17) + ' Td (' + pe(ttl) + ') Tj ET';
       list.forEach(function (b) {
         var s = ''; b.pts.forEach(function (p, i) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); });
         lapA.forEach(function (lp) {
@@ -526,25 +723,39 @@
         if (opts.name !== false) { ls.push(o.nm); lyr.push('Nomor blok dan luas'); }
         if (opts.luas !== false) { ls.push(o.ar); lyr.push('Nomor blok dan luas'); }
         var lf = sh ? sh.lines : opts.lines; if (lf) lf(o.b).forEach(function (t) { ls.push(asc(t.t != null ? t.t : t)); lyr.push(t.l || 'Tanggal dan luas kategori'); });
-        lapA.forEach(function (lp) { if (lp.mode !== 'sym') return; var li = HA.lyb.of(o.b, lp.id); if (li) { var dn0 = HA.lyb.diceN(li.sym); ls.push(dn0 ? { dice: dn0 } : li.sym); lyr.push('Lapisan: ' + lp.name); (lapUsed[lp.id] = lapUsed[lp.id] || {})[li.id] = 1; } });
-        var lh = fsU * 1.15, y0 = cy + (ls.length * lh) / 2 - fsU * 0.85;
-        var HALO = S.settings.halo !== false;
+        lapA.forEach(function (lp) { if (lp.mode !== 'sym') return; var li = HA.lyb.of(o.b, lp.id); if (li) { ls.push(HA.lyb.isVec(li.sym) ? { vec: li.sym } : li.sym); lyr.push('Lapisan: ' + lp.name); (lapUsed[lp.id] = lapUsed[lp.id] || {})[li.id] = 1; } });
+        var lh = fsU * 1.15, HALO = S.settings.halo !== false, szS = fsU * 0.9 * SK, hs = ls.map(function (t) { return typeof t === 'object' ? Math.max(lh, szS * 1.15) : lh; });
+        var tot2 = 0; hs.forEach(function (h) { tot2 += h; });
+        var topY = cy + tot2 / 2, acc = 0;
         ls.forEach(function (t, i) {
-          if (typeof t === 'object') { c.push(L(lyr[i], HA.lyb.dicePdf(cx, y0 - i * lh + fsU * 0.32, fsU * 0.9, t.dice, HALO ? fsU * 0.32 : 0))); return; }
-          var tp = 'BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - t.length * fsU * 0.52 / 2) + ' ' + f2(y0 - i * lh) + ' Td (' + pe(t) + ') Tj ET';
+          var ti = topY - acc; acc += hs[i];
+          if (typeof t === 'object') { c.push(L(lyr[i], HA.lyb.symPdf(cx, ti - hs[i] / 2, szS, t.vec, HALO ? fsU * 0.32 : 0))); return; }
+          var tp = 'BT /F1 ' + f2(fsU) + ' Tf ' + f2(cx - t.length * fsU * 0.52 / 2) + ' ' + f2(ti - fsU * 0.85) + ' Td (' + pe(t) + ') Tj ET';
           // biru tinta tua (jadi abu tua di fotokopi) + halo putih tipis; tepi blok tetap hitam
           c.push(L(lyr[i], (HALO ? 'q 1 G 1 j ' + f2(fsU * 0.32) + ' w 1 Tr ' + tp + ' Q ' : '') + 'q 0.122 0.306 0.62 rg 0 Tr ' + tp + ' Q'));
         });
       });
+      // peta: satu kelompok (geser/zoom dari tata letak), dipotong di bingkai
+      var mapEnd = c.length;
+      if (!sh) {
+        var mo = (LAY && LAY.map) || {}, mS = mo.s > 0 ? mo.s : 1, mdx = (mo.dx || 0) * PW, mdy = (mo.dy || 0) * PH;
+        MT = { s: mS, tx: (PW / 2) * (1 - mS) + mdx, ty: (PH / 2) * (1 - mS) + mdy };
+        var inner = c.splice(mapStart, mapEnd - mapStart).join('\n');
+        c.splice(mapStart, 0, 'q ' + f2(M) + ' ' + f2(M) + ' ' + f2(fw) + ' ' + f2(fh) + ' re W n q ' + f2(MT.s) + ' 0 0 ' + f2(MT.s) + ' ' + f2(MT.tx) + ' ' + f2(MT.ty) + ' cm\n' + inner + '\nQ Q');
+        lrect.map = { name: 'Peta', x0: M, y0: M, x1: PW - M, y1: PH - M, hid: false, map: true };
+      }
+      c.push(OB('judul', 'Judul', [PW / 2 - tw / 2 - 2, PH - 21, PW / 2 + tw / 2 + 2, PH - 5], ttlOps, 'Judul'));
       // skala dan panah utara
       var scStart = c.length;
       var L0 = [100, 200, 500, 1000, 2000, 5000].filter(function (v) { return v * sc < fw * 0.25; }).pop() || 100, bx = PW / 2 - L0 * sc / 2, by = M + 16;
       c.push('1 w ' + f2(bx) + ' ' + f2(by) + ' m ' + f2(bx + L0 * sc) + ' ' + f2(by) + ' l S ' + f2(bx) + ' ' + f2(by - 4) + ' m ' + f2(bx) + ' ' + f2(by + 4) + ' l S ' + f2(bx + L0 * sc) + ' ' + f2(by - 4) + ' m ' + f2(bx + L0 * sc) + ' ' + f2(by + 4) + ' l S');
       c.push('BT /F1 8 Tf ' + f2(bx) + ' ' + f2(by + 7) + ' Td (' + (L0 >= 1000 ? (L0 / 1000) + ' km' : L0 + ' m') + ') Tj ET');
-      var nx0 = PW - M - 24, ny0 = PH - M - 46;
+      c.push(OB('skala', 'Skala', [bx - 3, by - 6, bx + L0 * sc + 3, by + 16], c.splice(scStart).join('\n'), 'Legenda dan tabel'));
+      var nStart = c.length, nx0 = PW - M - 24, ny0 = PH - M - 46;
       c.push('1 w ' + f2(nx0) + ' ' + f2(ny0) + ' m ' + f2(nx0) + ' ' + f2(ny0 + 28) + ' l S ' + f2(nx0 - 5) + ' ' + f2(ny0 + 20) + ' m ' + f2(nx0) + ' ' + f2(ny0 + 28) + ' l ' + f2(nx0 + 5) + ' ' + f2(ny0 + 20) + ' l S');
       c.push('BT /F2 9 Tf ' + f2(nx0 - 3) + ' ' + f2(ny0 - 10) + ' Td (U) Tj ET');
-      if (c.length > scStart) c.push(L('Legenda dan tabel', c.splice(scStart).join('\n')));
+      c.push(OB('panah', 'Panah utara', [nx0 - 9, ny0 - 16, nx0 + 9, ny0 + 30], c.splice(nStart).join('\n'), 'Legenda dan tabel'));
+      if (sh && c.length > scStart) c.push(L('Legenda dan tabel', c.splice(scStart).join('\n')));
       // legenda: tabel info (Master: sudut paling kosong; Laporan: kanan bawah), kotak daftar (kiri, bisa digeser), keterangan (kiri bawah)
       var rows = [['Master', m.name.length > 24 ? m.name.slice(0, 23) + '.' : m.name], ['Jumlah blok', String(list.length)], ['Total luas', fmtHa(tot) + ' ha']].concat(opts.dates ? [[opts.datesLbl || 'Tanggal', opts.dates]] : [], [['Dicetak', tgl], ['Versi app', ver]]);
       if (sh && sh.info) rows = rows.concat(sh.info);
@@ -554,7 +765,7 @@
         var cands = sh ? [[PW - M - G - IW, M + G]] : [[PW - M - G - IW, M + G], [M + G, M + G], [M + G, PH - M - G - IH]];
         var ovl = function (cd) { var n = 0; infos.forEach(function (o) { if (o.x1 > cd[0] - 6 && o.x0 < cd[0] + IW + 6 && o.y1 > cd[1] - 6 && o.y0 < cd[1] + IH + 6) n++; }); return n; };
         var best = cands[0], bo = ovl(best); cands.forEach(function (cd) { var o2 = ovl(cd); if (o2 < bo) { bo = o2; best = cd; } });
-        var ix = best[0], iy = best[1];
+        var ix = best[0], iy = best[1], iStart = c.length;
         c.push('1 g 0.5 w ' + f2(ix) + ' ' + f2(iy) + ' ' + f2(IW) + ' ' + f2(IH) + ' re f 0 g ' + f2(ix) + ' ' + f2(iy) + ' ' + f2(IW) + ' ' + f2(IH) + ' re S');
         rows.forEach(function (r, i) {
           var ty = iy + IH - RH0 * (i + 1);
@@ -562,6 +773,7 @@
           c.push('BT /F2 8 Tf ' + f2(ix + 5) + ' ' + f2(ty + 4) + ' Td (' + pe(r[0]) + ') Tj ET BT /F1 8 Tf ' + f2(ix + 74) + ' ' + f2(ty + 4) + ' Td (' + pe(r[1]) + ') Tj ET');
         });
         c.push('0.5 w ' + f2(ix + 70) + ' ' + f2(iy) + ' m ' + f2(ix + 70) + ' ' + f2(iy + IH) + ' l S');
+        c.push(OB('info', 'Tabel info', [ix, iy, ix + IW, iy + IH], c.splice(iStart).join('\n'), 'Legenda dan tabel'));
         var lgl = sh ? (sh.leg || []) : [];
         if (lgl.length) {
           var bd = lgBox(lgl, opts.lgFs), lgp = opts.lgPos || {}, lx = lgp.x != null ? lgp.x * PW : M + G, ly = lgp.y != null ? PH - lgp.y * PH - bd.LH : PH - (M + 40) - bd.LH;
@@ -584,11 +796,11 @@
         }
       }
       if (opts.legend !== false) {
-        var rowsL = []; lapA.forEach(function (lp) { var u = lapUsed[lp.id]; if (!u) return; rowsL.push({ h: lp.name }); lp.items.forEach(function (it) { if (u[it.id]) rowsL.push({ lp: lp, it: it }); }); });
+        var rowsL = []; lapA.forEach(function (lp) { var u = lapUsed[lp.id]; if (!u) return; if (!sh && ((lp.id === 'status' && ktVis('st')) || (lp.id === 'varietas' && ktVis('var')))) return; rowsL.push({ h: lp.name }); lp.items.forEach(function (it) { if (u[it.id]) rowsL.push({ lp: lp, it: it }); }); });
         if (Object.keys(objU).length) { rowsL.push({ h: 'Objek' }); HA.obj.jenis().forEach(function (j) { if (objU[j.id]) rowsL.push({ oj: j }); }); }
         if (rowsL.length) {
           var RHl = 12, LWl = 140, LHl = rowsL.length * RHl + 6, lx0 = M + 10, ly0 = M + 10 + (sh && sh.keter ? sh.keter.length * 16 + 8 : 0);
-          c.push('1 g 0.5 w ' + f2(lx0) + ' ' + f2(ly0) + ' ' + f2(LWl) + ' ' + f2(LHl) + ' re f 0 G ' + f2(lx0) + ' ' + f2(ly0) + ' ' + f2(LWl) + ' ' + f2(LHl) + ' re S');
+          var lStart = c.length; c.push('1 g 0.5 w ' + f2(lx0) + ' ' + f2(ly0) + ' ' + f2(LWl) + ' ' + f2(LHl) + ' re f 0 G ' + f2(lx0) + ' ' + f2(ly0) + ' ' + f2(LWl) + ' ' + f2(LHl) + ' re S');
           rowsL.forEach(function (r, i) {
             var ty = ly0 + LHl - 3 - RHl * (i + 1) + 2;
             if (r.oj) {
@@ -599,18 +811,24 @@
               c.push('0 g BT /F1 8 Tf ' + f2(lx0 + 30) + ' ' + f2(ty) + ' Td (' + pe(oj.name) + ') Tj ET'); return;
             }
             if (r.h) { c.push('0 g BT /F2 8 Tf ' + f2(lx0 + 5) + ' ' + f2(ty) + ' Td (' + pe(r.h) + ') Tj ET'); return; }
-            if (r.lp.mode === 'fill') c.push(HA.lyb.swatchPdf(r.it, lx0 + 5, ty - 1, 18, 9)); else if (HA.lyb.diceN(r.it.sym)) c.push(HA.lyb.dicePdf(lx0 + 14, ty + 3.5, 8, HA.lyb.diceN(r.it.sym), 0, '0 g')); else c.push('0 g BT /F2 9 Tf ' + f2(lx0 + 5) + ' ' + f2(ty) + ' Td (' + pe(r.it.sym) + ') Tj ET');
+            if (r.lp.mode === 'fill') c.push(HA.lyb.swatchPdf(r.it, lx0 + 5, ty - 1, 18, 9)); else if (HA.lyb.isVec(r.it.sym)) c.push(HA.lyb.symPdf(lx0 + 14, ty + 3.5, 8, r.it.sym, 0)); else c.push('0 g BT /F2 9 Tf ' + f2(lx0 + 5) + ' ' + f2(ty) + ' Td (' + pe(r.it.sym) + ') Tj ET');
             c.push('0 g BT /F1 8 Tf ' + f2(lx0 + 30) + ' ' + f2(ty) + ' Td (' + pe(r.it.name) + ') Tj ET');
           });
+          c.push(OB('lgl', 'Legenda lapisan', [lx0, ly0, lx0 + LWl, ly0 + LHl], c.splice(lStart).join('\n'), 'Legenda dan tabel'));
         }
       }
-      if (opts.layers !== false && opts.legend !== false && c.length > lgStart) { var lgs = c.splice(lgStart).join('\n'); c.push(L('Legenda dan tabel', lgs)); }
-      var TWk = 0, kc = ktCfg();
-      if (!sh && opts.kt !== false && kc.on && (kc.tabs || []).length) { var kd = ktDraw(list, PW, PH, M, kc, f2); if (kd.w) { TWk = kd.w; c.push(L('Keterangan', kd.ops)); } }
+      if (sh && opts.layers !== false && opts.legend !== false && c.length > lgStart) { var lgs = c.splice(lgStart).join('\n'); c.push(L('Legenda dan tabel', lgs)); }
+      var TWk = 0;
+      if (!sh && opts.kt !== false && kc.on && (kc.tabs || []).length) {
+        var kd = ktDraw(list, PW, PH, M, kc, f2, lhide); TWk = kd.w;
+        kd.items.forEach(function (it) { c.push(OB('kt:' + it.id, it.name, it.bb, it.ops, 'Keterangan')); });
+        (kc.tabs || []).forEach(function (id) { if (lhide['kt:' + id]) { var nm = id; KT_ALL.forEach(function (a) { if (a[0] === id) nm = a[1]; }); lrect['kt:' + id] = { name: nm, hid: true }; } });
+      }
+      if (opts.layOut && !sh) { opts.layOut.rects = lrect; opts.layOut.PW = PW; opts.layOut.PH = PH; opts.layOut.M = M; opts.layOut.TW = TWk; }
       var resP = res; if (ocgs.length) resP = res.replace(/ >>$/, ' /Properties << ' + ocgs.map(function (nm) { return '/' + ocmap[nm].k + ' ' + ocmap[nm].n + ' 0 R'; }).join(' ') + ' >> >>');
       var cs = add(stream('', c.join('\n')));
       var corners = [[M, M], [M, PH - M], [PW - M, PH - M], [PW - M, M]], lp = [0, 0, 0, 1, 1, 1, 1, 0], gp = [];
-      corners.forEach(function (q) { gp.push(latAt(q[1]).toFixed(7), lngAt(q[0]).toFixed(7)); });
+      corners.forEach(function (q) { gp.push(latAt((q[1] - MT.ty) / MT.s).toFixed(7), lngAt((q[0] - MT.tx) / MT.s).toFixed(7)); });
       var vp = '/VP [ << /Type /Viewport /Name (Peta) /BBox [' + f2(M) + ' ' + f2(M) + ' ' + f2(PW - M) + ' ' + f2(PH - M) + '] /Measure << /Type /Measure /Subtype /GEO /Bounds [0 0 0 1 1 1 1 0] /GPTS [' + gp.join(' ') + '] /LPTS [' + lp.join(' ') + '] /GCS << /Type /GEOGCS /WKT (GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]) /EPSG 4326 >> /PDU [/M /DEG /DEG] >> >> ]';
       kids.push(add('<< /Type /Page /Parent ' + pages + ' 0 R /MediaBox [0 0 ' + f2(PW + TWk) + ' ' + f2(PH) + '] /Resources ' + resP + ' /Contents ' + cs + ' 0 R ' + vp + ' >>'));
     });

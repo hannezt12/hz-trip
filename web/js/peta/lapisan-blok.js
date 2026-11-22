@@ -12,22 +12,39 @@
   function save() { return HA.saveSettings(); }
   var PATS = [['none', 'Polos'], ['d1', 'Miring /'], ['d2', 'Miring \\'], ['x', 'Silang'], ['h', 'Datar'], ['v', 'Tegak'], ['dot', 'Titik']];
   var PAL = ['#E53935', '#FB8C00', '#FDD835', '#43A047', '#00ACC1', '#1E88E5', '#5E35B1', '#D81B60', '#6D4C41', '#757575'];
-  var SYMQ = ['\u00B1', '\u2022', '\u2022\u2022', '\u2022\u2022\u2022', 'D4', 'D5', '+', '*', '#', 'X'];
+  var SYMQ = ['P+', 'R1', 'R2', 'R3', 'D4', 'D5', '+', '*', '#', 'X'];
 
-  // ---------- simbol dadu (RC4 = 4 titik 2x2, RC5 = 4 titik + 1 tengah) ----------
-  function diceN(sym) { return sym === 'D4' ? 4 : sym === 'D5' ? 5 : 0; }
-  function dotsXY(n) { var d = 0.3, a = [[-d, -d], [d, -d], [-d, d], [d, d]]; if (n === 5) a.push([0, 0]); return a; }
+  // ---------- simbol vektor: P+ (plus merah), R1-R3 (titik), D4/D5 (dadu) ----------
+  var SV_TOK = { 'P+': 1, R1: 1, R2: 1, R3: 1, D4: 1, D5: 1 };
+  function isVec(sym) { return !!SV_TOK[sym]; }
+  function diceN(sym) { return isVec(sym) ? 1 : 0; }
+  function symK() { var v = +S.settings.symK; return v > 0 ? v : 1.5; }
+  function dotsXY(sym) {
+    if (sym === 'R1') return [[0, 0]]; if (sym === 'R2') return [[-0.27, 0], [0.27, 0]]; if (sym === 'R3') return [[-0.5, 0], [0, 0], [0.5, 0]];
+    var d = 0.3, a = [[-d, -d], [d, -d], [-d, d], [d, d]]; if (sym === 'D5') a.push([0, 0]); return a;
+  }
+  function dotR(sym) { return sym.charAt(0) === 'R' ? 0.2 : 0.18; }
   function circP(x, y, r) { var k = 0.5523 * r; return n2(x + r) + ' ' + n2(y) + ' m ' + n2(x + r) + ' ' + n2(y + k) + ' ' + n2(x + k) + ' ' + n2(y + r) + ' ' + n2(x) + ' ' + n2(y + r) + ' c ' + n2(x - k) + ' ' + n2(y + r) + ' ' + n2(x - r) + ' ' + n2(y + k) + ' ' + n2(x - r) + ' ' + n2(y) + ' c ' + n2(x - r) + ' ' + n2(y - k) + ' ' + n2(x - k) + ' ' + n2(y - r) + ' ' + n2(x) + ' ' + n2(y - r) + ' c ' + n2(x + k) + ' ' + n2(y - r) + ' ' + n2(x + r) + ' ' + n2(y - k) + ' ' + n2(x + r) + ' ' + n2(y) + ' c h '; }
-  // titik dadu di tengah (cx,cy), sisi kotak sz (pt); halo = tebal halo putih (0 = tanpa)
-  function dicePdf(cx, cy, sz, n, halo, ink) {
-    var r = sz * 0.14, pts = dotsXY(n).map(function (q) { return circP(cx + q[0] * sz, cy + q[1] * sz, r); }).join('');
-    return (halo > 0 ? 'q 1 g 1 G ' + n2(halo) + ' w ' + pts + 'B Q ' : '') + 'q ' + (ink || '0.122 0.306 0.62 rg') + ' ' + pts + 'f Q';
+  // gambar simbol di tengah (cx,cy); sz = sisi kotak dasar (pt, sudah termasuk pengali); halo = tebal halo putih titik (0 = tanpa). PC (+) selalu berhalo.
+  function symPdf(cx, cy, sz, sym, halo) {
+    if (sym === 'P+') {
+      var a = sz * 0.46, w = sz * 0.2, h = sz * 0.1;
+      var pth = n2(cx - a) + ' ' + n2(cy) + ' m ' + n2(cx + a) + ' ' + n2(cy) + ' l S ' + n2(cx) + ' ' + n2(cy - a) + ' m ' + n2(cx) + ' ' + n2(cy + a) + ' l S ';
+      return 'q 1 G 2 J ' + n2(w + 2 * h) + ' w ' + pth + 'Q q 0.86 0.08 0.08 RG 0 J ' + n2(w) + ' w ' + pth + 'Q';
+    }
+    var r = sz * dotR(sym), pts = dotsXY(sym).map(function (q) { return circP(cx + q[0] * sz, cy + q[1] * sz, r); }).join('');
+    return (halo > 0 ? 'q 1 g 1 G ' + n2(halo) + ' w ' + pts + 'B Q ' : '') + 'q 0 g ' + pts + 'f Q';
   }
+  // lebar simbol relatif terhadap sz (untuk tata letak)
+  function symW(sym) { return sym === 'R3' ? 1.4 : sym === 'R2' ? 1.0 : 0.9; }
   function symHtml(sym) {
-    var n = diceN(sym); if (!n) return esc(sym || '-');
-    return '<svg class="lbDice" viewBox="-0.5 -0.5 1 1" width="18" height="18">' + dotsXY(n).map(function (q) { return '<circle cx="' + q[0] + '" cy="' + q[1] + '" r="0.14" fill="currentColor"/>'; }).join('') + '</svg>';
+    if (!isVec(sym)) return esc(sym || '-');
+    var body;
+    if (sym === 'P+') body = '<path d="M-0.4 0H0.4M0 -0.4V0.4" stroke="#DB1414" stroke-width="0.2" fill="none"/>';
+    else body = dotsXY(sym).map(function (q) { return '<circle cx="' + q[0] + '" cy="' + q[1] + '" r="' + dotR(sym) + '" fill="currentColor"/>'; }).join('');
+    return '<svg class="lbDice" viewBox="-0.75 -0.5 1.5 1" width="24" height="16">' + body + '</svg>';
   }
-  function symTxt(sym) { return diceN(sym) ? '' : String(sym || ''); }
+  function symTxt(sym) { return isVec(sym) ? '' : String(sym || ''); }
 
   // ---------- Bulan tanam: 12 warna bersama (garis tepi Master + warna bulan Laporan) ----------
   var BN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -61,6 +78,10 @@
           { id: 'rc4', name: 'RC4', sym: 'D4', col: '#1F4E9E' }, { id: 'rc5', name: 'RC5', sym: 'D5', col: '#1F4E9E' }] },
         { id: 'varietas', name: 'Varietas', mode: 'fill', on: true, items: [] }
       ];
+    }
+    if (!a.symMig) {
+      a.symMig = 1; var M2 = { '\u00B1': 'P+', '\u2022': 'R1', '\u2022\u2022': 'R2', '\u2022\u2022\u2022': 'R3' };
+      a.forEach(function (l) { if (l.id === 'status') l.items.forEach(function (it) { if (M2[it.sym]) it.sym = M2[it.sym]; }); });
     }
     if (!a.rcMig) {
       a.rcMig = 1;
@@ -189,10 +210,12 @@
       }).join('') + '</div>' : '<div class="muted" style="margin:10px 0">Belum ada jenis. Tambahkan di bawah.</div>') +
       '<button class="btn pri" id="ldA" style="width:100%;margin-top:10px">+ Tambah ' + (l.mode === 'sym' ? 'status' : 'jenis') + '</button>' +
       (l.mode === 'sym' ? '<div class="muted" style="margin-top:6px">Urutan dipakai tombol Naik status (PC → RC1 → RC2 ...).</div>' : '') +
+      (l.mode === 'sym' ? '<div class="h" style="margin-top:10px">UKURAN SIMBOL DI CETAK (×)</div><input type="number" id="ldSk" min="0.5" max="5" step="0.1" inputmode="decimal" value="' + symK() + '" style="width:100%"><div class="muted">1 = ukuran dasar; 1,5 = bawaan. Berlaku untuk semua simbol status.</div>' : '') +
       (l.custom ? '<button class="btn" id="ldDel" style="width:100%;margin-top:8px;color:var(--r)">Hapus lapisan ini</button>' : '') +
       '<button class="btn" id="ldBk" style="width:100%;margin-top:8px">Kembali</button>');
     $('ldX').onclick = closeSheet; $('ldBk').onclick = home;
     $('ldA').onclick = function () { itemEdit(l, null); };
+    if ($('ldSk')) $('ldSk').onchange = function () { var v = Math.max(0.5, Math.min(5, parseFloat(String(this.value).replace(',', '.')) || 1.5)); S.settings.symK = v; this.value = v; save(); };
     $('sheet').querySelectorAll('.lbIt').forEach(function (e) { e.onclick = function () { itemEdit(l, itemBy(l, e.getAttribute('data-i'))); }; });
     $('sheet').querySelectorAll('[data-u],[data-d]').forEach(function (e) {
       e.onclick = function () { var u = e.hasAttribute('data-u'), i = +e.getAttribute(u ? 'data-u' : 'data-d'), j = u ? i - 1 : i + 1, t = l.items[i]; l.items[i] = l.items[j]; l.items[j] = t; save(); lapOpen(id); };
@@ -446,7 +469,7 @@
     $('rhX').onclick = function () { if (back) back(); else closeSheet(); };
     if ($('rhUn')) $('rhUn').onclick = function () { if (undoLast(b)) { toast('Perubahan terakhir diurungkan'); hist(b, back); } };
   }
-  HA.lyb = { hist: hist, suggest: suggest, all: all, by: lapBy, of: of, set: setItem, umur: umur, txt: txt, next: nextItem, active: active, fillPdf: fillPdf, swatchPdf: swatchPdf, rgb: rgb, pathOf: pathOf, PATS: PATS, PAL: PAL, prevSvg: prevSvg, diceN: diceN, dicePdf: dicePdf, symHtml: symHtml, symTxt: symTxt, bulanCol: bulanCol, bulanOf: bulanOf, btOn: btOn, btW: btW, BN: BN, home: home, bulk: bulk, today: today };
+  HA.lyb = { hist: hist, suggest: suggest, all: all, by: lapBy, of: of, set: setItem, umur: umur, txt: txt, next: nextItem, active: active, fillPdf: fillPdf, swatchPdf: swatchPdf, rgb: rgb, pathOf: pathOf, PATS: PATS, PAL: PAL, prevSvg: prevSvg, diceN: diceN, isVec: isVec, symPdf: symPdf, symK: symK, symW: symW, symHtml: symHtml, symTxt: symTxt, bulanCol: bulanCol, bulanOf: bulanOf, btOn: btOn, btW: btW, BN: BN, home: home, bulk: bulk, today: today };
   document.addEventListener('DOMContentLoaded', wire); if (document.readyState !== 'loading') wire();
   function wire() {
     var a = document.querySelector('#drawer a[data-lyb]'); if (!a || a._w) return; a._w = 1;

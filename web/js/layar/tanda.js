@@ -13,7 +13,7 @@
   function saveFile() { return HA.saveFile.apply(this, arguments); }
   function textB64() { return HA.textB64.apply(this, arguments); }
   HA.tandaFree = function () { modeOn(); }; HA.tandaBrush = function () { return brush(); }; HA.tandaSave = function () { save(); }; HA.tandaClick = function (ev) { onMapClick(ev); }; HA.tandaEdCancel = function () { edCancel(); }; HA.tandaDraw = function () { drawAll(); }; HA.tandaUndo = undoLast; HA.tandaColor = colorSheet; HA.tandaList = function (o) { listSheet(o); }; HA.tandaHud = function (t) { hud(t); }; HA.tandaNewId = function () { return newId(); }; HA.tandaAdd = function (it) { addItem(it); save(); }; HA.tandaInit = init;
-  HA.pdfPreview = pdfPreview;
+  HA.pdfPreview = pdfPreview; HA.loadPdfJs = loadPdfJs;
 
   var KEY = 'hz_tanda', KEYW = 'hz_tanda_wk';
   var PAL = [['Oranye', '#FF6A00'], ['Merah', '#E5484D'], ['Magenta', '#E635B0'], ['Kuning', '#FFD60A'], ['Cyan', '#00C2D1'], ['Biru', '#2F6BFF'], ['Putih', '#FFFFFF'], ['Hitam', '#111111']];
@@ -1204,7 +1204,7 @@
     lapA.forEach(function (lp) {
       var li = HA.lyb.of(blk, lp.id), ip = HA.poi(blk.pts, kx, ky), sx = X(ip[1]), sy = Y(ip[0]);
       LB(c, 'Lapisan: ' + lp.name);
-      if (lp.mode === 'sym' && HA.lyb.diceN(li.sym)) c.push(HA.lyb.dicePdf(sx, sy, 16, HA.lyb.diceN(li.sym), 3));
+      if (lp.mode === 'sym' && HA.lyb.isVec(li.sym)) c.push(HA.lyb.symPdf(sx, sy, 16 * HA.lyb.symK(), li.sym, 3));
       else if (lp.mode === 'sym') { var fz = 16; c.push('q 1 G 1 j 3 w 1 Tr BT /F2 ' + fz + ' Tf ' + f2(sx - String(li.sym).length * fz * 0.28) + ' ' + f2(sy - fz * 0.35) + ' Td (' + pe(li.sym) + ') Tj ET Q q 0.122 0.306 0.62 rg 0 Tr BT /F2 ' + fz + ' Tf ' + f2(sx - String(li.sym).length * fz * 0.28) + ' ' + f2(sy - fz * 0.35) + ' Td (' + pe(li.sym) + ') Tj ET Q'); }
       LE(c);
     });
