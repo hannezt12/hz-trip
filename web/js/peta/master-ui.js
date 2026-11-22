@@ -13,6 +13,7 @@
   function closeSheet() { return HA.closeSheet.apply(this, arguments); }
   function askConfirm() { return HA.askConfirm.apply(this, arguments); }
   HA.renderMaster = renderMaster;
+  HA.masterMembers = function (m) { return members(m); };
   HA.masterCreated = masterCreated;
   HA.readHzBlok = readHzBlok;
   HA.restoreHzBlok = restoreHzBlok;
@@ -74,6 +75,7 @@
       actions: function (id) {
         var m = mById(id); if (!m) return [];
         return [
+          { label: 'Isi data (varietas, status, bulan tanam)', fn: function () { HA.isiData(m, function () { S.dpTab = 'master'; go('data'); }); } },
           { label: 'Cetak (PDF atau KML)', fn: function () { PS.sel = m.id; printPanel(); } },
           { label: 'Atur blok perbatasan', fn: function () { aturSheet(m); } },
           { label: 'Edit batas', fn: function () { editBatas(m); } },
@@ -559,6 +561,7 @@
     return x;
   }
   HA.masterKml = buildKml;
+  HA.ktData = ktData;
 
   // ---------- penulis PDF minimal ----------
   function asc(t) { return String(t == null ? '' : t).replace(/[^\x20-\x7E]/g, '?'); }
