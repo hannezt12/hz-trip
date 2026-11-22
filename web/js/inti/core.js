@@ -200,6 +200,11 @@
   // ---------- navigasi ----------
   var TITLES = { spido: 'SPIDOMETER', lintasan: 'LINTASAN', riwayat: 'RIWAYAT', set: 'PENGATURAN', data: 'DATA PETA' };
   function go(v) {
+    var pv = S.view;
+    if (S.viaDrawer) { S.vstack = []; S.fromDrawer = v !== 'spido'; S.viaDrawer = false; }
+    else if (v === 'spido') { S.vstack = []; S.fromDrawer = false; }
+    else if (!S.noPush && pv && pv !== v && pv !== 'spido') { S.vstack = S.vstack || []; if (S.vstack[S.vstack.length - 1] !== pv) S.vstack.push(pv); }
+    S.noPush = false; S.dwBack = false;
     S.view = v;
     ['spido', 'lintasan', 'riwayat', 'set', 'data'].forEach(function (n) { $('v-' + n).classList.toggle('on', n === v); });
     $('main').classList.toggle('map', v === 'lintasan');
@@ -238,19 +243,27 @@
     $('toast').style.color = acc <= 8 ? '#3FD07A' : (acc <= 15 ? '#FFD24D' : '#FF6B6B');
   }
   HA.accToast = accToast;
-  function closeSheet() { $('sheet').classList.remove('on'); $('sheet').classList.remove('cmp'); $('scrim').classList.remove('on'); var h = HA.onSheetClose; HA.onSheetClose = null; if (h) h(); }
+  function closeSheet() { HA.plUn = false; $('sheet').classList.remove('on'); $('sheet').classList.remove('cmp'); $('scrim').classList.remove('on'); var h = HA.onSheetClose; HA.onSheetClose = null; if (h) h(); }
 
   // Tombol back Android (dipanggil dari MainActivity): true = sudah ditangani di halaman.
   window.hzBack = function () {
     if (HA.ED && HA.ED.isOpen && HA.ED.isOpen() && !$('sheet').classList.contains('on')) { HA.ED.back(); return true; }
-    if ($('sheet').classList.contains('on')) { closeSheet(); return true; }
-    if ($('drawer').classList.contains('on')) { $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); return true; }
+    if ($('sheet').classList.contains('on')) {
+      var bk = null; ['shBk', 'mpX', 'btR', 'ldBk', 'lmX', 'lbX', 'lyBk', 'lqX', 'obBk', 'dlX', 'rnX', 'tpBack', 'rhX'].some(function (id) { var e = $(id); if (e && $('sheet').contains(e) && !e.disabled) { bk = e; return true; } });
+      if (bk) bk.click(); else closeSheet();
+      return true;
+    }
+    if ($('drawer').classList.contains('on')) { $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); if (S.dwBack && S.view !== 'spido') { S.dwBack = false; go('spido'); } return true; }
     if (HA.mapBack && HA.mapBack()) return true;
     if (HA.ukurBack && HA.ukurBack()) return true;
     if (HA.tandaBack && HA.tandaBack()) return true;
     if (S.sel) { exitSel(); renderHistory(); return true; }
     if (S.view === 'riwayat' && S.hMode === 'day') { S.hMode = 'list'; loadRiwayat(); return true; }
-    if (S.view !== 'spido') { go('spido'); return true; }
+    if (S.view !== 'spido') {
+      if (S.vstack && S.vstack.length) { S.noPush = true; go(S.vstack.pop()); return true; }
+      if (S.fromDrawer) { S.fromDrawer = false; HA.openDrawer(); S.dwBack = true; return true; }
+      go('spido'); return true;
+    }
     if (HA.SP.active) { spShow('main'); return true; }
     return false;
   };

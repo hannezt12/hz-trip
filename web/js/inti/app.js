@@ -93,7 +93,7 @@
 
   // ---------- pasang ----------
   function init() {
-    $('btnMenu').onclick = openDrawer;
+    $('btnMenu').onclick = function () { S.dwBack = false; openDrawer(); };
     $('setMenu').onclick = function (e) { var b = e.target.closest ? e.target.closest('[data-sp]') : null; if (b) openSet(b.getAttribute('data-sp')); };
     document.querySelectorAll('[data-back]').forEach(function (b) { b.onclick = backSet; });
     $('fontSeg').onclick = function (e) { var f = e.target.getAttribute && e.target.getAttribute('data-f'); if (f) { S.settings.fs = f; saveSettings(); applyFont(); } };
@@ -110,7 +110,7 @@
     $('bkRestore').onclick = function () { $('bkFile').value = ''; $('bkFile').click(); };
     $('bkFile').onchange = function () { var f = this.files && this.files[0]; if (f) readBackup(f).then(restoreBackup).catch(function (e) { toast(e && e.message || 'Berkas tidak bisa dibaca'); }); };
     $('scrim').onclick = function () { closeSheet(); $('drawer').classList.remove('on'); };
-    document.querySelectorAll('#drawer a[data-go]').forEach(function (a) { a.onclick = function () { go(a.getAttribute('data-go')); }; });
+    document.querySelectorAll('#drawer a[data-go]').forEach(function (a) { a.onclick = function () { S.viaDrawer = true; go(a.getAttribute('data-go')); }; });
     $('btnRec').onclick = toggleRec;
     $('modeBox').onclick = onModeAction;
     $('modeBtns').onclick = onModeAction;

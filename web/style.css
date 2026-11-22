@@ -987,3 +987,6 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 .lyr{display:flex;align-items:center;gap:6px}.lyr .lyn{flex:1}
 .lyk .lyb{margin-bottom:6px}.lyk .btn{min-height:44px;min-width:44px}
 .lyEd.lyfold .lyk{display:none}
+details[data-pd]{margin-top:8px;border:1px solid var(--line,#8884);border-radius:10px;padding:0 10px}
+details[data-pd]>summary{min-height:44px;display:flex;align-items:center;font-weight:700;font-size:.8rem;letter-spacing:.04em;cursor:pointer}
+details[data-pd][open]{padding-bottom:8px}

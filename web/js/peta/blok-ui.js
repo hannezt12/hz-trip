@@ -791,13 +791,13 @@
   function lybHtml(b) {
     if (!HA.lyb) return '';
     var ls = HA.lyb.all();
-    return '<div class="lbG2">' + ls.map(function (l) {
+    return '<label style="margin-top:8px"><input type="checkbox" id="beUk"> Buka kunci data tanaman</label><div class="muted" style="margin-bottom:4px">Varietas, status dan bulan tanam terkunci agar tidak berubah tanpa sengaja.</div><div class="lbG2">' + ls.map(function (l) {
       return '<div><div class="muted">' + esc(l.name) + '</div><select id="beLy_' + l.id + '"><option value="">\u2014</option>' + l.items.map(function (x) { return '<option value="' + x.id + '"' + (b.ly && b.ly[l.id] === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>';
     }).join('') + '</div><div class="lbG"><div><div class="muted">Bulan tanam</div><input type="month" id="beTn" value="' + esc(b.tn || '') + '"></div><div><div class="muted">Umur</div><div id="beUm" style="min-height:2.5rem;display:flex;align-items:center">' + (HA.lyb.umur(b) || '\u2014') + '</div></div><div><div class="muted">&nbsp;</div><button class="btn" id="beUp" style="width:100%">Naik status</button></div></div>' + ((b.lyh && b.lyh.length) ? '<button class="btn sm" id="beLh" style="margin-top:8px">Riwayat status</button>' : '');
   }
   function openBlockEdit(b) {
     HA.pbStopForEdit(); if (HA.DM.closePanel) HA.DM.closePanel(); if (HA.closeLinePop) HA.closeLinePop();
-    HA.DM.bpFold = true;
+    HA.DM.bpFold = true; if (!HA.plUnKeep) HA.plUn = false; HA.plUnKeep = false;
     var sg = HzBlok.suggestDir(b.pts), inMap = S.view === 'lintasan' && !!HA.map;
     function dirStat(d) { try { var r = rowsFor(b, d, blkSp(b), +b.margin || 0); return r.n.toLocaleString('id-ID') + ' lajur · ' + Math.round(r.avg) + ' m'; } catch (e) { return ''; } }
     function dtText() {
@@ -855,13 +855,19 @@
     if (HA.lyb) {
       HA.lyb.all().forEach(function (l) { var e = $('beLy_' + l.id); if (e) e.onchange = function () { HA.lyb.set(b, l.id, e.value); live(); }; });
       if ($('beTn')) $('beTn').onchange = function () { b.tn = this.value || ''; $('beUm').textContent = HA.lyb.umur(b) || '\u2014'; live(); };
-      if ($('beLh')) $('beLh').onclick = function () { HA.onSheetClose = null; HA.lyb.hist(b, function () { openBlockEdit(b); if ($('beMo')) $('beMo').click(); }); };
+      if ($('beLh')) $('beLh').onclick = function () { HA.onSheetClose = null; HA.lyb.hist(b, function () { HA.plUnKeep = true; openBlockEdit(b); if ($('beMo')) $('beMo').click(); }); };
       if ($('beUp')) $('beUp').onclick = function () {
         var l = HA.lyb.by('status'), nx = l && HA.lyb.next(b, l), cur = HA.lyb.of(b, 'status');
         if (!l || !l.items.length) { toast('Isi dulu jenis status di menu Lapisan'); return; }
         if (!nx) { toast('Sudah di status terakhir'); return; }
         HA.askConfirm('Naik status blok ' + b.name + '?', (cur ? cur.name : '(kosong)') + ' \u2192 ' + nx.name + '. Bulan tanam/tebang diubah ke bulan ini.', 'Naik', function () { HA.lyb.set(b, 'status', nx.id); b.tn = HA.lyb.today().slice(0, 7); live(); openBlockEdit(b); if ($('beMo')) $('beMo').click(); });
       };
+    }
+    function plLock() {
+      var u = $('beUk'); if (!u) return; var lk = !u.checked;
+      HA.plUn = !lk;
+      HA.lyb.all().forEach(function (l) { var e = $('beLy_' + l.id); if (e) e.disabled = lk; });
+      ['beTn', 'beUp'].forEach(function (id) { var e = $(id); if (e) e.disabled = lk; });
     }
     function applyLock() {
       var lk = !!b.conf;
@@ -876,7 +882,7 @@
     $('beD2').onclick = function () { askConfirm('Hapus "' + b.name + '"?', 'Blok dihapus dari peta. Peta PDF tidak terpengaruh.', 'Hapus', function () { var i = blocksList().indexOf(b); if (i >= 0) blocksList().splice(i, 1); HzBlok.cache.del(bid(b)); saveSettings(); closeBlockPop(); closeSheet(); drawBlocks(); drawRows(); if (S.view === 'data') renderData(); }); };
     $('beX').onclick = function () { closeSheet(); if (S.view === 'data') renderData(); };
     HA.onSheetClose = function () { HA.DM.bpFold = false; applyFold(); pbClear(); };
-    applyLock(); pbRefresh();
+    applyLock(); if ($('beUk')) { $('beUk').checked = !!HA.plUn; $('beUk').onchange = plLock; plLock(); } pbRefresh();
     if (S.view === 'lintasan' && HA.map) { if (!HA.DM.pop) openBlockPop(b); else applyFold(); setTimeout(function () { fitBlockVisible(b, true); }, 80); }
   }
   // ---------- deteksi blok dari peta PDF ----------

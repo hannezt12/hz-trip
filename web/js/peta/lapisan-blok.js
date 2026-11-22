@@ -112,10 +112,12 @@
     return m < 0 ? '' : m + ' bln';
   }
   function txt(b) {
-    var a = [];
-    all().forEach(function (l) { var it = of(b, l.id); if (it) a.push(l.mode === 'sym' ? l.name + ' ' + it.name : it.name); });
-    var u = umur(b); if (u) a.push('umur ' + u);
-    return a.join(' · ');
+    var a = [], v = of(b, 'varietas'), s = of(b, 'status');
+    if (v) a.push('V_' + v.name);
+    if (s) a.push(s.name);
+    var u = umur(b); if (u) a.push(u.replace(' bln', ' bulan'));
+    all().forEach(function (l) { if (l.id === 'varietas' || l.id === 'status') return; var it = of(b, l.id); if (it) a.push(it.name); });
+    return a.join('-');
   }
   function nextItem(b, lap) {
     var cur = b.ly && b.ly[lap.id], ix = -1; lap.items.forEach(function (x, i) { if (x.id === cur) ix = i; });
@@ -314,7 +316,7 @@
         var ids = Object.keys(st.sel).filter(function (k) { return st.sel[k]; }); if (!ids.length) { toast('Pilih blok dulu'); return; }
         var bs = HA.blocksList().filter(function (b) { return st.sel[b.id]; }), L2 = lap();
         var msg = st.act === 'up' ? bs.length + ' blok naik satu tingkat pada ' + L2.name + '.' : bs.length + ' blok diatur ke ' + (st.item ? itemBy(L2, st.item).name : 'kosong') + ' pada ' + L2.name + '.';
-        HA.askConfirm('Terapkan?', msg, 'Terapkan', function () {
+        HA.askConfirm('Ubah ' + bs.length + ' blok?', msg, 'Terapkan', function () {
           var n = 0, skip = 0;
           bs.forEach(function (b) {
             if (st.act === 'up') { var nx = nextItem(b, L2); if (!nx) { skip++; return; } if (setItem(b, L2.id, nx.id)) { n++; if (L2.id === 'status') b.tn = today().slice(0, 7); } }
@@ -464,7 +466,7 @@
     var h = (b.lyh || []).slice().reverse();
     openSheet('<div class="grab"></div><div class="bth"><div class="st">RIWAYAT STATUS \u00B7 BLOK ' + esc(String(b.name)).toUpperCase() + '</div><button class="btn pri" id="rhX">Tutup</button></div>' +
       (h.length ? '<div class="lbList">' + h.map(function (x) { var l = lapBy(x.l), it = l && itemBy(l, x.i); return '<div class="lbRow" style="min-height:2.75rem;align-items:center"><span class="muted" style="width:6.5rem;flex:none">' + esc(x.d) + '</span><span><b>' + esc(l ? l.name : x.l) + '</b>: ' + esc(it ? it.name : 'dikosongkan') + (x.jn ? ' <span class="muted">\u00B7 tebang ' + x.jn + (x.um !== '' && x.um != null ? ' \u00B7 umur ' + x.um + ' bln' : '') + '</span>' : '') + '</span></div>'; }).join('') + '</div>' : '<div class="muted" style="margin:10px 0">Belum ada perubahan.</div>') +
-      (((b.lyh || []).length && b.lyh[b.lyh.length - 1].ps !== undefined) ? '<button class="btn" id="rhUn" style="width:100%;margin-top:8px">Urungkan perubahan terakhir</button>' : '') +
+      (((b.lyh || []).length && b.lyh[b.lyh.length - 1].ps !== undefined) ? '<button class="btn" id="rhUn"' + (HA.plUn ? '' : ' disabled') + ' style="width:100%;margin-top:8px">Urungkan perubahan terakhir</button>' + (HA.plUn ? '' : '<div class="muted">Terkunci. Buka kunci di Edit blok > Lainnya.</div>') : '') +
       (b.tn ? '<div class="muted" style="margin-top:8px">Bulan tanam/tebang terakhir: ' + esc(b.tn) + '</div>' : ''));
     $('rhX').onclick = function () { if (back) back(); else closeSheet(); };
     if ($('rhUn')) $('rhUn').onclick = function () { if (undoLast(b)) { toast('Perubahan terakhir diurungkan'); hist(b, back); } };

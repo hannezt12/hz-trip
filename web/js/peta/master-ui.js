@@ -229,7 +229,7 @@
   // ---------- cetak (drawer > Cetak > Master) ----------
   function ribu(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
   function fsNum(v) { var l = { s: 5, m: 7.5, l: 11 }[v]; if (l) return l; var n = parseFloat(v); return isFinite(n) ? n : null; }
-  var PS = { sel: null, fmt: 'pdf', map: true, list: false, title: '', fs: 'a', pos: 'c', luas: (function () { try { return localStorage.getItem('hz_pmluas') !== '0'; } catch (e) { return true; } })() };
+  var PS = { sel: null, fmt: 'pdf', map: true, list: false, title: '', fs: (function () { try { var v = localStorage.getItem('hz_pmfs'); return v && isFinite(parseFloat(v)) ? parseFloat(v) : 'a'; } catch (e) { return 'a'; } })(), pos: 'c', luas: (function () { try { return localStorage.getItem('hz_pmluas') !== '0'; } catch (e) { return true; } })() };
   function ktPanel() {
     var k = ktCfg(), h = '<div class="h">KETERANGAN (lajur tabel di kanan peta)</div><label><input type="checkbox" id="pmKt"' + (k.on ? ' checked' : '') + '> Tampilkan lajur keterangan (kertas dilebarkan ke kanan)</label>';
     if (k.on) {
@@ -258,6 +258,7 @@
     };
     $('sheet').querySelectorAll('[data-kc]').forEach(function (e) { e.onchange = function () { k.cols[e.getAttribute('data-kc')] = e.checked; saveSettings(); }; });
   }
+  function pdOpen(k) { return PS.open && PS.open[k] ? ' open' : ''; }
   function printPanel() {
     var ms = masters(); ms.forEach(function (m, i) { if (m.id == null) m.id = Date.now() + i; });
     if (!mById(PS.sel)) PS.sel = ms.length ? ms[0].id : null;
@@ -269,11 +270,11 @@
         return '<label><input type="radio" name="pmSel" value="' + esc(String(x.id)) + '"' + (String(x.id) === String(PS.sel) ? ' checked' : '') + '> ' + esc(x.name) + ' <span class="muted">· ' + n + ' blok · ' + fmtHa(haOf(mm.in.concat(mm.man))) + ' ha' + (mm.pend.length ? ' · ' + mm.pend.length + ' perlu diatur' : '') + '</span></label>';
       }).join('') +
         '<div class="h">FORMAT (pilih satu)</div><div class="seg" id="pmFmt"><button data-f="pdf"' + (PS.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-f="kml"' + (PS.fmt === 'kml' ? ' class="on"' : '') + '>KML</button><button data-f="data"' + (PS.fmt === 'data' ? ' class="on"' : '') + '>Data blok</button></div>' +
-        (PS.fmt === 'pdf' ? '<div class="h">ISI PDF</div><label><input type="checkbox" id="pmMap"' + (PS.map ? ' checked' : '') + '> Peta (satu lembar, ber-geo)</label><label><input type="checkbox" id="pmLuas"' + (PS.luas ? ' checked' : '') + '> Tampilkan luas di peta</label><label><input type="checkbox" id="pmList"' + (PS.list ? ' checked' : '') + '> Daftar blok lengkap</label>' +
-          (HA.lyb && (HA.lyb.all().some(function (l) { return l.items.length; }) || (HA.obj && HA.obj.objs().length)) ? '<div class="h">LAPISAN BLOK (layer PDF)</div>' + HA.lyb.all().filter(function (l) { return l.items.length; }).map(function (l) { return '<label><input type="checkbox" data-lyo="' + l.id + '"' + (l.on ? ' checked' : '') + '> ' + esc(l.name) + '</label>'; }).join('') + (HA.obj && HA.obj.objs().length ? '<label><input type="checkbox" data-lyo="__obj"' + (HA.obj.on() ? ' checked' : '') + '> Objek (' + HA.obj.objs().length + ')</label>' : '') : '') +
-          ktPanel() +
+        (PS.fmt === 'pdf' ? '<details data-pd="isi"' + pdOpen('isi') + '><summary>ISI PDF</summary><label><input type="checkbox" id="pmMap"' + (PS.map ? ' checked' : '') + '> Peta (satu lembar, ber-geo)</label><label><input type="checkbox" id="pmLuas"' + (PS.luas ? ' checked' : '') + '> Tampilkan luas di peta</label><label><input type="checkbox" id="pmList"' + (PS.list ? ' checked' : '') + '> Daftar blok lengkap</label></details>' +
+          (HA.lyb && (HA.lyb.all().some(function (l) { return l.items.length; }) || (HA.obj && HA.obj.objs().length)) ? '<details data-pd="lap"' + pdOpen('lap') + '><summary>LAPISAN BLOK (layer PDF)</summary>' + HA.lyb.all().filter(function (l) { return l.items.length; }).map(function (l) { return '<label><input type="checkbox" data-lyo="' + l.id + '"' + (l.on ? ' checked' : '') + '> ' + esc(l.name) + '</label>'; }).join('') + (HA.obj && HA.obj.objs().length ? '<label><input type="checkbox" data-lyo="__obj"' + (HA.obj.on() ? ' checked' : '') + '> Objek (' + HA.obj.objs().length + ')</label>' : '') + '</details>' : '') +
+          '<details data-pd="kt"' + pdOpen('kt') + '><summary>KETERANGAN, KOLOM, GARIS DAN HALO</summary>' + ktPanel() + '</details>' +
           '<div class="h">JUDUL</div><input type="text" id="pmTtl" maxlength="60" placeholder="Kosong = nama master" value="' + esc(PS.title) + '" style="width:100%">' +
-          '<div class="h">UKURAN TEKS NO BLOK (pt)</div><div class="row" style="gap:6px"><button class="btn" id="pmFm" style="width:3rem">−</button><input type="number" id="pmFn" min="1" max="30" step="0.5" inputmode="decimal" placeholder="Otomatis" value="' + (fsNum(PS.fs) != null ? fsNum(PS.fs) : '') + '" style="flex:1;text-align:center"><button class="btn" id="pmFp" style="width:3rem">+</button><button class="btn' + (fsNum(PS.fs) == null ? ' on' : '') + '" id="pmFa">Otomatis</button></div><div class="muted" style="margin-top:2px">Luas ikut ukuran ini, tampil di bawah nomor.</div>' +
+          '<div class="h">UKURAN TEKS NO BLOK (pt)</div><input type="number" id="pmFn" min="1" max="30" step="0.5" inputmode="decimal" placeholder="Otomatis (kosong)" value="' + (fsNum(PS.fs) != null ? fsNum(PS.fs) : '') + '" style="width:100%;text-align:center"><div class="muted" style="margin-top:2px">Kosong = otomatis. Pilihan terakhir tersimpan. Luas ikut ukuran ini.</div>'+
           ''
           : PS.fmt === 'data' ? '<div class="muted" style="margin-top:6px">Satu berkas ringan (Zip berisi .hzblok, tanpa gambar): blok Terkonfirmasi di dalam master ini. Penerima membukanya di HZ Trip; hanya blok baru yang ditambahkan.</div>' : '<div class="muted" style="margin-top:6px">KML berisi bentuk dan posisi blok serta batas master, tanpa luasan.</div>') +
         '</div>' +
@@ -284,6 +285,7 @@
         : '<div class="card muted" style="margin-top:6px">Belum ada master. Buat di Data peta > Master: gambar poligon kawasan, lalu kembali ke sini untuk mencetak.</div>') +
       '<button class="btn" id="pmX" style="width:100%;margin-top:8px">Tutup</button>');
     $('pmX').onclick = closeSheet;
+    $('sheet').querySelectorAll('details[data-pd]').forEach(function (d) { d.ontoggle = function () { (PS.open = PS.open || {})[d.getAttribute('data-pd')] = d.open; }; });
     ktWire(printPanel); tplWire(m);
     $('pmMode').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-m]'); if (!b) return; var md = b.getAttribute('data-m'); if (md === 'trip') { closeSheet(); HA.openPrint({ day: S.hDay }); } else if (md === 'laporan' && HA.openLaporan) { closeSheet(); HA.openLaporan(); } };
     if (!ms.length) return;
@@ -293,13 +295,8 @@
     if ($('pmTtl')) {
       $('pmTtl').oninput = function () { PS.title = this.value; };
       (function () {
-        var inp = $('pmFn'), au = $('pmFa');
-        function setF(v) { if (v == null) { PS.fs = 'a'; inp.value = ''; au.classList.add('on'); HA.toast('Ukuran teks: otomatis'); return; } v = Math.max(1, Math.min(30, Math.round(v * 2) / 2)); PS.fs = v; inp.value = v; au.classList.remove('on'); HA.toast('Ukuran teks ' + String(v).replace('.', ',') + ' pt'); }
-        $('pmFm').onclick = function () { setF((fsNum(PS.fs) != null ? fsNum(PS.fs) : 6) - 0.5); };
-        $('pmFp').onclick = function () { setF((fsNum(PS.fs) != null ? fsNum(PS.fs) : 6) + 0.5); };
-        au.onclick = function () { setF(null); };
-        inp.onchange = function () { var v = parseFloat(String(this.value).replace(',', '.')); setF(isFinite(v) ? v : null); };
-      })();
+        $('pmFn').onchange = function () { var v = parseFloat(String(this.value).replace(',', '.')); if (isFinite(v)) { v = Math.max(1, Math.min(30, Math.round(v * 2) / 2)); PS.fs = v; this.value = v; } else { PS.fs = 'a'; this.value = ''; } try { localStorage.setItem('hz_pmfs', String(PS.fs)); } catch (e) {} };
+        })();
     }
     if ($('pmPrev')) $('pmPrev').onclick = function () {
       if (!PS.map) { toast('Centang Peta untuk mengatur tata letak'); return; }
