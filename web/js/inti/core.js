@@ -247,6 +247,7 @@
 
   // Tombol back Android (dipanggil dari MainActivity): true = sudah ditangani di halaman.
   window.hzBack = function () {
+    if (HA.layBack && HA.layBack()) return true;
     if (HA.ED && HA.ED.isOpen && HA.ED.isOpen() && !$('sheet').classList.contains('on')) { HA.ED.back(); return true; }
     if ($('sheet').classList.contains('on')) {
       var bk = null; ['shBk', 'mpX', 'btR', 'ldBk', 'lmX', 'lbX', 'lyBk', 'lqX', 'obBk', 'dlX', 'rnX', 'tpBack', 'rhX'].some(function (id) { var e = $(id); if (e && $('sheet').contains(e) && !e.disabled) { bk = e; return true; } });

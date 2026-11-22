@@ -990,3 +990,12 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 details[data-pd]{margin-top:8px;border:1px solid var(--line,#8884);border-radius:10px;padding:0 10px}
 details[data-pd]>summary{min-height:44px;display:flex;align-items:center;font-weight:700;font-size:.8rem;letter-spacing:.04em;cursor:pointer}
 details[data-pd][open]{padding-bottom:8px}
+.lyps{flex:1;min-width:0;display:flex}.lyps button{flex:1}
+.lyp{touch-action:none;margin:0 auto;background:#fff;box-shadow:0 0 0 1px #777}
+.lyw{touch-action:none}
+.lyf{position:absolute;box-sizing:border-box;touch-action:none;outline:1px dashed #2e7dff88}
+.lyf canvas{width:100%;height:100%;display:block;pointer-events:none}
+.lyf.on{outline:2.5px solid #2e7dff}
+.lyf span{position:absolute;left:0;top:0;font-size:9px;background:#2e7dff;color:#fff;padding:0 3px;pointer-events:none;opacity:.85;max-width:100%;overflow:hidden;white-space:nowrap}
+.lyf.lyMap{outline-color:#7a8}.lyf.lyMap span{background:#7a8}
+.lyhint{padding:6px 10px max(env(safe-area-inset-bottom),64px);font-size:.75rem;background:#262626;color:#cfcfcf}
