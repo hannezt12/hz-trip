@@ -54,18 +54,20 @@
   function btW() { var v = +S.settings.btW; return v > 0 ? v : 1.5; }
   function bulanOf(b) { return b && b.tn && /^\d{4}-\d{2}$/.test(b.tn) ? +b.tn.slice(5, 7) : 0; }
   function btOpen() {
+    var wOn = btOn(), wW = btW(), wc = []; for (var q = 1; q <= 12; q++) wc.push(bulanCol(q));
+    var oc = wc.slice(), oOn = wOn, oW = wW;
+    function changed() { return wOn !== oOn || wW !== oW || wc.join() !== oc.join(); }
     var cnt = {}; HA.blocksList().forEach(function (b) { var m = bulanOf(b); if (m) cnt[m] = (cnt[m] || 0) + 1; });
-    openSheet('<div class="grab"></div><div class="bth"><div class="st">BULAN TANAM</div><button class="btn pri" id="btX">Selesai</button></div>' +
+    openSheet('<div class="grab"></div><div class="bth"><button class="btn" id="btC">Batal</button><div class="st" style="flex:1;text-align:center">BULAN TANAM</div><button class="btn pri" id="btX">Simpan</button></div>' +
       '<div class="muted" style="margin:4px 0 8px">Satu warna per bulan (tanpa tahun). Warna ini dipakai sebagai garis tepi blok di cetak Master dan sebagai warna bulan di Laporan Tahunan. Bulan tanam blok diatur di Edit blok (blok RC: bulan tebang terakhir).</div>' +
-      '<label style="display:block"><input type="checkbox" id="btOn"' + (btOn() ? ' checked' : '') + '> Ikut cetak Master (garis tepi menurut bulan tanam)</label>' +
-      '<div class="h" style="margin-top:10px">TEBAL GARIS TEPI (pt)</div><input type="number" id="btW" min="0.5" max="8" step="0.5" inputmode="decimal" value="' + btW() + '" style="width:100%">' +
-      '<div class="h" style="margin-top:10px">WARNA BULAN</div><div class="lbList">' + BN.map(function (nm, i) { return '<label class="lbRow" style="min-height:2.75rem;align-items:center;gap:10px"><input type="color" data-n="' + (i + 1) + '" value="' + bulanCol(i + 1) + '"><span style="flex:1">' + nm + '</span><span class="muted">' + (cnt[i + 1] || 0) + ' blok</span></label>'; }).join('') + '</div>' +
-      '<button class="btn" id="btR" style="width:100%;margin-top:8px">Kembalikan warna awal</button>');
-    $('btX').onclick = home;
-    $('btOn').onchange = function () { S.settings.btOn = this.checked; save(); };
-    $('btW').onchange = function () { var v = Math.max(0.5, Math.min(8, parseFloat(String(this.value).replace(',', '.')) || 1.5)); S.settings.btW = v; this.value = v; save(); };
-    $('sheet').querySelectorAll('input[type=color][data-n]').forEach(function (e) { e.onchange = function () { var a = (S.settings.bulanCol || BC0).slice(); a[+e.getAttribute('data-n') - 1] = e.value; S.settings.bulanCol = a; save(); }; });
-    $('btR').onclick = function () { S.settings.bulanCol = null; save(); btOpen(); };
+      '<label style="display:block"><input type="checkbox" id="btOn"' + (wOn ? ' checked' : '') + '> Ikut cetak Master (garis tepi menurut bulan tanam)</label>' +
+      '<div class="h" style="margin-top:10px">TEBAL GARIS TEPI (pt)</div><input type="number" id="btW" min="0.5" max="8" step="0.5" inputmode="decimal" value="' + wW + '" style="width:100%">' +
+      '<div class="h" style="margin-top:10px">WARNA BULAN</div><div class="lbList">' + BN.map(function (nm, i) { return '<label class="lbRow" style="min-height:2.75rem;align-items:center;gap:10px"><input type="color" data-n="' + (i + 1) + '" value="' + wc[i] + '"><span style="flex:1">' + nm + '</span><span class="muted">' + (cnt[i + 1] || 0) + ' blok</span></label>'; }).join('') + '</div>' );
+    $('btC').onclick = function () { if (!changed()) { home(); return; } HA.askConfirm('Buang perubahan?', 'Perubahan warna dan tebal garis belum disimpan.', 'Buang', home); };
+    $('btX').onclick = function () { S.settings.btOn = wOn; S.settings.btW = wW; S.settings.bulanCol = wc.slice(); save(); home(); };
+    $('btOn').onchange = function () { wOn = this.checked; };
+    $('btW').onchange = function () { var v = Math.max(0.5, Math.min(8, parseFloat(String(this.value).replace(',', '.')) || 1.5)); wW = v; this.value = v; };
+    $('sheet').querySelectorAll('input[type=color][data-n]').forEach(function (e) { e.onchange = function () { wc[+e.getAttribute('data-n') - 1] = e.value; }; });
   }
 
   function all() {

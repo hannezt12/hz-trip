@@ -251,7 +251,7 @@
     if (HA.idBack && HA.idBack()) return true;
     if (HA.ED && HA.ED.isOpen && HA.ED.isOpen() && !$('sheet').classList.contains('on')) { HA.ED.back(); return true; }
     if ($('sheet').classList.contains('on')) {
-      var bk = null; ['shBk', 'mpX', 'btR', 'ldBk', 'lmX', 'lbX', 'lyBk', 'lqX', 'obBk', 'dlX', 'rnX', 'tpBack', 'rhX'].some(function (id) { var e = $(id); if (e && $('sheet').contains(e) && !e.disabled) { bk = e; return true; } });
+      var bk = null; ['shBk', 'mpX', 'btC', 'ldBk', 'lmX', 'lbX', 'lyBk', 'lqX', 'obBk', 'dlX', 'rnX', 'tpBack', 'rhX'].some(function (id) { var e = $(id); if (e && $('sheet').contains(e) && !e.disabled) { bk = e; return true; } });
       if (bk) bk.click(); else closeSheet();
       return true;
     }
