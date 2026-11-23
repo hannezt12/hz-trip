@@ -762,6 +762,14 @@
       }
       var bwPt = opts.bw ? opts.bw * 0.2 : 0.6;
       function rgb(hex) { var h = String(hex || '#888888').replace('#', ''); if (h.length !== 6) h = '888888'; return f2(parseInt(h.slice(0, 2), 16) / 255) + ' ' + f2(parseInt(h.slice(2, 4), 16) / 255) + ' ' + f2(parseInt(h.slice(4, 6), 16) / 255); }
+      var HSP = 0; if (HA.lyb) { var shs = []; list.forEach(function (b) { var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; b.pts.forEach(function (p) { var vx = X(p[1]), vy = Y(p[0]); x0 = Math.min(x0, vx); x1 = Math.max(x1, vx); y0 = Math.min(y0, vy); y1 = Math.max(y1, vy); }); shs.push(Math.min(x1 - x0, y1 - y0)); }); shs.sort(function (a, b) { return a - b; }); HSP = shs.length ? Math.max(1.8, shs[Math.floor(shs.length / 2)] / 8) : 0; }
+      list.forEach(function (b) {
+        lapA.forEach(function (lp) {
+          if (lp.mode !== 'fill') return; var li = HA.lyb.of(b, lp.id); if (!li) return;
+          (lapUsed[lp.id] = lapUsed[lp.id] || {})[li.id] = 1;
+          c.push(L('Lapisan: ' + lp.name, HA.lyb.fillPdf(li, b.pts.map(function (p) { return [X(p[1]), Y(p[0])]; }), '', HSP)));
+        });
+      });
       ((sh ? sh.items : opts.items) || []).forEach(function (it) {
         var path = '', k; it.pts.forEach(function (p, i) { path += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); });
         if (it.t === 'pt') { var px = X(it.pts[0][1]), py = Y(it.pts[0][0]); c.push(L('Kategori: ' + (it.catName || 'tanda'), 'q ' + rgb(it.col) + ' rg ' + f2(px - 1.5) + ' ' + f2(py - 1.5) + ' 3 3 re f Q')); }
@@ -802,14 +810,8 @@
       c.push('0 0 0 RG 0 0 0 rg ' + f2(bwPt) + ' w');
       var ttl = asc((opts.title || m.name) + (sh && sh.name ? ' - ' + sh.name : '')), tw = ttl.length * 13 * 0.56;
       var ttlOps = 'BT /F2 13 Tf ' + f2(PW / 2 - tw / 2) + ' ' + f2(PH - 17) + ' Td (' + pe(ttl) + ') Tj ET';
-      var HSP = 0; if (HA.lyb) { var shs = []; list.forEach(function (b) { var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; b.pts.forEach(function (p) { var vx = X(p[1]), vy = Y(p[0]); x0 = Math.min(x0, vx); x1 = Math.max(x1, vx); y0 = Math.min(y0, vy); y1 = Math.max(y1, vy); }); shs.push(Math.min(x1 - x0, y1 - y0)); }); shs.sort(function (a, b) { return a - b; }); HSP = shs.length ? Math.max(1.8, shs[Math.floor(shs.length / 2)] / 8) : 0; }
       list.forEach(function (b) {
         var s = ''; b.pts.forEach(function (p, i) { s += f2(X(p[1])) + ' ' + f2(Y(p[0])) + (i ? ' l ' : ' m '); });
-        lapA.forEach(function (lp) {
-          if (lp.mode !== 'fill') return; var li = HA.lyb.of(b, lp.id); if (!li) return;
-          (lapUsed[lp.id] = lapUsed[lp.id] || {})[li.id] = 1;
-          c.push(L('Lapisan: ' + lp.name, HA.lyb.fillPdf(li, b.pts.map(function (p) { return [X(p[1]), Y(p[0])]; }), '/GS1', HSP)));
-        });
         if (!sh && opts.bt !== false && HA.lyb.btOn()) { var bm = HA.lyb.bulanOf(b); if (bm) c.push(L('Bulan tanam', 'q ' + s + 'h W n ' + rgbc(HA.lyb.bulanCol(bm)) + ' RG 1 j ' + f2(HA.lyb.btW() * 2) + ' w ' + s + 'h S Q')); }
         c.push(L('Tepi blok', s + 'h S'));
         var q = bbox(b.pts), bw = (q[3] - q[1]) * kx * sc, bh = (q[2] - q[0]) * ky * sc, nm = asc(b.name);

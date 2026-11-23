@@ -23,6 +23,7 @@
     });
     var BX0 = 1e18, BX1 = -1e18, BY0 = 1e18, BY1 = -1e18; G.forEach(function (g) { BX0 = Math.min(BX0, g.x0); BX1 = Math.max(BX1, g.x1); BY0 = Math.min(BY0, g.y0); BY1 = Math.max(BY1, g.y1); });
     var HS = (function () { var a = G.map(function (g) { return Math.min(g.x1 - g.x0, g.y1 - g.y0); }).sort(function (x, y) { return x - y; }); return Math.max(2, a[Math.floor(a.length / 2)] / 8); })();
+    var byId = {}; list.forEach(function (b) { byId[b.id] = b; });
     var ch = {}, hist = ['{}'], hi = 0, sel = {}, mode = 'tap', lay = { v: true, s: true, t: true }, V = { s: 1, tx: 0, ty: 0 }, rect = null;
     var el = document.createElement('div'); el.id = 'idEd'; el.className = 'idEd';
     el.innerHTML = '<div class="idh"><b class="idt">Isi data · ' + esc(m.name) + '</b><button class="btn sm" id="idBk">Tutup</button></div>' +
@@ -45,9 +46,9 @@
     function fit() { var w = C.clientWidth, h = C.clientHeight, s = Math.min((w - 16) / Math.max(1, BX1 - BX0), (h - 16) / Math.max(1, BY1 - BY0)); V.s = s; V.tx = (w - (BX1 - BX0) * s) / 2 - BX0 * s; V.ty = (h - (BY1 - BY0) * s) / 2 - BY0 * s; }
     function size() { var w = C.clientWidth, h = C.clientHeight; cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR); cv.style.width = w + 'px'; cv.style.height = h + 'px'; }
     var PC = {};
-    function pattern(pat, col) {
-      if (!pat || pat === 'none') return null; var T = Math.max(4, Math.min(48, Math.round(HS * V.s))), k = pat + col + T; if (PC[k] !== undefined) return PC[k];
-      var c = document.createElement('canvas'); c.width = c.height = T; var x = c.getContext('2d'); x.strokeStyle = col; x.fillStyle = col; x.lineWidth = Math.max(1, T / 9);
+    function pattern(pat, col, ps) {
+      if (!pat || pat === 'none') return null; var T = Math.max(4, Math.min(80, Math.round(HS * V.s * (ps > 0 ? ps : 1)))), k = pat + col + T; if (PC[k] !== undefined) return PC[k];
+      var c = document.createElement('canvas'); c.width = c.height = T; var x = c.getContext('2d'); x.strokeStyle = col; x.fillStyle = col; x.lineWidth = Math.max(1.2, T / 7);
       if (pat === 'd1' || pat === 'x') { x.beginPath(); x.moveTo(0, T); x.lineTo(T, 0); x.stroke(); }
       if (pat === 'd2' || pat === 'x') { x.beginPath(); x.moveTo(0, 0); x.lineTo(T, T); x.stroke(); }
       if (pat === 'h') { x.beginPath(); x.moveTo(0, T / 2); x.lineTo(T, T / 2); x.stroke(); }
@@ -58,7 +59,7 @@
     function sym(x, y, r, sy) {
       if (!sy) return; ctx.save(); ctx.lineWidth = Math.max(1.5, r * 0.35); ctx.strokeStyle = '#fff'; ctx.fillStyle = '#000';
       function dot(a, b) { ctx.beginPath(); ctx.arc(a, b, r * 0.3, 0, 7); ctx.stroke(); ctx.fill(); }
-      if (sy === 'P+') { ctx.strokeStyle = '#fff'; ctx.lineWidth = r * 0.7; ctx.beginPath(); ctx.moveTo(x - r * 0.6, y); ctx.lineTo(x + r * 0.6, y); ctx.moveTo(x, y - r * 0.6); ctx.lineTo(x, y + r * 0.6); ctx.stroke(); ctx.strokeStyle = '#d32f2f'; ctx.lineWidth = r * 0.4; ctx.stroke(); }
+      if (sy === 'P+') { ctx.strokeStyle = '#fff'; ctx.lineWidth = r * 0.5; ctx.beginPath(); ctx.moveTo(x - r * 0.42, y); ctx.lineTo(x + r * 0.42, y); ctx.moveTo(x, y - r * 0.42); ctx.lineTo(x, y + r * 0.42); ctx.stroke(); ctx.strokeStyle = '#d32f2f'; ctx.lineWidth = r * 0.3; ctx.stroke(); }
       else if (sy === 'R1') dot(x, y); else if (sy === 'R2') { dot(x - r * .45, y); dot(x + r * .45, y); } else if (sy === 'R3') { dot(x - r * .7, y); dot(x, y); dot(x + r * .7, y); }
       else if (sy === 'D4') { dot(x - r * .4, y - r * .4); dot(x + r * .4, y - r * .4); dot(x - r * .4, y + r * .4); dot(x + r * .4, y + r * .4); }
       else if (sy === 'D5') { dot(x - r * .5, y - r * .5); dot(x + r * .5, y - r * .5); dot(x, y); dot(x - r * .5, y + r * .5); dot(x + r * .5, y + r * .5); }
@@ -74,7 +75,7 @@
         var e = E[g.b.id], vi = lay.v && va ? HA.lyb.of(e, 'varietas') : null, si = lay.s && st ? HA.lyb.of(e, 'status') : null, mo = lay.t ? HA.lyb.bulanOf(e) : 0;
         ctx.beginPath(); g.q.forEach(function (p, i) { var X = p[0] * V.s + V.tx, Y = p[1] * V.s + V.ty; if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); }); ctx.closePath();
         ctx.fillStyle = vi ? (vi.col || '#999') : '#e8e2d0'; ctx.fill();
-        if (vi && vi.pat && vi.pat !== 'none') { var pt = pattern(vi.pat, '#00000066'); if (pt) { ctx.fillStyle = pt; ctx.fill(); } }
+        if (vi && vi.pat && vi.pat !== 'none') { var pt = pattern(vi.pat, vi.pc || '#000000', vi.ps); if (pt) { ctx.fillStyle = pt; ctx.fill(); } }
         if (sel[g.b.id]) { ctx.fillStyle = 'rgba(33,120,255,.35)'; ctx.fill(); }
         ctx.lineJoin = 'round'; ctx.strokeStyle = mo ? HA.lyb.bulanCol(mo) : '#555'; ctx.lineWidth = mo ? 3.5 : 0.8; if (pendSet[g.b.id]) ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]);
         if (sel[g.b.id]) { ctx.strokeStyle = '#1565c0'; ctx.lineWidth = 2; ctx.setLineDash([2, 2]); ctx.stroke(); ctx.setLineDash([]); }
@@ -87,7 +88,7 @@
     function inPoly(px, py, q) { var ins = false, i, j; for (i = 0, j = q.length - 1; i < q.length; j = i++) { if ((q[i][1] > py) !== (q[j][1] > py) && px < (q[j][0] - q[i][0]) * (py - q[i][1]) / (q[j][1] - q[i][1]) + q[i][0]) ins = !ins; } return ins; }
     function hit(sx, sy) { var wx = (sx - V.tx) / V.s, wy = (sy - V.ty) / V.s, i; for (i = G.length - 1; i >= 0; i--) { var g = G[i]; if (wx < g.x0 || wx > g.x1 || wy < g.y0 || wy > g.y1) continue; if (inPoly(wx, wy, g.q)) return g.b; } return null; }
     function info() {
-      $e('idGo').textContent = 'Isi data (' + nSel() + ')'; $e('idN').textContent = nSel() + ' dipilih dari ' + list.length + ' blok' + (mem.pend.length ? ' · garis putus = perbatasan belum diputuskan' : '');
+      $e('idGo').textContent = 'Isi data (' + nSel() + ')'; var one = nSel() === 1 ? byId[Object.keys(sel)[0]] : null; $e('idN').textContent = (one ? one.name + ' · ' + (HA.lyb.txt(one) || 'belum diisi') + ' · ' : '') + nSel() + ' dipilih dari ' + list.length + ' blok' + (mem.pend.length ? ' · garis putus = perbatasan belum diputuskan' : '');
     }
     function tables() {
       reff(); var D = HA.ktData(list.map(function (b) { return E[b.id]; }), { tabs: ['var', 'bt', 'st'] }), h = '';
@@ -137,27 +138,39 @@
     $e('idQb').onclick = function () { var q = $e('idQ').value.trim().toLowerCase(), n = 0; if (!q) return; list.forEach(function (b) { if (String(b.name).toLowerCase().indexOf(q) >= 0) { sel[b.id] = 1; n++; } }); info(); draw(); HA.toast(n + ' blok dipilih'); };
     $e('idNo').onclick = function () { sel = {}; info(); draw(); };
     function dlg(html, wire) { var q = document.createElement('div'); q.className = 'lyq'; q.innerHTML = '<div class="lyqc">' + html + '</div>'; el.appendChild(q); wire(q, function () { q.remove(); }); }
-    var byId = {}; list.forEach(function (b) { byId[b.id] = b; });
     $e('idGo').onclick = function () {
       if (!nSel()) { HA.toast('Pilih blok dulu'); return; }
-      var vSel = '__k';
+      var cur = { v: {}, s: {}, t: {} }, ids0 = Object.keys(sel);
+      ids0.forEach(function (id) { var b = byId[id], vv = (b.ly || {}).varietas || '', ss = (b.ly || {}).status || '', tt = b.tn || ''; cur.v[vv] = (cur.v[vv] || 0) + 1; cur.s[ss] = (cur.s[ss] || 0) + 1; cur.t[tt] = (cur.t[tt] || 0) + 1; });
+      function top(o) { var k = '', n = -1; Object.keys(o).forEach(function (x) { if (o[x] > n) { n = o[x]; k = x; } }); return k; }
+      var cv = top(cur.v), cs = top(cur.s), ct = top(cur.t), mixed = Object.keys(cur.v).length > 1 || Object.keys(cur.s).length > 1 || Object.keys(cur.t).length > 1;
+      var yNow = new Date().getFullYear(), tm = /^(\d{4})-(\d{2})$/.exec(ct || ''), tY = tm ? +tm[1] : yNow, tMo = tm ? +tm[2] : 0;
+      var vSel = cv || null, vT = false, sT = false, tT = false, MS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
       function vrow(val, name, it) { return '<button type="button" class="idpr" data-v="' + esc(val) + '">' + (it ? HA.lyb.prevSvg(va, it) : '<span class="idsw0"></span>') + '<span>' + esc(name) + '</span></button>'; }
-      var sopt = '<option value="__k">(tidak diubah)</option><option value="">(kosongkan)</option>' + (st ? st.items.map(function (x) { return '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>'; }).join('') : '');
-      dlg('<div class="st">ISI DATA ' + nSel() + ' BLOK</div><div class="h" style="margin-top:8px">VARIETAS</div><div class="idpl" id="fdVl">' + vrow('__k', '(tidak diubah)') + vrow('', '(kosongkan)') + (va ? va.items.map(function (x) { return vrow(x.id, x.name, x); }).join('') : '') + '</div><div class="h" style="margin-top:8px">STATUS TANAMAN</div><select id="fdS" style="width:100%">' + sopt + '</select><div class="h" style="margin-top:8px">BULAN TANAM</div><div class="row" style="gap:6px"><input type="month" id="fdT" style="flex:1;min-width:0"><label><input type="checkbox" id="fdTc"> kosongkan</label></div><div class="muted" style="margin:6px 0">Kolom yang tidak diubah dibiarkan seperti semula.</div><button class="btn pri" id="fdO" style="width:100%">Terapkan</button>', function (q, c) {
-        function mark() { q.querySelectorAll('.idpr').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-v') === vSel); }); } mark();
-        q.querySelector('#fdVl').onclick = function (e) { var b = e.target.closest && e.target.closest('.idpr'); if (!b) return; vSel = b.getAttribute('data-v'); mark(); };
+      var sopt = '<option value="">(kosongkan)</option>' + (st ? st.items.map(function (x) { return '<option value="' + esc(x.id) + '"' + (cs === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') : '');
+      var yopt = ''; for (var yy = yNow - 6; yy <= yNow; yy++) yopt += '<option value="' + yy + '"' + (yy === tY ? ' selected' : '') + '>' + yy + '</option>';
+      if (tY < yNow - 6) yopt = '<option value="' + tY + '" selected>' + tY + '</option>' + yopt;
+      var mb = ''; for (var mi = 1; mi <= 12; mi++) mb += '<button type="button" class="idmo" data-mo="' + mi + '"><i style="background:' + HA.lyb.bulanCol(mi) + '"></i>' + MS[mi - 1] + '</button>';
+      dlg('<div class="st">ISI DATA ' + nSel() + ' BLOK</div>' + (mixed ? '<div class="muted" style="margin-top:4px">Data blok beragam. Yang tampil: yang terbanyak.</div>' : '') + '<div class="h" style="margin-top:8px">VARIETAS</div><div class="idpl" id="fdVl">' + vrow('', '(kosongkan)') + (va ? va.items.map(function (x) { return vrow(x.id, x.name, x); }).join('') : '') + '</div><div class="h" style="margin-top:8px">STATUS TANAMAN</div><select id="fdS" style="width:100%">' + sopt + '</select><div class="h" style="margin-top:8px">BULAN TANAM</div><div class="row" style="gap:6px"><select id="fdY" style="flex:1;min-width:0">' + yopt + '</select><button type="button" class="btn sm" id="fdTc">Kosongkan</button></div><div class="idmg" id="fdM">' + mb + '</div><button class="btn pri" id="fdO" style="width:100%;margin-top:8px">Terapkan</button>', function (q, c) {
+        var tClr = false;
+        function mark() { q.querySelectorAll('.idpr').forEach(function (b) { b.classList.toggle('on', vSel !== null && b.getAttribute('data-v') === vSel); }); q.querySelectorAll('.idmo').forEach(function (b) { b.classList.toggle('on', !tClr && +b.getAttribute('data-mo') === tMo); }); } mark();
+        q.querySelector('#fdVl').onclick = function (e) { var b = e.target.closest && e.target.closest('.idpr'); if (!b) return; vSel = b.getAttribute('data-v'); vT = true; mark(); };
+        q.querySelector('#fdS').onchange = function () { sT = true; };
+        q.querySelector('#fdY').onchange = function () { tY = +this.value; if (tMo) tT = true; };
+        q.querySelector('#fdM').onclick = function (e) { var b = e.target.closest && e.target.closest('.idmo'); if (!b) return; tMo = +b.getAttribute('data-mo'); tClr = false; tT = true; mark(); };
+        q.querySelector('#fdTc').onclick = function () { tClr = true; tMo = 0; tT = true; mark(); };
         q.onclick = function (e) { if (e.target === q) c(); };
         q.querySelector('#fdO').onclick = function () {
-          var v = vSel, s = q.querySelector('#fdS').value, t = q.querySelector('#fdT').value, tc = q.querySelector('#fdTc').checked;
-          if (v === '__k' && s === '__k' && !t && !tc) { HA.toast('Belum ada yang dipilih'); return; }
+          var v = vSel, s = q.querySelector('#fdS').value, t = tClr ? '' : (tMo ? tY + '-' + ('0' + tMo).slice(-2) : '');
+          if (!vT && !sT && !tT) { HA.toast('Belum ada yang diubah'); return; }
           c(); var ids = Object.keys(sel);
           dlg('<div class="st">SIMPAN ' + ids.length + ' BLOK?</div><div class="muted" style="margin:8px 0">Data langsung tersimpan ke blok.</div><div class="idrow"><button class="btn" id="cfN">Batal</button><button class="btn pri" id="cfY">Simpan</button></div>', function (q2, c2) {
             q2.querySelector('#cfN').onclick = c2;
             q2.querySelector('#cfY').onclick = function () {
               c2(); var n = 0;
               ids.forEach(function (id) { var b = byId[id]; if (!b) return; var chg = false;
-                if (v !== '__k' && HA.lyb.set(b, 'varietas', v)) chg = true; if (s !== '__k' && HA.lyb.set(b, 'status', s)) chg = true;
-                if (tc) { if (b.tn) { delete b.tn; chg = true; } } else if (t && b.tn !== t) { b.tn = t; chg = true; }
+                if (vT && HA.lyb.set(b, 'varietas', v)) chg = true; if (sT && HA.lyb.set(b, 'status', s)) chg = true;
+                if (tT) { if (t) { if (b.tn !== t) { b.tn = t; chg = true; } } else if (b.tn) { delete b.tn; chg = true; } }
                 if (chg) n++; });
               HA.saveSettings(); sel = {}; HA.toast(n + ' blok disimpan'); refresh(); tabLater();
             };

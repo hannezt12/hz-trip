@@ -28,7 +28,7 @@
   // gambar simbol di tengah (cx,cy); sz = sisi kotak dasar (pt, sudah termasuk pengali); halo = tebal halo putih titik (0 = tanpa). PC (+) selalu berhalo.
   function symPdf(cx, cy, sz, sym, halo) {
     if (sym === 'P+') {
-      var a = sz * 0.46, w = sz * 0.2, h = sz * 0.1;
+      var a = sz * 0.31, w = sz * 0.17, h = sz * 0.09;
       var pth = n2(cx - a) + ' ' + n2(cy) + ' m ' + n2(cx + a) + ' ' + n2(cy) + ' l S ' + n2(cx) + ' ' + n2(cy - a) + ' m ' + n2(cx) + ' ' + n2(cy + a) + ' l S ';
       return 'q 1 G 2 J ' + n2(w + 2 * h) + ' w ' + pth + 'Q q 0.86 0.08 0.08 RG 0 J ' + n2(w) + ' w ' + pth + 'Q';
     }
@@ -40,7 +40,7 @@
   function symHtml(sym) {
     if (!isVec(sym)) return esc(sym || '-');
     var body;
-    if (sym === 'P+') body = '<path d="M-0.4 0H0.4M0 -0.4V0.4" stroke="#DB1414" stroke-width="0.2" fill="none"/>';
+    if (sym === 'P+') body = '<path d="M-0.28 0H0.28M0 -0.28V0.28" stroke="#DB1414" stroke-width="0.17" fill="none"/>';
     else body = dotsXY(sym).map(function (q) { return '<circle cx="' + q[0] + '" cy="' + q[1] + '" r="' + dotR(sym) + '" fill="currentColor"/>'; }).join('');
     return '<svg class="lbDice" viewBox="-0.75 -0.5 1.5 1" width="24" height="16">' + body + '</svg>';
   }
@@ -136,8 +136,8 @@
     if (item.col) s += 'q ' + (gs ? gs + ' gs ' : '') + rgb(item.col) + ' rg ' + pathOf(xy) + 'f Q\n';
     var pat = item.pat || 'none';
     if (pat !== 'none') {
-      var w = x1 - x0, h = y1 - y0, sp = hsp > 0 ? hsp : 4.2, ink = rgb(item.pc || '#000000'), k;
-      s += 'q ' + pathOf(xy) + 'W n ' + ink + ' RG ' + ink + ' rg ' + n2(Math.max(0.45, Math.min(1.1, sp / 9))) + ' w ';
+      var w = x1 - x0, h = y1 - y0, sp = Math.max(2.5, (hsp > 0 ? hsp : 4.2) * (item.ps > 0 ? item.ps : 1)), ink = rgb(item.pc || '#000000'), k;
+      s += 'q ' + pathOf(xy) + 'W n ' + ink + ' RG ' + ink + ' rg ' + n2(Math.max(0.7, Math.min(3.5, sp * 0.14))) + ' w ';
       if (pat === 'd1' || pat === 'x') for (k = -h; k <= w; k += sp) s += n2(x0 + k) + ' ' + n2(y0) + ' m ' + n2(x0 + k + h) + ' ' + n2(y1) + ' l S ';
       if (pat === 'd2' || pat === 'x') for (k = -h; k <= w; k += sp) s += n2(x0 + k) + ' ' + n2(y1) + ' m ' + n2(x0 + k + h) + ' ' + n2(y0) + ' l S ';
       if (pat === 'h') for (k = 0; k <= h; k += sp) s += n2(x0) + ' ' + n2(y0 + k) + ' m ' + n2(x1) + ' ' + n2(y0 + k) + ' l S ';
@@ -156,10 +156,10 @@
     if (l.mode === 'sym') return '<span class="lbSym">' + symHtml(it.sym) + '</span>';
     var id = 'lbp' + (++SV), pat = it.pat || 'none', ink = it.pc || '#000000', body = '';
     if (pat !== 'none') {
-      var ln = { d1: '<path d="M0 8L8 0" />', d2: '<path d="M0 0L8 8" />', x: '<path d="M0 8L8 0M0 0L8 8" />', h: '<path d="M0 4H8" />', v: '<path d="M4 0V8" />', dot: '<circle cx="4" cy="4" r="1" fill="' + ink + '" stroke="none"/>' }[pat];
-      body = '<defs><pattern id="' + id + '" width="8" height="8" patternUnits="userSpaceOnUse"><g stroke="' + ink + '" stroke-width="1">' + ln + '</g></pattern></defs><rect width="44" height="26" fill="url(#' + id + ')"/>';
+      var psz = 8 * (it.ps > 0 ? it.ps : 1), ln = { d1: '<path d="M0 8L8 0" />', d2: '<path d="M0 0L8 8" />', x: '<path d="M0 8L8 0M0 0L8 8" />', h: '<path d="M0 4H8" />', v: '<path d="M4 0V8" />', dot: '<circle cx="4" cy="4" r="1" fill="' + ink + '" stroke="none"/>' }[pat];
+      body = '<defs><pattern id="' + id + '" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="scale(' + (it.ps > 0 ? it.ps : 1) + ')"><g stroke="' + ink + '" stroke-width="' + (1 + 0.3 * Math.max(0, (it.ps || 1) - 1)) + '">' + ln + '</g></pattern></defs><rect width="44" height="26" fill="url(#' + id + ')"/>';
     }
-    return '<svg width="44" height="26" viewBox="0 0 44 26" class="lbSw"><rect width="44" height="26" fill="' + esc(it.col || '#888') + '" fill-opacity="0.75"/>' + body + '<rect width="44" height="26" fill="none" stroke="currentColor" stroke-opacity=".5"/></svg>';
+    return '<svg width="44" height="26" viewBox="0 0 44 26" class="lbSw"><rect width="44" height="26" fill="' + esc(it.col || '#888') + '" fill-opacity="1"/>' + body + '<rect width="44" height="26" fill="none" stroke="currentColor" stroke-opacity=".5"/></svg>';
   }
 
   // ---------- menu Lapisan ----------
@@ -238,6 +238,7 @@
       } else {
         h += '<div class="h" style="margin-top:10px">WARNA ISI</div><div class="lbQ">' + PAL.map(function (c) { return '<button type="button" class="lbC' + (d.col === c ? ' on' : '') + '" data-c="' + c + '" style="background:' + c + '" aria-label="' + c + '"></button>'; }).join('') + '<input type="color" id="ieC" value="' + esc(d.col) + '"></div>' +
           '<div class="h" style="margin-top:10px">POLA ARSIR</div><div class="lbQ">' + PATS.map(function (p) { return '<button type="button" class="btn sm' + (d.pat === p[0] ? ' pri' : '') + '" data-p="' + p[0] + '">' + p[1] + '</button>'; }).join('') + '</div>' +
+          '<div class="h" style="margin-top:10px">UKURAN ARSIR</div><div class="lbQ">' + [1, 1.5, 2, 3, 4, 5].map(function (n) { return '<button type="button" class="btn sm' + ((d.ps || 1) === n ? ' pri' : '') + '" data-ps="' + n + '">' + String(n).replace('.', ',') + '</button>'; }).join('') + '<input type="number" id="iePs" min="0.5" max="8" step="0.5" inputmode="decimal" value="' + (d.ps || 1) + '" style="width:72px;text-align:center"></div>' +
           '<div class="h" style="margin-top:10px">WARNA ARSIR</div><div class="lbQ">' + ['#000000', '#FFFFFF'].concat(PAL).map(function (c) { return '<button type="button" class="lbC' + (d.pc === c ? ' on' : '') + '" data-pc="' + c + '" style="background:' + c + '" aria-label="' + c + '"></button>'; }).join('') + '<input type="color" id="iePc" value="' + esc(d.pc) + '"></div>';
       }
       h += '<div class="h" style="margin-top:10px">CONTOH</div><div class="lbPv">' + prevSvg(l, d) + ' <b>' + esc(d.name || '(nama)') + '</b></div>';
@@ -256,6 +257,8 @@
       $('sheet').querySelectorAll('[data-c]').forEach(function (e) { e.onclick = function () { d.col = e.getAttribute('data-c'); keep(); }; });
       $('sheet').querySelectorAll('[data-pc]').forEach(function (e) { e.onclick = function () { d.pc = e.getAttribute('data-pc'); keep(); }; });
       $('sheet').querySelectorAll('[data-p]').forEach(function (e) { e.onclick = function () { d.pat = e.getAttribute('data-p'); keep(); }; });
+      $('sheet').querySelectorAll('[data-ps]').forEach(function (e) { e.onclick = function () { d.ps = parseFloat(e.getAttribute('data-ps')); keep(); }; });
+      if ($('iePs')) $('iePs').onchange = function () { var v = parseFloat(String(this.value).replace(',', '.')); d.ps = isFinite(v) ? Math.max(0.5, Math.min(8, v)) : 1; keep(); };
       if ($('ieC')) $('ieC').onchange = function () { d.col = this.value; keep(); };
       if ($('iePc')) $('iePc').onchange = function () { d.pc = this.value; keep(); };
       $('ieBk').onclick = function () { lapOpen(l.id); };

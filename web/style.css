@@ -1025,3 +1025,7 @@ details[data-pd][open]{padding-bottom:8px}
 .lyEd .lyp{position:relative;margin-left:0;margin-right:0;touch-action:none}
 .lyEd .lyhint{flex:0 0 10vh;box-sizing:border-box;padding:6px 10px 0!important;font-size:.72rem}
 .lyEd .lymsg{position:absolute;left:0;right:0;top:50%;text-align:center;z-index:3;pointer-events:none;color:#fff;background:rgba(0,0,0,.6);padding:8px}
+.idmg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}
+.idmo{display:flex;align-items:center;gap:6px;justify-content:center;min-height:40px;border:1px solid #8886;border-radius:8px;background:none;color:inherit;font:inherit}
+.idmo i{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid #0006}
+.idmo.on{border-color:#2e7dff;box-shadow:0 0 0 2px #2e7dff66}
