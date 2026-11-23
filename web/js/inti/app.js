@@ -189,6 +189,7 @@
     $('btnBatt').onclick = openBatt;
     $('btnBg').onclick = askBackground;
     $('btnPrint').onclick = function () { openPrint({ day: S.hMode === 'list' ? T.ymd(Date.now()) : S.hDay }); };
+    document.querySelectorAll('#drawer a[data-soon]').forEach(function (a) { a.onclick = function () { closeDrawer(); var t = a.getAttribute('data-soon'); HA.openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1">' + t.toUpperCase() + '</div><button class="btn pri" id="soonX">Tutup</button></div><div class="emptyBox"><div class="emptyIc"><svg viewBox="0 0 24 24" style="width:2.5rem;height:2.5rem;fill:var(--onpc);margin-top:1.25rem"><path d="M19 14V6c0-1.1-.9-2-2-2H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zm-9 1c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm13-6v11c0 1.1-.9 2-2 2H4v-2h17V9h2z"/></svg></div><b>Belum diisi</b><div class="muted">Bagian ' + t + ' disiapkan untuk perkiraan biaya per ha. Isinya menyusul.</div></div>'); HA.$('soonX').onclick = HA.closeSheet; }; });
     document.querySelectorAll('#drawer a[data-print]').forEach(function (a) { a.onclick = function () { closeDrawer(); openPrint({ day: S.hDay }); }; });
     $('mapChips').onclick = function (e) {
       var t = e.target; if (!t.getAttribute) return;

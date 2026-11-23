@@ -208,6 +208,7 @@
     srchWire(); stripWire();
     if ($('mapCal')) $('mapCal').onclick = openCal;
     $('katInfo').onclick = function () { if (KM.only) { KM.only = null; draw(); stripDraw(); toast('Semua kategori tampil'); } };
+    $('katLay').onclick = function () { S.dpTab = 'master'; HA.go('data'); };
     $('katSeg').onclick = function (e) {
       var r = e.target.getAttribute && e.target.getAttribute('data-r'); if (r === null || r === undefined) return;
       KM.range = r === '1'; KM.all = r === '2'; syncUi(); draw();
