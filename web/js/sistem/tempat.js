@@ -56,33 +56,8 @@
     });
     return b;
   }
-  HA.placeBtn = function (m) {
-    if (!m || !window.L || m._tpBtn) return;
-    var Ctl = L.Control.extend({
-      options: { position: 'bottomright' },
-      onAdd: function () {
-        var b = L.DomUtil.create('button', 'locbtn tpbtn leaflet-control');
-        b.type = 'button'; b.setAttribute('aria-label', 'Tampilkan Tempat (pagar virtual)');
-        b.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5" stroke-dasharray="3.2 3"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg><span>Tempat</span>';
-        L.DomEvent.disableClickPropagation(b);
-        b.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-        function sync() { b.classList.toggle('on', !!S.settings.showPlaces); }
-        b.onclick = function () {
-          S.settings.showPlaces = !S.settings.showPlaces;
-          HA.saveSettings(); sync(); HA.drawPlaces();
-          if (!S.settings.showPlaces) { HA.toast('Cincin Tempat disembunyikan'); return; }
-          var ps = places();
-          if (!ps.length) { HA.toast('Belum ada Tempat. Buat di Pengaturan > Tempat'); return; }
-          var bb = placesBounds();
-          if (bb && !m.getBounds().intersects(bb)) m.fitBounds(bb, { padding: [30, 30], maxZoom: 17 });
-          HA.toast(ps.length + ' Tempat ditampilkan');
-        };
-        m._tpBtn = b; sync();
-        return b;
-      }
-    });
-    new Ctl().addTo(m);
-  };
+  HA.placesFit = function (m) { var bb = placesBounds(); if (bb && !m.getBounds().intersects(bb)) m.fitBounds(bb, { padding: [30, 30], maxZoom: 17 }); };
+  HA.placeBtn = function () {};
 
   function here() {
     return new Promise(function (res, rej) {

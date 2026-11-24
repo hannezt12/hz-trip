@@ -1073,3 +1073,13 @@ input[type=checkbox],input[type=radio]{accent-color:var(--p)}
 .pkT{flex:1;min-width:0;display:flex;align-items:center;gap:0.5rem;min-height:3rem;background:var(--card2);border:0;border-radius:0.75rem;color:inherit;font:inherit;padding:0 0.75rem;text-align:left;cursor:pointer}
 .pkT b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pkAr{width:1rem;flex:none;color:var(--tx2)}
+
+/* v0.27.2 layar Lapisan */
+.idEd:not(.idv) .idvo,.idEd:not(.idv) .idcb{display:none!important}
+.idEd.idv .idb,.idEd.idv .idf,.idEd.idv .idev,.idEd.idv .idd{display:none}
+.idcb{gap:10px;padding:6px 10px;flex-wrap:wrap;align-items:center;font-size:.85rem}
+.idlg{display:flex;gap:10px;padding:4px 10px;flex-wrap:wrap;font-size:.75rem}
+.idlgi{display:inline-flex;align-items:center;gap:4px}.idlgi i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.idir{display:flex;gap:8px;align-items:center;padding:6px 10px;min-height:44px;border-top:1px solid #8884;font-size:.9rem}
+.idvf{display:flex;gap:8px;padding:6px 10px}
+.idEd.idv .idn{display:none}

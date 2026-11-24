@@ -7,7 +7,7 @@
   function esc(t) { return HA.esc(t); }
   function fh(v) { return v.toFixed(2).replace('.', ','); }
 
-  function open(m, back) {
+  function open(m, back, opts) {
     if (!HA.lyb || !HA.masterMembers) return;
     var mem = HA.masterMembers(m), list = mem.in.concat(mem.man, mem.pend), pendSet = {};
     mem.pend.forEach(function (b) { pendSet[b.id] = 1; });
@@ -24,12 +24,16 @@
     var BX0 = 1e18, BX1 = -1e18, BY0 = 1e18, BY1 = -1e18; G.forEach(function (g) { BX0 = Math.min(BX0, g.x0); BX1 = Math.max(BX1, g.x1); BY0 = Math.min(BY0, g.y0); BY1 = Math.max(BY1, g.y1); });
     var HS = (function () { var a = G.map(function (g) { return Math.min(g.x1 - g.x0, g.y1 - g.y0); }).sort(function (x, y) { return x - y; }); return Math.max(2, a[Math.floor(a.length / 2)] / 8); })();
     var byId = {}; list.forEach(function (b) { byId[b.id] = b; });
-    var ch = {}, hist = ['{}'], hi = 0, sel = {}, mode = 'tap', lay = { v: true, s: true, t: true }, V = { s: 1, tx: 0, ty: 0 }, rect = null;
-    var el = document.createElement('div'); el.id = 'idEd'; el.className = 'idEd';
-    el.innerHTML = '<div class="idh"><b class="idt">Isi data · ' + esc(m.name) + '</b><button class="btn sm" id="idBk">Tutup</button></div>' +
-      '<div class="idb"><div class="seg" id="idMd"><button data-m="tap" class="on">Ketuk</button><button data-m="area">Area</button></div><button class="btn sm" id="idBl">Belum diisi</button><input type="text" id="idQ" placeholder="Nama blok…" style="flex:1;min-width:0"><button class="btn sm" id="idQb">Pilih</button></div>' +
+    var ch = {}, hist = ['{}'], hi = 0, sel = {}, mode = 'tap', lay = { v: true, s: true, t: true }, view = !!(opts && opts.mode === 'lihat'), LS = S.settings.lihat || {}, fillM = LS.fill || 'var', V = { s: 1, tx: 0, ty: 0 }, rect = null;
+    var el = document.createElement('div'); el.id = 'idEd'; el.className = 'idEd' + (view ? ' idv' : '');
+    el.innerHTML = '<div class="idh"><b class="idt">' + (view ? 'Lapisan' : 'Isi data') + ' \u00b7 ' + esc(m.name) + '</b><button class="btn sm idvo" id="idPn" aria-label="Atur kombinasi lapisan">\u270E Lapisan</button><button class="btn sm" id="idBk">Tutup</button></div>' +
+      '<div class="idlv idcb" id="idCb" style="display:none"><div class="seg" id="idFs"><button data-f="var">Varietas</button><button data-f="umur">Umur</button><button data-f="none">Tanpa warna</button></div><label><input type="checkbox" id="idCs"> Status</label><label><input type="checkbox" id="idCt"> Bulan tanam</label></div>' +
+      '<div class="idlg idvo" id="idLg"></div>' +
+      '<div class="idb"><div class="seg" id="idMd"><button data-m="tap" class="on">Ketuk</button><button data-m="area">Area</button></div><button class="btn sm" id="idBl">Belum diisi</button><input type="text" id="idQ" placeholder="Nama blok…" style="flex:1;min-width:0"><button class="btn sm" id="idQb">Pilih</button>' + (opts && opts.mode ? '<button class="btn sm" id="idVw">Lihat</button>' : '') + '</div>' +
       '<div class="idc" id="idC"><canvas id="idCv"></canvas><div class="idn" id="idN"></div></div>' +
-      '<div class="idl"><label><input type="checkbox" id="idLv" checked> Varietas</label><label><input type="checkbox" id="idLs" checked> Status</label><label><input type="checkbox" id="idLt" checked> Bulan tanam</label></div>' +
+      '<div class="idir idvo" id="idIr"><span id="idIt" style="flex:1;min-width:0">Ketuk blok untuk melihat infonya</span><button class="btn sm" id="idPe" aria-label="Ubah data blok" style="display:none">\u270E</button></div>' +
+      '<div class="idvf idvo"><button class="btn pri" id="idEdt" style="flex:1">Isi data</button><button class="btn" id="idBg" style="flex:1">Bagikan</button></div>' +
+      '<div class="idl idev"><label><input type="checkbox" id="idLv" checked> Varietas</label><label><input type="checkbox" id="idLs" checked> Status</label><label><input type="checkbox" id="idLt" checked> Bulan tanam</label></div>' +
       '<div class="idf"><button class="btn sm" id="idNo">Kosongkan pilihan</button><button class="btn pri" id="idGo" style="flex:1">Isi data (0)</button></div>' +
       '<details class="idd"><summary>RINGKASAN (ha)</summary><div id="idT"></div></details>';
     document.body.appendChild(el);
@@ -72,9 +76,9 @@
       var cw = C.clientWidth, chh = C.clientHeight;
       G.forEach(function (g) {
         var sx0 = g.x0 * V.s + V.tx, sx1 = g.x1 * V.s + V.tx, sy0 = g.y0 * V.s + V.ty, sy1 = g.y1 * V.s + V.ty; if (sx1 < 0 || sy1 < 0 || sx0 > cw || sy0 > chh) return;
-        var e = E[g.b.id], vi = lay.v && va ? HA.lyb.of(e, 'varietas') : null, si = lay.s && st ? HA.lyb.of(e, 'status') : null, mo = lay.t ? HA.lyb.bulanOf(e) : 0;
+        var e = E[g.b.id], vi = fillM === 'var' && lay.v && va ? HA.lyb.of(e, 'varietas') : null, ub = fillM === 'umur' ? HA.lyb.umBucket(e) : -1, si = lay.s && st ? HA.lyb.of(e, 'status') : null, mo = lay.t ? HA.lyb.bulanOf(e) : 0;
         ctx.beginPath(); g.q.forEach(function (p, i) { var X = p[0] * V.s + V.tx, Y = p[1] * V.s + V.ty; if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); }); ctx.closePath();
-        ctx.fillStyle = vi ? (vi.col || '#999') : '#e8e2d0'; ctx.fill();
+        ctx.fillStyle = vi ? (vi.col || '#999') : (ub >= 0 ? HA.lyb.umCol(ub) : '#e8e2d0'); ctx.fill();
         if (vi && vi.pat && vi.pat !== 'none') { var pt = pattern(vi.pat, vi.pc || '#000000', vi.ps); if (pt) { ctx.fillStyle = pt; ctx.fill(); } }
         if (sel[g.b.id]) { ctx.fillStyle = 'rgba(33,120,255,.35)'; ctx.fill(); }
         ctx.lineJoin = 'round'; ctx.strokeStyle = mo ? HA.lyb.bulanCol(mo) : '#555'; ctx.lineWidth = mo ? 3.5 : 0.8; if (pendSet[g.b.id]) ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]);
@@ -87,7 +91,20 @@
     }
     function inPoly(px, py, q) { var ins = false, i, j; for (i = 0, j = q.length - 1; i < q.length; j = i++) { if ((q[i][1] > py) !== (q[j][1] > py) && px < (q[j][0] - q[i][0]) * (py - q[i][1]) / (q[j][1] - q[i][1]) + q[i][0]) ins = !ins; } return ins; }
     function hit(sx, sy) { var wx = (sx - V.tx) / V.s, wy = (sy - V.ty) / V.s, i; for (i = G.length - 1; i >= 0; i--) { var g = G[i]; if (wx < g.x0 || wx > g.x1 || wy < g.y0 || wy > g.y1) continue; if (inPoly(wx, wy, g.q)) return g.b; } return null; }
+    function legend() {
+      var h = '', i;
+      if (fillM === 'var' && va) va.items.forEach(function (x) { h += '<span class="idlgi">' + HA.lyb.prevSvg(va, x) + esc(x.name) + '</span>'; });
+      else if (fillM === 'umur') { var L = HA.lyb.umLabels(); for (i = 0; i < 5; i++) h += '<span class="idlgi"><i style="background:' + HA.lyb.umCol(i) + '"></i>' + esc(L[i]) + '</span>'; h += '<span class="idlgi"><i style="background:#e8e2d0"></i>belum ada</span>'; }
+      $e('idLg').innerHTML = h;
+    }
+    function irow() {
+      var ids = Object.keys(sel), b = ids.length === 1 ? byId[ids[0]] : null, t = $e('idIt'), pe = $e('idPe');
+      if (!view) return;
+      if (!b) { t.textContent = ids.length ? ids.length + ' blok dipilih' : 'Ketuk blok untuk melihat infonya'; pe.style.display = 'none'; return; }
+      var e = E[b.id], um = HA.lyb.umurM(e); t.innerHTML = '<b>' + esc(b.name) + '</b> \u00b7 ' + esc(HA.lyb.txt(e) || 'belum diisi') + (um >= 0 ? ' \u00b7 umur ' + um + ' bln' : ''); pe.style.display = '';
+    }
     function info() {
+      irow();
       $e('idGo').textContent = 'Isi data (' + nSel() + ')'; var one = nSel() === 1 ? byId[Object.keys(sel)[0]] : null; $e('idN').textContent = (one ? one.name + ' · ' + (HA.lyb.txt(one) || 'belum diisi') + ' · ' : '') + nSel() + ' dipilih dari ' + list.length + ' blok' + (mem.pend.length ? ' · garis putus = perbatasan belum diputuskan' : '');
     }
     function tables() {
@@ -122,7 +139,7 @@
     function up(e) {
       var p = pos(e); if (!ptr[e.pointerId]) return; delete ptr[e.pointerId]; if (!g0) return;
       if (g0.m === 'zoom') { if (np() < 2) { g0 = null; ptr = {}; } return; }
-      if (g0.m === 'tap' && !g0.moved) { var b = hit(p.x, p.y); if (b) { if (sel[b.id]) delete sel[b.id]; else sel[b.id] = 1; info(); draw(); } }
+      if (g0.m === 'tap' && !g0.moved) { var b = hit(p.x, p.y); if (b) { if (view) { var was = sel[b.id]; sel = {}; if (!was) sel[b.id] = 1; } else if (sel[b.id]) delete sel[b.id]; else sel[b.id] = 1; info(); draw(); } }
       else if (g0.m === 'area' && rect) {
         if (Math.abs(rect.x1 - rect.x0) < 6 && Math.abs(rect.y1 - rect.y0) < 6) { var b2 = hit(p.x, p.y); if (b2) { if (sel[b2.id]) delete sel[b2.id]; else sel[b2.id] = 1; } }
         else { var xa = (Math.min(rect.x0, rect.x1) - V.tx) / V.s, xb = (Math.max(rect.x0, rect.x1) - V.tx) / V.s, ya = (Math.min(rect.y0, rect.y1) - V.ty) / V.s, yb = (Math.max(rect.y0, rect.y1) - V.ty) / V.s; G.forEach(function (g) { if (g.cx >= xa && g.cx <= xb && g.cy >= ya && g.cy <= yb) sel[g.b.id] = 1; }); }
@@ -136,6 +153,18 @@
     ['v', 's', 't'].forEach(function (k) { $e('idL' + k).onchange = function () { lay[k] = this.checked; draw(); }; });
     $e('idBl').onclick = function () { var n = 0; list.forEach(function (b) { var e = E[b.id]; if (!HA.lyb.of(e, 'varietas') || !HA.lyb.of(e, 'status') || !HA.lyb.bulanOf(e)) { sel[b.id] = 1; n++; } }); info(); draw(); HA.toast(n ? n + ' blok belum lengkap dipilih' : 'Semua blok sudah lengkap'); };
     $e('idQb').onclick = function () { var q = $e('idQ').value.trim().toLowerCase(), n = 0; if (!q) return; list.forEach(function (b) { if (String(b.name).toLowerCase().indexOf(q) >= 0) { sel[b.id] = 1; n++; } }); info(); draw(); HA.toast(n + ' blok dipilih'); };
+    function applyV() { el.classList.toggle('idv', view); size(); fit(); draw(); }
+    function saveL() { S.settings.lihat = { fill: fillM, s: lay.s, t: lay.t }; HA.saveSettings(); }
+    function syncCb() { el.querySelectorAll('#idFs button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-f') === fillM); }); $e('idCs').checked = lay.s; $e('idCt').checked = lay.t; }
+    if (view) { lay.s = LS.s !== false; lay.t = LS.t !== false; syncCb(); legend(); }
+    $e('idPn').onclick = function () { var c = $e('idCb'); c.style.display = c.style.display === 'none' ? 'flex' : 'none'; };
+    $e('idFs').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-f]'); if (!b) return; fillM = b.getAttribute('data-f'); syncCb(); legend(); saveL(); draw(); };
+    $e('idCs').onchange = function () { lay.s = this.checked; saveL(); draw(); };
+    $e('idCt').onchange = function () { lay.t = this.checked; saveL(); draw(); };
+    $e('idPe').onclick = function () { $e('idGo').onclick(); };
+    $e('idEdt').onclick = function () { view = false; sel = {}; applyV(); info(); };
+    if ($e('idVw')) $e('idVw').onclick = function () { if (dirty()) { HA.toast('Simpan atau buang perubahan dulu'); return; } view = true; sel = {}; applyV(); info(); };
+    $e('idBg').onclick = function () { closeEd(); if (HA.printFor) HA.printFor(m); };
     $e('idNo').onclick = function () { sel = {}; info(); draw(); };
     function dlg(html, wire) { var q = document.createElement('div'); q.className = 'lyq'; q.innerHTML = '<div class="lyqc">' + html + '</div>'; el.appendChild(q); wire(q, function () { q.remove(); }); }
     $e('idGo').onclick = function () {
@@ -187,6 +216,7 @@
     HA.idBack = function () { if (!document.getElementById('idEd')) return false; var q = el.querySelector('.lyq'); if (q) { q.remove(); return true; } batal(); return true; };
     window.addEventListener('resize', function () { if (document.getElementById('idEd')) { size(); draw(); } });
     setTimeout(function () { size(); fit(); reff(); info(); paint(); tables(); }, 30);
+    window.__hzLihat = function () { return view; };
   }
   HA.isiData = open;
 })();

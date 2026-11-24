@@ -588,6 +588,7 @@
     });
   }
   HA.openPrintMaster = printPanel;
+  HA.printFor = function (m) { PS.sel = m.id; printPanel(); };
   HA.masterAtur = function (m, back) { return aturSheet(m, back); };
   HA.masterCetak = function () { return cetak.apply(this, arguments); };
   function cetak(m, fmt, opts, prev) {
