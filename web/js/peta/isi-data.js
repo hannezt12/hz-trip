@@ -46,7 +46,7 @@
       '<div class="idb idev"><div class="seg" id="idMd"><button data-m="tap" class="on">Ketuk</button><button data-m="area">Area</button></div><button class="btn sm" id="idBl">Belum diisi</button><input type="text" id="idQ" placeholder="Nama blok…" style="flex:1;min-width:0"><button class="btn sm" id="idQb">Pilih</button>' + (opts && opts.mode ? '<button class="btn sm" id="idVw">Lihat</button>' : '') + '</div>' +
       '<div class="idc" id="idC"><canvas id="idCv"></canvas><div class="idn" id="idN"></div>' +
       '<div class="idac idvo" id="idAc" style="display:none"><label><input type="checkbox" data-k="s"> Status</label><label><input type="checkbox" data-k="t"> Bulan tanam</label><label><input type="checkbox" data-k="n"> Nomor blok</label><label><input type="checkbox" data-k="j"> Jalan &amp; drainase</label></div>' +
-      '<div class="idtabs idvo" id="idTb"><button class="locbtn idtab" data-k="um" aria-label="Umur">' + ICO.um + '<i class="idtx" data-x="um">✕</i></button><button class="locbtn idtab" data-k="var" aria-label="Varietas">' + ICO.vr + '<i class="idtx" data-x="var">✕</i></button><button class="locbtn idtab" data-k="st" aria-label="Status">' + ICO.st + '<i class="idtx" data-x="st">✕</i></button></div>' +
+      '<div class="idtabs idvo" id="idTb"><button class="locbtn idtab" data-k="um" aria-label="Umur">' + ICO.um + '<i class="idtx" data-x="um"></i></button><button class="locbtn idtab" data-k="var" aria-label="Varietas">' + ICO.vr + '<i class="idtx" data-x="var"></i></button><button class="locbtn idtab" data-k="st" aria-label="Status">' + ICO.st + '<i class="idtx" data-x="st"></i></button></div>' +
       '<div class="idpn idvo" id="idPl" style="display:none"><div class="idplh"><b id="idPt"></b><button class="ib" id="idPx" aria-label="Tutup panel">' + ICO.x + '</button></div><div class="idpsm" id="idPs"></div><div class="idpls" id="idPr"></div></div>' +
       '<div class="idfab idvo" id="idFab"><button class="locbtn" id="idEdt" aria-label="Isi data">' + ICO.ed + '</button><button class="locbtn" id="idBg" aria-label="Bagikan">' + ICO.sh + '</button></div></div>' +
       '<div class="idbt idvo" id="idBt"></div>' +
@@ -168,11 +168,11 @@
     var FK = { var: 'v', um: 'u', st: 's' }, TT = { var: 'Varietas', um: 'Umur', st: 'Status tanaman' };
     function fN(k) { return Object.keys(F[FK[k]]).length; }
     function fAny() { return fN('var') + fN('um') + fN('st') > 0; }
-    function fMatch(e) {
+    function fMatch(e, skip) {
       var v, u, t;
-      if (fN('var')) { v = HA.lyb.of(e, 'varietas'); if (!v || !F.v[v.id]) return false; }
-      if (fN('um')) { u = HA.lyb.umBucket(e); if (u < 0 || !F.u[u]) return false; }
-      if (fN('st')) { t = HA.lyb.of(e, 'status'); if (!t || !F.s[t.id]) return false; }
+      if (skip !== 'var' && fN('var')) { v = HA.lyb.of(e, 'varietas'); if (!v || !F.v[v.id]) return false; }
+      if (skip !== 'um' && fN('um')) { u = HA.lyb.umBucket(e); if (u < 0 || !F.u[u]) return false; }
+      if (skip !== 'st' && fN('st')) { t = HA.lyb.of(e, 'status'); if (!t || !F.s[t.id]) return false; }
       return true;
     }
     function saveL() { S.settings.lihat = { fill: fillM, s: VF.s, t: VF.t, n: VF.n, j: VF.j }; HA.saveSettings(); }
@@ -190,11 +190,13 @@
     function plRender() {
       var k = openP, pl = $e('idPl'); if (!k) { pl.style.display = 'none'; syncCb(); return; }
       var cnt = {}, rows = [], Fm = F[FK[k]], names = [];
-      list.forEach(function (b) { var kk = keyOf(k, E[b.id]); if (kk !== null) cnt[kk] = (cnt[kk] || 0) + 1; });
+      var oth = ['var', 'um', 'st'].some(function (x) { return x !== k && fN(x) > 0; });
+      list.forEach(function (b) { if (!fMatch(E[b.id], k)) return; var kk = keyOf(k, E[b.id]); if (kk !== null) cnt[kk] = (cnt[kk] || 0) + 1; });
       if (k === 'var' && va) rows = va.items.map(function (x) { return { key: x.id, label: x.name, col: x.col || '#999', n: cnt[x.id] || 0 }; });
       else if (k === 'um') { var L = HA.lyb.umLabels(); rows = [0, 1, 2, 3, 4].map(function (i) { return { key: String(i), label: L[i], col: HA.lyb.umCol(i), n: cnt[i] || 0 }; }); }
       else if (k === 'st' && st) rows = st.items.map(function (x) { return { key: x.id, label: x.name, it: x, n: cnt[x.id] || 0 }; });
       rows.forEach(function (r) { if (Fm[r.key]) names.push(r.label); });
+      if (oth) rows = rows.filter(function (r) { return r.n > 0 || Fm[r.key]; });
       $e('idPt').innerHTML = ICO[k === 'var' ? 'vr' : k] + ' ' + esc(TT[k]);
       $e('idPs').innerHTML = '<span>' + (names.length ? '<b>Terpilih:</b> ' + esc(names.join(', ')) : 'Ketuk untuk memfilter blok') + '</span>' + (names.length ? '<button class="btn sm" id="idPc" aria-label="Kosongkan pilihan">✕</button>' : '');
       $e('idPr').innerHTML = rows.map(function (r) {
@@ -218,7 +220,7 @@
       b.addEventListener('pointermove', function (e) { if (!dn || did) return; if (e.clientX - x0 < -22) { did = true; solid(k); openPanel(k); } });
       b.addEventListener('pointerup', function (e) {
         e.stopPropagation(); if (!dn) return; dn = false; if (did) return;
-        if (e.target.closest && e.target.closest('.idtx')) { F[FK[k]] = {}; filt(); return; }
+        var hz = document.elementFromPoint(e.clientX, e.clientY); if (hz && hz.closest && hz.closest('.idtx') && b.classList.contains('on')) { F[FK[k]] = {}; filt(); return; }
         var now = Date.now(); if (lastTap.k === k && now - lastTap.t < 420) { lastTap = { k: '', t: 0 }; solid(k); openPanel(k); } else { lastTap = { k: k, t: now }; solid(k); }
       });
       b.addEventListener('pointercancel', function () { dn = false; });
