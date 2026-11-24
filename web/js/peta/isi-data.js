@@ -252,7 +252,7 @@
     if (view) { syncCb(); btRender(); }
     $e('idEdt').onclick = function () { if (infoId) return; view = false; sel = {}; applyV(); info(); };
     if ($e('idVw')) $e('idVw').onclick = function () { if (dirty()) { HA.toast('Simpan atau buang perubahan dulu'); return; } toView(); };
-    $e('idBg').onclick = function () { if (infoId) return; closeEd(); if (HA.printFor) HA.printFor(m); };
+    $e('idBg').onclick = function () { if (infoId) return; if (HA.shareLihat) HA.shareLihat(m, { fill: fillM, s: VF.s, t: VF.t, n: VF.n, j: VF.j }); };
     $e('idNo').onclick = function () { sel = {}; info(); draw(); };
     function dlg(html, wire) { var q = document.createElement('div'); q.className = 'lyq'; q.innerHTML = '<div class="lyqc">' + html + '</div>'; el.appendChild(q); wire(q, function () { q.remove(); }); }
     $e('idGo').onclick = function () {
