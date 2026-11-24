@@ -61,6 +61,11 @@
     var poly = type === 'blok' || type === 'danau' || type === 'master', pts = [], redo = [], g = L.layerGroup().addTo(HA.map), pl = null, pl0 = null, mk = [], busy = false;
     function normalBar() { return '<button type="button" id="nbU">Urungkan</button><button type="button" id="nbR">Ulangi</button><button type="button" id="nbC">Batal</button>' + '<button type="button" class="pri" id="nbOk">Simpan</button>'; }
     var bar = mkBar(normalBar());
+    var gg = null;
+    if (type === 'master' && HA.mkGuide && HA.mkGuide.length) {
+      gg = L.layerGroup().addTo(HA.map);
+      HA.mkGuide.forEach(function (q) { L.polygon(q.pts, { color: q.main ? '#AAB6C0' : '#7B8794', weight: q.main ? 3 : 2, dashArray: q.main ? null : '6 5', fillOpacity: 0.05, opacity: 0.85, interactive: false }).addTo(gg); });
+    }
     var pa = null, pb = null;
     function pathOf() { return poly && pts.length > 2 ? pts.concat([pts[0]]) : pts; }
     function upd() {
@@ -88,7 +93,7 @@
         t.textContent = pts.length < 2 ? NAMES[type] + ' · ketuk ' + (pts.length ? 'titik kedua' : 'titik pertama') : NAMES[type] + ' · ' + fmtLen(flat(pts, false).len) + ' · geser titik bila perlu';
       }
     }
-    function end() { HA.map._lakeDraw = null; HA.map.removeLayer(g); bar.remove(); }
+    function end() { HA.map._lakeDraw = null; HA.map.removeLayer(g); if (gg) { HA.map.removeLayer(gg); gg = null; } HA.mkGuide = null; bar.remove(); }
     var drawTap = function (ll) {
       if (!poly && pts.length >= 2) { toast('Garis cukup 2 titik. Geser titiknya bila perlu'); return; }
       pts.push([+ll.lat.toFixed(6), +ll.lng.toFixed(6)]); redo = []; upd();

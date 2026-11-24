@@ -59,6 +59,33 @@
   function haOf(list) { var t = 0; list.forEach(function (b) { try { t += HzBlok.areaHa(b.pts); } catch (e) {} }); return t; }
 
   // ---------- daftar master (Data peta > Master) ----------
+  function parentOf(m) { if (!m || m.parent == null) return null; var p = mById(m.parent); return p && p !== m ? p : null; }
+  function kidsOf(id) { return masters().filter(function (m) { var p = parentOf(m); return id == null ? !p : (p && String(p.id) === String(id)); }); }
+  function depthOf(m) { var d = 0, p = parentOf(m), n = 0; while (p && n++ < 10) { d++; p = parentOf(p); } return d; }
+  function isDesc(m, anc) { var p = parentOf(m), n = 0; while (p && n++ < 10) { if (p === anc) return true; p = parentOf(p); } return false; }
+  function treeOrder() { var out = []; (function walk(id, seen) { kidsOf(id).forEach(function (m) { if (seen.indexOf(m.id) >= 0) return; out.push(m); walk(m.id, seen.concat([m.id])); }); })(null, []); masters().forEach(function (m) { if (out.indexOf(m) < 0) out.push(m); }); return out; }
+  function parentSel(m) {
+    var opts = '<option value="">(tingkat atas)</option>' + treeOrder().filter(function (x) { return x !== m && !(m && isDesc(x, m)); }).map(function (x) { return '<option value="' + esc(String(x.id)) + '"' + (m && m.parent != null && String(m.parent) === String(x.id) ? ' selected' : '') + '>' + '\u00A0\u00A0'.repeat(depthOf(x)) + esc(x.name) + '</option>'; }).join('');
+    return '<select id="mnP" style="width:100%">' + opts + '</select>';
+  }
+  function pickMaster(title, cb) {
+    var open = {};
+    function rows(pid, dep) {
+      return kidsOf(pid).map(function (m) {
+        var k = kidsOf(m.id).length, mm = members(m);
+        return '<div class="pkRow" style="padding-left:' + (dep * 18) + 'px"><button type="button" class="pkT" data-t="' + esc(String(m.id)) + '"><span class="pkAr">' + (k ? (open[m.id] ? '\u25BE' : '\u25B8') : '') + '</span><b>' + esc(m.name) + '</b><span class="muted">' + (mm.in.length + mm.man.length) + ' blok</span></button><button type="button" class="btn tonal sm" data-u="' + esc(String(m.id)) + '">Pakai</button></div>' + (open[m.id] ? rows(m.id, dep + 1) : '');
+      }).join('');
+    }
+    function draw() {
+      $('pkList').innerHTML = rows(null, 0) || '<div class="muted">Belum ada master.</div>';
+      $('pkList').querySelectorAll('[data-t]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-t'); if (kidsOf(id).length) { open[id] = !open[id]; draw(); } else { use(id); } }; });
+      $('pkList').querySelectorAll('[data-u]').forEach(function (b) { b.onclick = function () { use(b.getAttribute('data-u')); }; });
+    }
+    function use(id) { var m = mById(id); closeSheet(); if (m) cb(m); }
+    openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1">' + esc(title) + '</div><button class="btn pri" id="pkX">Tutup</button></div><div class="muted" style="margin:2px 0 8px">Ketuk nama untuk membuka bagian di bawahnya, tombol Pakai untuk memilih.</div><div id="pkList"></div>');
+    $('pkX').onclick = closeSheet; draw();
+  }
+  HA.pickMaster = pickMaster;
   function mById(id) { return masters().filter(function (m) { return String(m.id) === String(id); })[0]; }
   function renderMaster(box) {
     var ms = masters(); ms.forEach(function (m, i) { if (m.id == null) m.id = Date.now() + i; });
@@ -67,15 +94,23 @@
     if ($('mkIsi')) $('mkIsi').onclick = function () {
       var bk = function () { S.dpTab = 'master'; go('data'); };
       if (ms.length === 1) { HA.isiData(ms[0], bk); return; }
-      openSheet('<div class="grab"></div><div class="st">ISI DATA: PILIH MASTER</div>' + ms.map(function (x) { var mm = members(x); return '<button class="btn" data-m="' + esc(String(x.id)) + '" style="width:100%;margin-top:6px;text-align:left">' + esc(x.name) + ' <span class="muted">· ' + (mm.in.length + mm.man.length) + ' blok</span></button>'; }).join('') + '<button class="btn" id="mkIsiX" style="width:100%;margin-top:10px">Batal</button>');
-      $('mkIsiX').onclick = closeSheet;
-      document.querySelectorAll('#sheet button[data-m]').forEach(function (b) { b.onclick = function () { var m2 = mById(b.getAttribute('data-m')); closeSheet(); if (m2) HA.isiData(m2, bk); }; });
+      HA.pickMaster('ISI DATA: PILIH MASTER', function (m2) { HA.isiData(m2, bk); }); return;
     };
-    $('mkNew').onclick = function () { HA.mapKeep = true; go('lintasan'); setTimeout(function () { HA.closeAll(); HA.drawFlow('master'); }, 800); };
+    $('mkNew').onclick = function () {
+      function startDraw(pid) {
+        HA.mkParent = pid; var par = pid != null ? mById(pid) : null;
+        HA.mkGuide = par ? [{ pts: par.pts, main: true }].concat(kidsOf(par.id).map(function (c) { return { pts: c.pts, main: false }; })) : null;
+        HA.mapKeep = true; go('lintasan'); setTimeout(function () { HA.closeAll(); if (par && HA.map) { try { HA.map.fitBounds(L.latLngBounds(par.pts), { padding: [30, 30] }); } catch (e) {} } HA.drawFlow('master'); }, 800);
+      }
+      if (!ms.length) { startDraw(null); return; }
+      openSheet('<div class="grab"></div><div class="bth"><button class="btn" id="mpC">Batal</button><div class="st" style="flex:1;text-align:center">MASTER BARU</div><button class="btn pri" id="mpG">Gambar</button></div><div class="h">INDUK</div>' + parentSel(null) + '<div class="muted" style="margin-top:8px">Pilih induk bila ini bagian dari master lain (mis. Utara di dalam Divisi). Garis induk tampil abu-abu sebagai pemandu saat menggambar. Divisi baru: tingkat atas.</div>');
+      $('mpC').onclick = closeSheet;
+      $('mpG').onclick = function () { var v = $('mnP').value; closeSheet(); startDraw(v === '' ? null : (mById(v) ? mById(v).id : null)); };
+    };
     HA.lpList($('mkList'), 'master', {
-      items: ms.map(function (m) {
-        var mem = members(m), n = mem.in.length + mem.man.length;
-        return { id: m.id, title: m.name, sub: n + ' blok · ' + fmtHa(haOf(mem.in.concat(mem.man))) + ' ha' + (mem.man.length ? ' · ' + mem.man.length + ' manual' : '') + (mem.pend.length ? ' · ' + mem.pend.length + ' perlu diatur' : '') };
+      items: treeOrder().map(function (m) {
+        var mem = members(m), n = mem.in.length + mem.man.length, dp = depthOf(m);
+        return { id: m.id, title: (dp ? '\u00A0\u00A0\u00A0'.repeat(dp - 1) + '\u2514 ' : '') + m.name, sub: n + ' blok · ' + fmtHa(haOf(mem.in.concat(mem.man))) + ' ha' + (mem.man.length ? ' · ' + mem.man.length + ' manual' : '') + (mem.pend.length ? ' · ' + mem.pend.length + ' perlu diatur' : '') };
       }),
       empty: 'Belum ada master. Tekan "Buat master baru" lalu gambar poligon kawasan.',
       onTap: function (id) { var m = mById(id); if (m) viewMaster(m); },
@@ -86,7 +121,7 @@
           { label: 'Cetak (PDF atau KML)', fn: function () { PS.sel = m.id; printPanel(); } },
           { label: 'Atur blok perbatasan', fn: function () { aturSheet(m); } },
           { label: 'Edit batas', fn: function () { editBatas(m); } },
-          { label: 'Ganti nama', fn: function () { nameSheet(m, false); } }
+          { label: 'Ganti nama dan induk', fn: function () { nameSheet(m, false); } }
         ];
       },
       delTitle: function (ids) { return ids.length === 1 ? 'Hapus master ini?' : 'Hapus ' + ids.length + ' master?'; },
@@ -115,14 +150,15 @@
     });
   }
   function masterCreated(P) {
-    var m = { id: Date.now(), name: 'Master ' + (masters().length + 1), pts: P, inc: [], exc: [] };
+    var m = { id: Date.now(), name: 'Master ' + (masters().length + 1), pts: P, inc: [], exc: [], parent: HA.mkParent != null ? HA.mkParent : null };
+    HA.mkParent = null;
     masters().push(m); saveSettings(); nameSheet(m, true);
   }
   function nameSheet(m, isNew) {
     openSheet('<div class="grab"></div><div class="bth"><div class="st">MASTER</div><button class="btn pri" id="mnX">Simpan</button></div>' +
-      '<div class="bnm"><input type="text" id="mnN" maxlength="40" value="' + esc(m.name) + '"></div>' +
+      '<div class="bnm"><input type="text" id="mnN" maxlength="40" value="' + esc(m.name) + '"></div>' + '<div class="h" style="margin-top:10px">INDUK</div>' + parentSel(m) +
       '<div class="muted" style="margin-top:8px">Nama dipakai di judul PDF dan nama berkas, mis. "Divisi 1 Selatan".</div>');
-    $('mnX').onclick = function () { m.name = $('mnN').value.trim() || m.name; saveSettings(); closeSheet(); S.dpTab = 'master'; go('data'); };
+    $('mnX').onclick = function () { m.name = $('mnN').value.trim() || m.name; var pv = $('mnP').value; m.parent = pv === '' ? null : (mById(pv) ? mById(pv).id : null); saveSettings(); closeSheet(); S.dpTab = 'master'; go('data'); };
   }
 
   // ---------- blok perbatasan: putuskan satu per satu ----------
