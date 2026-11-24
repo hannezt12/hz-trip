@@ -1083,3 +1083,36 @@ input[type=checkbox],input[type=radio]{accent-color:var(--p)}
 .idir{display:flex;gap:8px;align-items:center;padding:6px 10px;min-height:44px;border-top:1px solid #8884;font-size:.9rem}
 .idvf{display:flex;gap:8px;padding:6px 10px}
 .idEd.idv .idn{display:none}
+
+/* v0.27.3 layar Lapisan baru */
+.idEd .idh{padding-top:calc(env(safe-area-inset-top,1.5rem) + 8px)}
+.idEd .idh .seg button{display:flex;align-items:center;gap:5px}
+.idEd .idh .btn.sm{display:inline-flex;align-items:center;gap:5px}
+.idac{position:absolute;left:8px;top:8px;z-index:4;background:var(--card2,#222);border:1px solid var(--line,#8884);border-radius:.9rem;padding:10px 14px;flex-direction:column;gap:12px;font-size:.88rem;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+.idtabs{position:absolute;right:0;top:50%;transform:translateY(-50%);z-index:3;display:flex;flex-direction:column;gap:18px}
+.idtab{position:relative;opacity:.3;transition:opacity .15s;color:var(--tx);touch-action:none;margin:0 .5rem 0 0}
+.idtab.sol,.idtab.on,.idtab.op{opacity:1}
+.idtab.op{border-color:#8AB4FF}
+.idtx{display:none;position:absolute;top:-10px;left:-10px;width:22px;height:22px;border-radius:50%;background:#1a73e8;color:#fff;font-size:.7rem;align-items:center;justify-content:center;font-style:normal}
+.idtab.on .idtx{display:flex}
+.idpn{position:absolute;right:0;top:0;bottom:0;width:64%;max-width:300px;z-index:5;background:var(--card,#1b1f27);border-left:1px solid var(--line,#8886);flex-direction:column}
+.idplh{display:flex;align-items:center;gap:6px;padding:2px 2px 2px 12px;border-bottom:1px solid #8884}
+.idplh b{flex:1;font-size:.9rem;display:flex;align-items:center;gap:6px}
+.idpsm{padding:6px 12px;font-size:.75rem;display:flex;gap:6px;align-items:flex-start}.idpsm span{flex:1;overflow-wrap:anywhere}
+.idpls{overflow-y:auto;flex:1;padding:4px 10px 14px}
+.idpw{display:flex;align-items:center;gap:12px;margin:8px 0;cursor:pointer}
+.iddot{flex:0 0 20px;width:20px;height:20px;border-radius:50%;background:#9aa0a6;box-shadow:0 0 0 3px #fff}
+.iddot.on{background:#1a73e8;box-shadow:0 0 0 3px rgba(26,115,232,.5)}
+.idpb{flex:1;min-width:0;border-radius:8px;padding:7px 9px;font-size:.78rem;font-weight:600;line-height:1.15;display:flex;align-items:center;gap:6px;justify-content:space-between;border:1px solid #8883}
+.idpb>span{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.idpb small{opacity:.8;font-weight:500}
+.idfab{position:absolute;right:0;bottom:0;z-index:3;display:flex;flex-direction:column}
+.idbt{padding:8px 12px;border-top:1px solid #8884;font-size:.88rem;display:flex;gap:8px;align-items:center;min-height:46px;cursor:pointer}
+.idin{position:absolute;left:0;right:0;bottom:max(env(safe-area-inset-bottom),56px);max-height:52%;overflow:auto;z-index:6;background:var(--card,#1b1f27);border-top:1px solid #8886;border-radius:1.25rem 1.25rem 0 0;padding:6px 12px 14px}
+.idinh{display:flex;align-items:center;gap:6px}.idinh b{flex:1}
+.idkv{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #8883;font-size:.9rem}
+.idlock .idh .idvo,.idlock .idtabs,.idlock .idfab,.idlock .idac,.idlock .idbt{opacity:.35;pointer-events:none}
+.katRow{display:flex;gap:8px;align-items:center;margin-bottom:.4rem}.katRow .seg{flex:1;margin-bottom:0!important}
+.katRow .katLay{margin:0;width:2.75rem;height:2.5rem;padding:0;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.idin{display:none}
+.idEd .idh .seg{flex:0 0 auto}.idEd .idh .seg button{white-space:nowrap;padding-left:10px;padding-right:12px}
+.idEd .idh .btn.sm{white-space:nowrap;flex:0 0 auto}
