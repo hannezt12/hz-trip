@@ -274,32 +274,34 @@
   // ---------- cetak (drawer > Cetak > Master) ----------
   function ribu(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
   function fsNum(v) { var l = { s: 5, m: 7.5, l: 11 }[v]; if (l) return l; var n = parseFloat(v); return isFinite(n) ? n : null; }
-  var PS = { rj: true, rd: true, nc: 'b', sel: null, fmt: 'pdf', map: true, list: false, title: '', paper: 'auto', ori: 'auto', oSk: true, oIn: true, oLg: true, fs: (function () { try { var v = localStorage.getItem('hz_pmfs'); return v && isFinite(parseFloat(v)) ? parseFloat(v) : 'a'; } catch (e) { return 'a'; } })(), pos: 'c', luas: (function () { try { return localStorage.getItem('hz_pmluas') !== '0'; } catch (e) { return true; } })() };
+  var PS = { btw: null, rj: true, rd: true, nc: 'b', sel: null, fmt: 'pdf', map: true, list: false, title: '', paper: 'auto', ori: 'auto', oSk: true, oIn: true, oLg: true, fs: (function () { try { var v = localStorage.getItem('hz_pmfs'); return v && isFinite(parseFloat(v)) ? parseFloat(v) : 'a'; } catch (e) { return 'a'; } })(), pos: 'c', luas: (function () { try { return localStorage.getItem('hz_pmluas') !== '0'; } catch (e) { return true; } })() };
   function ktPanel() {
-    var k = ktCfg(), h = '<div class="h">KETERANGAN (lajur tabel di kanan peta)</div><label><input type="checkbox" id="pmKt"' + (k.on ? ' checked' : '') + '> Tampilkan lajur keterangan (kertas dilebarkan ke kanan)</label>';
-    if (k.on) {
-      var order = (k.tabs || []).slice(); KT_ALL.forEach(function (a) { if (order.indexOf(a[0]) < 0) order.push(a[0]); });
-      h += '<div class="lbList" id="pmKtL">' + order.map(function (id, i) {
-        var nm = ''; KT_ALL.forEach(function (a) { if (a[0] === id) nm = a[1]; });
-        return '<div class="lbRow" style="min-height:2.5rem;align-items:center;gap:6px"><input type="checkbox" data-kt="' + id + '"' + ((k.tabs || []).indexOf(id) >= 0 ? ' checked' : '') + '><span style="flex:1">' + nm + '</span><button class="btn sm" data-ku="' + id + '"' + (i ? '' : ' disabled') + '>\u2191</button><button class="btn sm" data-kd="' + id + '"' + (i < order.length - 1 ? '' : ' disabled') + '>\u2193</button></div>';
-      }).join('') + '</div>' +
-      '<div class="muted" style="margin:6px 0 2px">Kolom (Varietas dan Bulan tanam)</div><div class="row" style="gap:10px;flex-wrap:wrap">' + [['pc', 'PC'], ['rc', 'RC'], ['tot', 'Total'], ['pct', '%']].map(function (c) { return '<label><input type="checkbox" data-kc="' + c[0] + '"' + (k.cols[c[0]] !== false ? ' checked' : '') + '> ' + c[1] + '</label>'; }).join('') + '</div>' +
-      '<div class="muted" style="margin-top:4px">Satuan ha. Urutan tabel bisa diubah dengan tombol panah.</div>';
-    }
-    return h + '<label style="margin-top:6px"><input type="checkbox" id="pmBt"' + (S.settings.btOn ? ' checked' : '') + '> Garis tepi bulan tanam (warna dan tebal di menu Lapisan)</label><label><input type="checkbox" id="pmHalo"' + (S.settings.halo !== false ? ' checked' : '') + '> Halo teks (garis putih di sekeliling teks)</label>';
+    var k = ktCfg(), order = (k.ord || k.tabs || []).slice(); KT_ALL.forEach(function (a) { if (order.indexOf(a[0]) < 0) order.push(a[0]); });
+    return '<div class="h">TABEL YANG TAMPIL (di lajur kanan peta)</div><div class="lbList" id="pmKtL">' + order.map(function (id, i) {
+      var nm = ''; KT_ALL.forEach(function (a) { if (a[0] === id) nm = a[1]; });
+      return '<div class="lbRow" style="min-height:2.5rem;align-items:center;gap:6px"><input type="checkbox" data-kt="' + id + '"' + ((k.tabs || []).indexOf(id) >= 0 ? ' checked' : '') + '><span style="flex:1">Tabel ' + nm + '</span><button class="btn sm" data-ku="' + id + '"' + (i ? '' : ' disabled') + '>↑</button><button class="btn sm" data-kd="' + id + '"' + (i < order.length - 1 ? '' : ' disabled') + '>↓</button></div>';
+    }).join('') + '<div class="lbRow" style="min-height:2.5rem;align-items:center;gap:6px"><input type="checkbox" id="pmIn"' + (PS.oIn ? ' checked' : '') + '><span style="flex:1">Tabel info (master, jumlah blok, total luas)</span></div></div>' +
+    '<div class="muted" style="margin:6px 0 2px">Kolom (Varietas dan Bulan tanam)</div><div class="row" style="gap:10px;flex-wrap:wrap">' + [['pc', 'PC'], ['rc', 'RC'], ['tot', 'Total'], ['pct', '%']].map(function (c) { return '<label><input type="checkbox" data-kc="' + c[0] + '"' + (k.cols[c[0]] !== false ? ' checked' : '') + '> ' + c[1] + '</label>'; }).join('') + '</div>' +
+    '<div class="muted" style="margin-top:4px">Satuan ha. Tabel yang tidak diceklis tidak muncul di PDF. Urutan diatur dengan tombol panah.</div>';
+  }
+  function gsPanel() {
+    var w = PS.btw > 0 ? PS.btw : HA.lyb.btW();
+    return '<label><input type="checkbox" id="pmBt"' + (S.settings.btOn ? ' checked' : '') + '> Garis tepi bulan tanam</label><div class="row" style="gap:8px;align-items:center;margin:4px 0 8px"><span class="muted">Tebal</span><input type="number" id="pmBw" min="0.5" max="8" step="0.5" inputmode="decimal" value="' + w + '" style="width:4.4rem;text-align:center"><span class="muted">pt</span><span style="flex:1"></span><button class="btn sm" id="pmBtGo">Atur warna ›</button></div>' +
+      '<label><input type="checkbox" id="pmHalo"' + (S.settings.halo !== false ? ' checked' : '') + '> Halo teks (garis putih di sekeliling teks)</label>';
   }
   function ktWire(rerender) {
     var k = ktCfg();
-    if ($('pmKt')) $('pmKt').onchange = function () { k.on = this.checked; saveSettings(); rerender(); };
+    if ($('pmBw')) $('pmBw').onchange = function () { var v = Math.max(0.5, Math.min(8, parseFloat(String(this.value).replace(',', '.')) || 1.5)); PS.btw = v; this.value = v; };
+    if ($('pmBtGo')) $('pmBtGo').onclick = function () { if (HA.lyb && HA.lyb.btOpen) HA.lyb.btOpen(function () { printPanel(); }); };
     if ($('pmBt')) $('pmBt').onchange = function () { S.settings.btOn = this.checked; saveSettings(); };
     if ($('pmHalo')) $('pmHalo').onchange = function () { S.settings.halo = this.checked; saveSettings(); };
     var L2 = $('pmKtL'); if (!L2) return;
     function order() { var o = (k.ord || k.tabs || []).slice(); KT_ALL.forEach(function (a) { if (o.indexOf(a[0]) < 0) o.push(a[0]); }); return o; }
-    L2.onchange = function (e) { var id = e.target.getAttribute && e.target.getAttribute('data-kt'); if (!id) return; var o = order(), on = {}; (k.tabs || []).forEach(function (t) { on[t] = 1; }); on[id] = e.target.checked ? 1 : 0; k.tabs = o.filter(function (t) { return on[t]; }); k.ord = o; saveSettings(); };
+    L2.onchange = function (e) { var id = e.target.getAttribute && e.target.getAttribute('data-kt'); if (!id) return; var o = order(), on = {}; (k.tabs || []).forEach(function (t) { on[t] = 1; }); on[id] = e.target.checked ? 1 : 0; k.tabs = o.filter(function (t) { return on[t]; }); k.ord = o; k.on = k.tabs.length > 0; saveSettings(); };
     L2.onclick = function (e) {
       var b = e.target.closest && e.target.closest('button'); if (!b) return; var u = b.getAttribute('data-ku'), d = b.getAttribute('data-kd'), id = u || d; if (!id) return;
       var o = k.ord || order(), i = o.indexOf(id), j = u ? i - 1 : i + 1; if (j < 0 || j >= o.length) return; var t = o[i]; o[i] = o[j]; o[j] = t; k.ord = o;
-      var on = {}; (k.tabs || []).forEach(function (x) { on[x] = 1; }); k.tabs = o.filter(function (x) { return on[x]; }); saveSettings(); rerender();
+      var on = {}; (k.tabs || []).forEach(function (x) { on[x] = 1; }); k.tabs = o.filter(function (x) { return on[x]; }); k.on = k.tabs.length > 0; saveSettings(); rerender();
     };
     $('sheet').querySelectorAll('[data-kc]').forEach(function (e) { e.onchange = function () { k.cols[e.getAttribute('data-kc')] = e.checked; saveSettings(); }; });
   }
@@ -318,8 +320,9 @@
         (PS.fmt === 'pdf' ? '<details data-pd="isi"' + pdOpen('isi') + '><summary>ISI PDF</summary><label><input type="checkbox" id="pmMap"' + (PS.map ? ' checked' : '') + '> Peta (satu lembar, ber-geo)</label><label><input type="checkbox" id="pmLuas"' + (PS.luas ? ' checked' : '') + '> Tampilkan luas di peta</label><label><input type="checkbox" id="pmList"' + (PS.list ? ' checked' : '') + '> Daftar blok lengkap</label><label><input type="checkbox" id="pmRj"' + (PS.rj !== false ? ' checked' : '') + '> Jalan bantu</label><label><input type="checkbox" id="pmRd"' + (PS.rd !== false ? ' checked' : '') + '> Drainase</label></details>' +
           (HA.lyb && (HA.lyb.all().some(function (l) { return l.items.length; }) || (HA.obj && HA.obj.objs().length)) ? '<details data-pd="lap"' + pdOpen('lap') + '><summary>LAPISAN BLOK (layer PDF)</summary>' + HA.lyb.all().filter(function (l) { return l.items.length; }).map(function (l) { return '<label><input type="checkbox" data-lyo="' + l.id + '"' + (l.on ? ' checked' : '') + '> ' + esc(l.name) + '</label>'; }).join('') + (HA.obj && HA.obj.objs().length ? '<label><input type="checkbox" data-lyo="__obj"' + (HA.obj.on() ? ' checked' : '') + '> Objek (' + HA.obj.objs().length + ')</label>' : '') + '</details>' : '') +
           '<details data-pd="kr"' + pdOpen('kr') + '><summary>KERTAS DAN ELEMEN</summary><div class="row" style="gap:6px;margin-top:6px"><select id="pmPp" style="flex:1;min-width:0">' + [['auto', 'Otomatis'], ['a4', 'A4'], ['a3', 'A3'], ['a2', 'A2'], ['f4', 'F4']].map(function (x) { return '<option value="' + x[0] + '"' + (PS.paper === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select><select id="pmOr" style="flex:1;min-width:0">' + [['auto', 'Otomatis'], ['p', 'Tegak'], ['l', 'Datar']].map(function (x) { return '<option value="' + x[0] + '"' + (PS.ori === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></div>' +
-          '<label><input type="checkbox" id="pmSk"' + (PS.oSk ? ' checked' : '') + '> Skala</label><label><input type="checkbox" id="pmIn"' + (PS.oIn ? ' checked' : '') + '> Tabel info</label><label><input type="checkbox" id="pmLg"' + (PS.oLg ? ' checked' : '') + '> Legenda lapisan</label></details>' +
-          '<details data-pd="kt"' + pdOpen('kt') + '><summary>KETERANGAN, KOLOM, GARIS DAN HALO</summary>' + ktPanel() + '</details>' +
+          '<label><input type="checkbox" id="pmSk"' + (PS.oSk ? ' checked' : '') + '> Skala</label><label><input type="checkbox" id="pmLg"' + (PS.oLg ? ' checked' : '') + '> Legenda lapisan</label></details>' +
+          '<details data-pd="kt"' + pdOpen('kt') + '><summary>TABEL KETERANGAN</summary>' + ktPanel() + '</details>' +
+          '<details data-pd="gs"' + pdOpen('gs') + '><summary>GARIS BULAN TANAM DAN HALO</summary>' + gsPanel() + '</details>' +
           '<div class="h">JUDUL</div><input type="text" id="pmTtl" maxlength="60" placeholder="Kosong = nama master" value="' + esc(PS.title) + '" style="width:100%">' +
           '<div class="row" style="gap:8px;align-items:flex-end"><div style="flex:1;min-width:0"><div class="h">UKURAN TEKS NO BLOK (pt)</div><input type="number" id="pmFn" min="1" max="30" step="0.5" inputmode="decimal" placeholder="Otomatis (kosong)" value="' + (fsNum(PS.fs) != null ? fsNum(PS.fs) : '') + '" style="width:100%;text-align:center"></div><div style="width:38%"><div class="h">WARNA TEKS</div><select id="pmNc" style="width:100%;height:42px"><option value="b"' + (PS.nc === 'b' ? ' selected' : '') + '>Biru</option><option value="r"' + (PS.nc === 'r' ? ' selected' : '') + '>Merah</option><option value="k"' + (PS.nc === 'k' ? ' selected' : '') + '>Hitam</option></select></div></div><div class="muted" style="margin-top:2px">Kosong = otomatis. Pilihan terakhir tersimpan. Luas ikut ukuran dan warna ini.</div>'+
           ''
@@ -382,7 +385,7 @@
   function snap() {
     var ly = {}; HA.lyb.all().forEach(function (l) { ly[l.id] = !!l.on; }); ly.__obj = S.settings.objOn !== false;
     var k = ktCfg();
-    return { paper: PS.paper, ori: PS.ori, oSk: !!PS.oSk, oIn: !!PS.oIn, oLg: !!PS.oLg, map: !!PS.map, list: !!PS.list, luas: !!PS.luas, fs: PS.fs, pos: PS.pos, rj: PS.rj !== false, rd: PS.rd !== false, nc: PS.nc || 'b', ly: ly, bt: !!S.settings.btOn, halo: S.settings.halo !== false,
+    return { paper: PS.paper, ori: PS.ori, oSk: !!PS.oSk, oIn: !!PS.oIn, oLg: !!PS.oLg, map: !!PS.map, list: !!PS.list, luas: !!PS.luas, fs: PS.fs, pos: PS.pos, rj: PS.rj !== false, rd: PS.rd !== false, nc: PS.nc || 'b', btw: PS.btw > 0 ? PS.btw : null, ly: ly, bt: !!S.settings.btOn, halo: S.settings.halo !== false,
       kt: { on: !!k.on, tabs: (k.tabs || []).slice(), ord: k.ord ? k.ord.slice() : null, cols: { pc: k.cols.pc !== false, rc: k.cols.rc !== false, tot: k.cols.tot !== false, pct: k.cols.pct !== false } },
       lay: JSON.parse(JSON.stringify(S.settings.mLay || {})) };
   }
@@ -392,7 +395,7 @@
   }
   function applySnap(v) {
     PS.paper = v.paper || 'auto'; PS.ori = v.ori || 'auto'; PS.oSk = v.oSk !== false; PS.oIn = v.oIn !== false; PS.oLg = v.oLg !== false;
-    PS.map = v.map !== false; PS.list = !!v.list; PS.luas = v.luas !== false; PS.fs = v.fs == null ? 'a' : v.fs; PS.pos = v.pos || 'c'; PS.rj = v.rj !== false; PS.rd = v.rd !== false; PS.nc = v.nc || 'b';
+    PS.map = v.map !== false; PS.list = !!v.list; PS.luas = v.luas !== false; PS.fs = v.fs == null ? 'a' : v.fs; PS.pos = v.pos || 'c'; PS.rj = v.rj !== false; PS.rd = v.rd !== false; PS.nc = v.nc || 'b'; PS.btw = v.btw > 0 ? v.btw : null;
     HA.lyb.all().forEach(function (l) { l.on = v.ly && v.ly[l.id] !== undefined ? !!v.ly[l.id] : true; });
     S.settings.objOn = v.ly && v.ly.__obj !== undefined ? !!v.ly.__obj : true;
     S.settings.btOn = !!v.bt; S.settings.halo = v.halo !== false;
@@ -423,7 +426,7 @@
     $('pmTpU').onclick = function () { var t = tplBy(tplCur()); if (!t || t.id === 'std') return; askConfirm('Perbarui template', 'Timpa "' + t.name + '" dengan setelan sekarang?', 'Perbarui', function () { t.v = snap(); saveSettings(); toast('Template diperbarui'); printPanel(); }); };
     $('pmTpD').onclick = function () { var t = tplBy(tplCur()); if (!t || t.id === 'std') return; askConfirm('Hapus template', 'Hapus template "' + t.name + '"? Setelan cetak sekarang tidak berubah.', 'Hapus', function () { S.settings.mTpl = tplList().filter(function (x) { return x.id !== t.id; }); var by = S.settings.mTplBy || {}; Object.keys(by).forEach(function (k) { if (by[k] === t.id) delete by[k]; }); S.settings.mTplCur = 'std'; saveSettings(); printPanel(); }); };
   }
-  function curOpts() { return { paper: PS.paper, ori: PS.ori, oSk: PS.oSk, oIn: PS.oIn, oLg: PS.oLg, map: PS.map, list: PS.list, luas: PS.luas, title: PS.title, fs: PS.fs, pos: PS.pos, rj: PS.rj, rd: PS.rd, nc: PS.nc, lay: S.settings.mLay || {} }; }
+  function curOpts() { return { paper: PS.paper, ori: PS.ori, oSk: PS.oSk, oIn: PS.oIn, oLg: PS.oLg, map: PS.map, list: PS.list, luas: PS.luas, title: PS.title, fs: PS.fs, pos: PS.pos, rj: PS.rj, rd: PS.rd, nc: PS.nc, btw: PS.btw, lay: S.settings.mLay || {} }; }
   function slug(t) { var r = String(t || 'x').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/^master-(?=.)/, '').slice(0, 24); return r || 'x'; }
   function pdfName(m) { return 'M-' + slug(m.name) + '-' + (PS.paper && PS.paper !== 'auto' ? PS.paper : 'a3') + '.pdf'; }
 
@@ -870,7 +873,7 @@
         if (!sh && opts.bt !== false && (opts.btForce || HA.lyb.btOn())) { var bm = HA.lyb.bulanOf(b); if (bm) { hasBt = true;
           // blok <= 1,0 ha: garis bulan tanam 0,5 pt DI LUAR batas (isi blok utuh untuk varietas); blok besar: di dalam
           if (HzBlok.areaHa(b.pts) <= 1.0) c.push(L('Bulan tanam', 'q -20000 -20000 40000 40000 re ' + s + 'h W* n ' + rgbc(HA.lyb.bulanCol(bm)) + ' RG 1 j 1 w ' + s + 'h S Q'));
-          else c.push(L('Bulan tanam', 'q ' + s + 'h W n ' + rgbc(HA.lyb.bulanCol(bm)) + ' RG 1 j ' + f2(HA.lyb.btW() * 2) + ' w ' + s + 'h S Q')); } }
+          else c.push(L('Bulan tanam', 'q ' + s + 'h W n ' + rgbc(HA.lyb.bulanCol(bm)) + ' RG 1 j ' + f2((opts.btw > 0 ? opts.btw : HA.lyb.btW()) * 2) + ' w ' + s + 'h S Q')); } }
         if (!hasBt) c.push(L('Tepi blok', s + 'h S'));
         var q = bbox(b.pts), bw = (q[3] - q[1]) * kx * sc, bh = (q[2] - q[0]) * ky * sc, nm = asc(b.name);
         infos.push({ b: b, nm: nm, ar: fmtHa(HzBlok.areaHa(b.pts)) + ' ha', fit: Math.min(bw * 0.84 / (Math.max(3, nm.length) * 0.56), bh * (opts.luas === false ? 0.7 : 0.42)), x0: X(q[1]), x1: X(q[3]), y0: Y(q[0]), y1: Y(q[2]) });

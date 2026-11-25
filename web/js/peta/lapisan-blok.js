@@ -53,7 +53,8 @@
   function btOn() { return !!S.settings.btOn; }
   function btW() { var v = +S.settings.btW; return v > 0 ? v : 1.5; }
   function bulanOf(b) { return b && b.tn && /^\d{4}-\d{2}$/.test(b.tn) ? +b.tn.slice(5, 7) : 0; }
-  function btOpen() {
+  function btOpen(ret) {
+    var home2 = typeof ret === 'function' ? ret : home;
     var wOn = btOn(), wW = btW(), wc = []; for (var q = 1; q <= 12; q++) wc.push(bulanCol(q));
     var oc = wc.slice(), oOn = wOn, oW = wW;
     function changed() { return wOn !== oOn || wW !== oW || wc.join() !== oc.join(); }
@@ -63,8 +64,8 @@
       '<label style="display:block"><input type="checkbox" id="btOn"' + (wOn ? ' checked' : '') + '> Ikut cetak Master (garis tepi menurut bulan tanam)</label>' +
       '<div class="h" style="margin-top:10px">TEBAL GARIS TEPI (pt)</div><input type="number" id="btW" min="0.5" max="8" step="0.5" inputmode="decimal" value="' + wW + '" style="width:100%">' +
       '<div class="h" style="margin-top:10px">WARNA BULAN</div><div class="lbList">' + BN.map(function (nm, i) { return '<label class="lbRow" style="min-height:2.75rem;align-items:center;gap:10px"><input type="color" data-n="' + (i + 1) + '" value="' + wc[i] + '"><span style="flex:1">' + nm + '</span><span class="muted">' + (cnt[i + 1] || 0) + ' blok</span></label>'; }).join('') + '</div>' );
-    $('btC').onclick = function () { if (!changed()) { home(); return; } HA.askConfirm('Buang perubahan?', 'Perubahan warna dan tebal garis belum disimpan.', 'Buang', home); };
-    $('btX').onclick = function () { S.settings.btOn = wOn; S.settings.btW = wW; S.settings.bulanCol = wc.slice(); save(); home(); };
+    $('btC').onclick = function () { if (!changed()) { home2(); return; } HA.askConfirm('Buang perubahan?', 'Perubahan warna dan tebal garis belum disimpan.', 'Buang', home2); };
+    $('btX').onclick = function () { S.settings.btOn = wOn; S.settings.btW = wW; S.settings.bulanCol = wc.slice(); save(); home2(); };
     $('btOn').onchange = function () { wOn = this.checked; };
     $('btW').onchange = function () { var v = Math.max(0.5, Math.min(8, parseFloat(String(this.value).replace(',', '.')) || 1.5)); wW = v; this.value = v; };
     $('sheet').querySelectorAll('input[type=color][data-n]').forEach(function (e) { e.onchange = function () { wc[+e.getAttribute('data-n') - 1] = e.value; }; });
@@ -504,7 +505,7 @@
     $('rhX').onclick = function () { if (back) back(); else closeSheet(); };
     if ($('rhUn')) $('rhUn').onclick = function () { if (undoLast(b)) { toast('Perubahan terakhir diurungkan'); hist(b, back); } };
   }
-  HA.lyb = { hist: hist, suggest: suggest, all: all, by: lapBy, of: of, set: setItem, umur: umur, umurM: umurM, umBucket: umBucket, umCol: function (i) { return umCols()[i]; }, umLabels: umLabels, umCols: umCols, txt: txt, next: nextItem, active: active, fillPdf: fillPdf, swatchPdf: swatchPdf, rgb: rgb, pathOf: pathOf, PATS: PATS, PAL: PAL, prevSvg: prevSvg, diceN: diceN, isVec: isVec, symPdf: symPdf, symK: symK, symW: symW, symHtml: symHtml, symTxt: symTxt, bulanCol: bulanCol, bulanOf: bulanOf, btOn: btOn, btW: btW, BN: BN, home: home, bulk: bulk, today: today };
+  HA.lyb = { btOpen: btOpen, hist: hist, suggest: suggest, all: all, by: lapBy, of: of, set: setItem, umur: umur, umurM: umurM, umBucket: umBucket, umCol: function (i) { return umCols()[i]; }, umLabels: umLabels, umCols: umCols, txt: txt, next: nextItem, active: active, fillPdf: fillPdf, swatchPdf: swatchPdf, rgb: rgb, pathOf: pathOf, PATS: PATS, PAL: PAL, prevSvg: prevSvg, diceN: diceN, isVec: isVec, symPdf: symPdf, symK: symK, symW: symW, symHtml: symHtml, symTxt: symTxt, bulanCol: bulanCol, bulanOf: bulanOf, btOn: btOn, btW: btW, BN: BN, home: home, bulk: bulk, today: today };
   document.addEventListener('DOMContentLoaded', wire); if (document.readyState !== 'loading') wire();
   function wire() {
     var a = document.querySelector('#drawer a[data-lyb]'); if (!a || a._w) return; a._w = 1;
