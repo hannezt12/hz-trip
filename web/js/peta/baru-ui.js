@@ -244,6 +244,7 @@
         var first = !pl && k === 0 && pts.length >= 3;
         L.circleMarker(p, { radius: first && snap ? 10 : 5, color: first && snap ? '#fff' : '#06202B', weight: first && snap ? 3 : 2, fillColor: '#FFD84D', fillOpacity: 1, interactive: false }).addTo(g);
       });
+      segLabels(main, !closed && pts.length ? cp : null);
       // hasil
       var len = pts.length ? flat(closed ? line : pts.concat([cp]), false).len : 0;
       $('mzP').textContent = pts.length === 1 && !closed ? pts[0][0].toFixed(5) + ', ' + pts[0][1].toFixed(5) : (pts.length ? fmtLen(len) : '–');
@@ -255,6 +256,21 @@
       sv.style.display = (!TK() && (closed || pts.length >= 1)) ? '' : 'none';
       card.classList.toggle('shut', !!closed);
       sv.style.top = (card.offsetTop + card.offsetHeight + 8) + 'px'; undo.style.top = (card.offsetTop + card.offsetHeight + 8) + 'px';
+    }
+    // label panjang tiap sisi (meter, 1 desimal); tombol m nyala/mati
+    var segOn = S.settings.ukSeg !== false, sb = document.createElement('button');
+    sb.type = 'button'; sb.className = 'ukSb' + (segOn ? '' : ' off'); sb.textContent = 'm'; sb.setAttribute('aria-label', 'Panjang sisi'); box.appendChild(sb); L.DomEvent.disableClickPropagation(sb);
+    sb.onclick = function () { segOn = !segOn; S.settings.ukSeg = segOn; HA.saveSettings(); sb.classList.toggle('off', !segOn); toast(segOn ? 'Panjang sisi tampil' : 'Panjang sisi disembunyikan'); upd(); };
+    function segTxt(m) { return m < 1000 ? m.toFixed(1).replace('.', ',') + ' m' : (m / 1000).toFixed(2).replace('.', ',') + ' km'; }
+    function segLabels(main, tail) {
+      if (!segOn) return;
+      var P = main.slice(); if (tail) P = P.concat([tail]);
+      for (var k = 0; k < P.length - 1; k++) {
+        var a = P[k], b = P[k + 1], pa = map.latLngToContainerPoint(L.latLng(a[0], a[1])), pb = map.latLngToContainerPoint(L.latLng(b[0], b[1]));
+        if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < 46) continue;
+        var m = flat([a, b], false).len;
+        L.marker([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], { interactive: false, keyboard: false, zIndexOffset: 700, icon: L.divIcon({ className: '', html: '<div class="ukSl">' + segTxt(m) + '</div>', iconSize: [0, 0], iconAnchor: [0, 0] }) }).addTo(g);
+      }
     }
     function setClosed(c) { var was = !!closed; closed = c; if (c && !was) toast('Poligon tertutup. Tekan Simpan'); }
     function addPt() {
@@ -339,17 +355,13 @@
     function ink2(hex) { var h = String(hex).replace('#', ''); if (h.length !== 6) return '#fff'; var rr = parseInt(h.slice(0, 2), 16), gg = parseInt(h.slice(2, 4), 16), bb = parseInt(h.slice(4, 6), 16); return (0.299 * rr + 0.587 * gg + 0.114 * bb) > 150 ? '#111' : '#fff'; }
     function dateField(def) { return '<label class="ukDt">Tanggal<input type="date" id="ukDate" value="' + def + '" max="' + S.today + '"></label>'; }
     function dateVal(def) { var v = $('ukDate') ? $('ukDate').value : ''; return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : def; }
-    // titik (1 titik) atau garis (titik tidak menyatu): wajib menyentuh blok terkonfirmasi
+    // titik (1 titik) atau garis (titik tidak menyatu): boleh di dalam maupun di luar blok
     function saveOpen() {
       var P = pts.map(r6), kind = P.length === 1 ? 'pt' : 'ln', hit = null;
       P.forEach(function (p) { if (hit) return; var b = HA.blockAt(L.latLng(p[0], p[1])); if (b && b.conf) hit = b; });
-      if (!hit) {
-        openSheet('<div class="grab"></div><div class="st">Tidak bisa ditandai</div><div class="muted" style="margin:6px 0 10px">' + (kind === 'pt' ? 'Titik' : 'Garis') + ' ini tidak berada di blok terkonfirmasi. Tanda hanya untuk blok terkonfirmasi. Konfirmasi blok dulu di Edit Blok.</div><div class="row" style="margin-top:12px"><button class="btn" id="ukNo" style="flex:1;height:50px">Tutup</button></div>');
-        $('ukNo').onclick = closeSheet; return;
-      }
       var d = HA.tandaData(), br = HA.tandaBrush(), cat = br.cat, sb = br.sub, def = S.mapDay || S.today;
       var catRow = d.cats.map(function (c) { return '<button type="button" class="tdk' + (c.id === cat ? ' on' : '') + '" data-cat="' + c.id + '" style="background:' + c.col + ';color:' + ink2(c.col) + '">' + esc(c.name) + '</button>'; }).join('');
-      openSheet('<div class="grab"></div><div class="st">Simpan sebagai tanda ' + (kind === 'pt' ? 'titik' : 'garis') + '</div><div class="muted" style="margin:4px 0 8px">Blok: ' + esc(hit.name) + '. Pilih kategori:</div><div class="tdKs" id="ukCats">' + catRow + '</div>' + dateField(def) +
+      openSheet('<div class="grab"></div><div class="st">Simpan sebagai tanda ' + (kind === 'pt' ? 'titik' : 'garis') + '</div><div class="muted" style="margin:4px 0 8px">' + (hit ? 'Blok: ' + esc(hit.name) : 'Di luar blok') + '. Pilih kategori:</div><div class="tdKs" id="ukCats">' + catRow + '</div>' + dateField(def) +
         '<div class="row" style="margin-top:12px"><button class="btn" id="ukNo" style="flex:1;height:50px">Batal</button><button class="btn pri" id="ukYes" style="flex:1;height:50px">Simpan</button></div>');
       $('ukCats').onclick = function (e) {
         var bt = e.target.closest && e.target.closest('button[data-cat]'); if (!bt) return;

@@ -16,7 +16,9 @@
   function ik() { return S.settings.ikon || (S.settings.ikon = { on: false, p: 'bulat', c: CLRS[0], h: 'A' }); }
   function hm() { return S.settings.ikonH || (S.settings.ikonH = {}); }
   function arr() { return S.settings.ttk || (S.settings.ttk = []); }
-  function lab(t) { return t.h + '.' + t.no; }
+  function code(t) { return t.h + '.' + t.no; }
+  function lab(t) { return t.nm || code(t); }
+  function bname(t) { return t.bn || 'Luar blok'; }
   function ink(hex) { var h = String(hex).replace('#', ''); if (h.length !== 6) return '#fff'; var r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#06202B' : '#fff'; }
   function svg(p, c, txt, sz) {
     var sh = { bulat: '<circle cx="16" cy="16" r="13"', kotak: '<rect x="4" y="4" width="24" height="24" rx="4"', segitiga: '<polygon points="16,3 30,28 2,28"', belah: '<polygon points="16,2 30,16 16,30 2,16"', enam: '<polygon points="16,2 28,9 28,23 16,30 4,23 4,9"' }[p] || '<circle cx="16" cy="16" r="13"';
@@ -68,11 +70,11 @@
   };
   HA.titikOf = function (bid) { return arr().filter(function (t) { return t.bid === bid; }); };
   HA.titikAdd = function (ll, o) {
-    o = o || {}; var i = ik(), b = HA.blockAt(L.latLng(ll[0], ll[1]));
-    if (!b) { toast('Titik di luar blok'); return null; }
-    if (!b.conf) { toast('Blok ' + b.name + ' belum terkonfirmasi. Konfirmasi dulu di Edit Blok'); return null; }
-    var it = { id: 'k' + Date.now() + Math.random().toString(36).slice(2, 5), bid: b.id, bn: String(b.name), p: i.p, c: i.c, h: i.h || 'A', no: nextNo(b.id, { p: i.p, c: i.c, h: i.h || 'A' }), ll: [+(+ll[0]).toFixed(6), +(+ll[1]).toFixed(6)], note: o.note || '', date: S.mapDay || S.today, ts: Date.now(), je: Math.round(edgeD(b, ll)) };
-    arr().push(it); save(); toast(lab(it) + ' · ' + b.name + ' · ' + it.je + ' m dari tepi'); return it;
+    o = o || {}; var i = ik(), b = HA.blockAt(L.latLng(ll[0], ll[1])), note = '';
+    if (b && !b.conf) { note = ' (blok ' + b.name + ' belum terkonfirmasi, dianggap di luar blok)'; b = null; }
+    var h = i.h || 'A', bid = b ? b.id : null;
+    var it = { id: 'k' + Date.now() + Math.random().toString(36).slice(2, 5), bid: bid, bn: b ? String(b.name) : '', p: i.p, c: i.c, h: h, no: nextNo(bid, { p: i.p, c: i.c, h: h }), ll: [+(+ll[0]).toFixed(6), +(+ll[1]).toFixed(6)], je: b ? Math.round(edgeD(b, ll)) : null, nm: '', note: '', date: S.mapDay || S.today, ts: Date.now() };
+    arr().push(it); save(); toast(code(it) + ' · ' + (b ? b.name + ' · ' + it.je + ' m dari tepi' : 'di luar blok') + note); return it;
   };
   HA.titikDel = function (id) { var a = arr(), k; for (k = a.length - 1; k >= 0; k--) if (a[k].id === id) a.splice(k, 1); save(); };
 
@@ -84,7 +86,7 @@
     var bd = map.getBounds().pad(0.2), n = 0; LAY = L.layerGroup().addTo(map);
     arr().forEach(function (t) {
       if (n >= 400 || !bd.contains(t.ll)) return; n++;
-      var mk = L.marker(t.ll, { icon: L.divIcon({ className: '', html: svg(t.p, t.c, lab(t), 36), iconSize: [36, 36], iconAnchor: [18, 18] }), zIndexOffset: 400 }).addTo(LAY);
+      var mk = L.marker(t.ll, { icon: L.divIcon({ className: '', html: svg(t.p, t.c, code(t), 36), iconSize: [36, 36], iconAnchor: [18, 18] }), zIndexOffset: 400 }).addTo(LAY);
       mk.on('click', function (e) { L.DomEvent.stop(e); edit(t, null); });
     });
   }
@@ -118,16 +120,33 @@
   HA.titikIkon = ikonSheet;
 
   // ---------- ubah satu tanda ----------
+  function kirimKml(t) {
+    function xe(x) { return String(x == null ? '' : x).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    var nm = lab(t), d = [];
+    if (t.bn) d.push('Blok ' + t.bn);
+    if (t.note) d.push(t.note);
+    var h = String(t.c).replace('#', ''), kc = 'ff' + h.slice(4, 6) + h.slice(2, 4) + h.slice(0, 2);
+    var x = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>' + xe(nm) + '</name>' +
+      '<Style id="s"><IconStyle><color>' + kc + '</color><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle></Style>' +
+      '<Placemark><name>' + xe(nm) + '</name><description>' + xe(d.join(' | ')) + '</description><styleUrl>#s</styleUrl><Point><coordinates>' + t.ll[1].toFixed(7) + ',' + t.ll[0].toFixed(7) + ',0</coordinates></Point></Placemark></Document></kml>';
+    var fn = 'Tanda_' + String(nm).replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 30) + '.kml';
+    return HA.saveFile(fn, HA.textB64(x), 'application/vnd.google-earth.kml+xml');
+  }
+  HA.titikKml = kirimKml;
   function edit(t, back) {
-    openSheet('<div class="grab"></div><div class="st" style="display:flex;align-items:center;gap:10px">' + svg(t.p, t.c, lab(t), 40) + '<span>' + esc(lab(t)) + ' · ' + esc(t.bn) + '</span></div>' +
-      '<div class="muted" style="margin:6px 0">' + t.ll[0].toFixed(6) + ', ' + t.ll[1].toFixed(6) + ' · ' + t.je + ' m dari tepi blok</div>' +
+    openSheet('<div class="grab"></div><div class="tkHd"><span class="tkHi">' + svg(t.p, t.c, code(t), 40) + '</span><div class="tkHt"><b>' + esc(lab(t)) + '</b><small>' + (t.bn ? 'Blok ' + esc(t.bn) : 'Di luar blok') + '</small></div>' +
+      '<button type="button" class="btn sm" id="tkKr">Kirim</button><button type="button" class="ib" id="tkX" aria-label="Tutup">\u2715</button></div>' +
+      '<div class="muted" style="margin:6px 0">' + t.ll[0].toFixed(6) + ', ' + t.ll[1].toFixed(6) + (t.je != null ? ' · ' + t.je + ' m dari tepi blok' : '') + '</div>' +
+      '<label class="ukDt" style="display:block">Nama<input type="text" id="tkNm" maxlength="40" placeholder="' + esc(code(t)) + '" value="' + esc(t.nm || '') + '" style="width:100%"></label>' +
       '<label class="ukDt" style="display:block">Catatan<textarea id="tkN" rows="3" style="width:100%" maxlength="300">' + esc(t.note || '') + '</textarea></label>' +
       '<label class="ukDt">Tanggal<input type="date" id="tkD" value="' + t.date + '" max="' + S.today + '"></label>' +
-      '<div class="row" style="margin-top:12px"><button class="btn" id="tkX" style="flex:1;height:50px">Tutup</button><button class="btn" id="tkDl" style="flex:1;height:50px;color:var(--r)">Hapus</button><button class="btn pri" id="tkOk" style="flex:1;height:50px">Simpan</button></div>');
+      '<div class="row" style="margin-top:12px"><button class="btn" id="tkDl" style="flex:1;height:50px;color:var(--r)">Hapus</button><button class="btn pri" id="tkOk" style="flex:1;height:50px">Simpan</button></div>');
     function out() { if (back) back(); }
+    function keep() { t.nm = $('tkNm').value.trim(); t.note = $('tkN').value.trim(); var d = $('tkD').value; if (/^\d{4}-\d{2}-\d{2}$/.test(d)) t.date = d; }
     $('tkX').onclick = function () { closeSheet(); out(); };
-    $('tkOk').onclick = function () { t.note = $('tkN').value.trim(); var d = $('tkD').value; if (/^\d{4}-\d{2}-\d{2}$/.test(d)) t.date = d; save(); closeSheet(); out(); };
-    $('tkDl').onclick = function () { askConfirm('Hapus ' + lab(t) + '?', 'Tanda ' + lab(t) + ' di ' + t.bn + ' dihapus. Nomor lain tidak berubah.', 'Hapus', function () { HA.titikDel(t.id); out(); }); var cn = $('cfNo'); if (cn) cn.onclick = function () { edit(t, back); }; };
+    $('tkKr').onclick = function () { keep(); save(); kirimKml(t); };
+    $('tkOk').onclick = function () { keep(); save(); closeSheet(); out(); };
+    $('tkDl').onclick = function () { askConfirm('Hapus ' + lab(t) + '?', 'Tanda ' + lab(t) + (t.bn ? ' di ' + t.bn : '') + ' dihapus. Nomor lain tidak berubah.', 'Hapus', function () { HA.titikDel(t.id); out(); }); var cn = $('cfNo'); if (cn) cn.onclick = function () { edit(t, back); }; };
   }
 
   // ---------- Daftar tanda: tab Kategori | Tanda | Draf ----------
@@ -143,18 +162,18 @@
   var Q = '';
   function sorted() {
     var coll = new Intl.Collator('id', { numeric: true });
-    return arr().slice().sort(function (a, b) { return coll.compare(a.bn, b.bn) || coll.compare(a.h + a.p + a.c, b.h + b.p + b.c) || a.no - b.no; });
+    return arr().slice().sort(function (a, b) { return coll.compare(a.bn || '\uffff', b.bn || '\uffff') || coll.compare(a.h + a.p + a.c, b.h + b.p + b.c) || a.no - b.no; });
   }
   function tndOpen() {
-    var q = Q.toLowerCase().replace(/\s+/g, ''), items = sorted().filter(function (t) { return !q || (t.bn + lab(t) + t.note + t.date).toLowerCase().replace(/\s+/g, '').indexOf(q) >= 0; }), ic = ik();
-    openSheet('<div class="grab"></div>' + HA.listTabs('tnd') + '<div class="lsQr" style="display:flex;gap:6px"><input type="search" id="tkQ" placeholder="Cari blok, label, catatan" value="' + esc(Q) + '" autocomplete="off" style="flex:1"><button type="button" class="btn" id="tkIk" style="padding:0 8px">' + svg(ic.p, ic.c, ic.h || 'A', 28) + ' <small>Ikon</small></button></div>' +
+    var q = Q.toLowerCase().replace(/\s+/g, ''), items = sorted().filter(function (t) { return !q || (bname(t) + code(t) + (t.nm || '') + t.note + t.date).toLowerCase().replace(/\s+/g, '').indexOf(q) >= 0; }), ic = ik();
+    openSheet('<div class="grab"></div>' + HA.listTabs('tnd') + '<div class="lsQr" style="display:flex;gap:6px"><input type="search" id="tkQ" placeholder="Cari blok, nama, catatan" value="' + esc(Q) + '" autocomplete="off" style="flex:1"><button type="button" class="btn" id="tkIk" style="padding:0 8px">' + svg(ic.p, ic.c, ic.h || 'A', 28) + ' <small>Ikon</small></button></div>' +
       '<div id="tkL" style="margin-top:8px"></div><div class="row" style="margin-top:10px"><button class="btn" id="tkNu" style="flex:1;height:46px">Susun ulang nomor</button><button class="btn" id="tkXx" style="flex:1;height:46px">Tutup</button></div>');
     $('tkXx').onclick = closeSheet;
     $('tkIk').onclick = function () { ikonSheet(tndOpen); };
     $('tkQ').oninput = function () { Q = this.value; var p = this.selectionStart; tndOpen(); var e = $('tkQ'); if (e) { e.focus(); try { e.setSelectionRange(p, p); } catch (x) {} } };
     $('tkNu').onclick = renum;
     HA.lpList($('tkL'), 'titik', {
-      items: items.map(function (t) { return { id: t.id, title: t.bn + ' · ' + lab(t), sub: (t.note ? t.note + ' · ' : '') + t.date + ' · ' + t.je + ' m dari tepi' }; }),
+      items: items.map(function (t) { return { id: t.id, title: bname(t) + ' · ' + lab(t) + (t.nm ? ' (' + code(t) + ')' : ''), sub: (t.note ? t.note + ' · ' : '') + t.date + (t.je != null ? ' · ' + t.je + ' m dari tepi' : '') }; }),
       empty: 'Belum ada tanda titik. Aktifkan ikon, lalu pakai Ukur atau Walking.',
       reopen: tndOpen,
       onTap: function (id) { var t = byId(id); if (t) edit(t, tndOpen); },
@@ -175,12 +194,12 @@
     sorted().forEach(function (t) { var k = t.bid + '|' + t.p + '|' + t.c + '|' + t.h; if (!g[k]) { g[k] = []; order.push(k); } g[k].push(t); });
     if (!order.length) { toast('Belum ada tanda'); return; }
     openSheet('<div class="grab"></div><div class="st">Susun ulang nomor</div><div class="muted" style="margin:4px 0 8px">Per blok dan ikon. Nomor disusun 1, 2, 3 menurut waktu dibuat.</div>' +
-      order.map(function (k, i) { var a = g[k], t = a[0], gap = a.some(function (x, j) { return false; }); void gap; return '<div class="ukRw"><span style="display:flex;align-items:center;gap:8px">' + svg(t.p, t.c, t.h, 28) + esc(t.bn) + ' · ' + a.length + ' tanda</span><button class="btn sm" data-g="' + i + '">Susun</button></div>'; }).join('') +
+      order.map(function (k, i) { var a = g[k], t = a[0], gap = a.some(function (x, j) { return false; }); void gap; return '<div class="ukRw"><span style="display:flex;align-items:center;gap:8px">' + svg(t.p, t.c, t.h, 28) + esc(bname(t)) + ' · ' + a.length + ' tanda</span><button class="btn sm" data-g="' + i + '">Susun</button></div>'; }).join('') +
       '<button class="btn" id="rnX" style="width:100%;margin-top:10px;height:46px">Kembali</button>');
     $('rnX').onclick = tndOpen;
     $('sheet').onclick = function (e) {
       var b = e.target.closest && e.target.closest('[data-g]'); if (!b) return; var a = g[order[+b.getAttribute('data-g')]];
-      askConfirm('Susun ulang nomor?', 'Nomor ' + esc(a[0].h) + ' di ' + a[0].bn + ' (' + a.length + ' tanda) menjadi 1 sampai ' + a.length + ' menurut waktu dibuat. Label lama berubah.', 'Susun', function () {
+      askConfirm('Susun ulang nomor?', 'Nomor ' + esc(a[0].h) + ' di ' + bname(a[0]) + ' (' + a.length + ' tanda) menjadi 1 sampai ' + a.length + ' menurut waktu dibuat. Label lama berubah.', 'Susun', function () {
         a.slice().sort(function (x, y) { return x.ts - y.ts; }).forEach(function (t, j) { t.no = j + 1; }); save(); toast('Nomor disusun ulang'); renum();
       });
       var cn = $('cfNo'); if (cn) cn.onclick = renum;

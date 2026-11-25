@@ -535,7 +535,7 @@
     var hasObj = !!(HA.obj && HA.obj.objs().length);
     var lyList = HA.lyb ? HA.lyb.all().filter(function (l) { return l.items.length && list.some(function (b) { return HA.lyb.of(b, l.id); }); }) : [];
     var stTitle = 'BAGIKAN ' + (many ? list.length + ' BLOK' : 'BLOK ' + esc(String(list[0].name)).toUpperCase());
-    openSheet('<div class="grab"></div><div class="st">' + stTitle + '</div>' +
+    openSheet('<div class="grab"></div><div class="st shHd"><span>' + stTitle + '</span><button type="button" class="btn sm" id="shKl">Kolase</button></div>' +
       '<div id="shS1">' +
       '<div class="muted" style="margin-bottom:8px">' + n + ' tanda' + (n ? '' : ' · blok akan dicetak tanpa tanda') + (nNoCat ? ' · ' + nNoCat + ' tanpa kategori tidak ikut PDF' : '') + '</div>' +
       '<button type="button" class="shRow" id="shBc"><span class="shL">Kategori</span><span class="shV" id="shBcV"></span><span class="lsAr">›</span></button>' +
@@ -559,6 +559,7 @@
       '<div class="muted" id="shK" style="margin-top:10px;display:none">KML berisi batas blok dan tanda persis di dalam blok, tanpa tambahan sekeliling.</div>' +
       '<button class="btn" id="shPv" style="width:100%;margin-top:12px">Preview layar penuh</button><button class="btn pri" id="shGo" style="width:100%;margin-top:8px;height:52px">Kirim</button><button class="btn" id="shX2" style="width:100%;margin-top:8px">Tutup</button></div>');
     var S2 = false, detK = null;
+    $('shKl').onclick = function () { closeSheet(); if (HA.kolase) HA.kolase(list); };
     function nTk() { return tks.filter(function (t) { return SH.tkSel[t.id]; }).length; }
     function pagesEst() {
       var pg = 0;
