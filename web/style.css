@@ -1156,3 +1156,9 @@ input[type=checkbox],input[type=radio]{accent-color:var(--p)}
 .klPn .klLs{max-height:22vh}
 .klTip{background:#FF9500;border:2px solid #fff;color:#111;font-weight:800;border-radius:12px;padding:1px 7px;box-shadow:none}
 .klTip:before{display:none}
+/* v0.27.12 kolase: naik 64 px dari dasar (di atas bar navigasi Android) */
+.klPn{padding-bottom:64px}
+.klPn .klFt{padding-bottom:8px}
+.klEd .klFt{padding-bottom:72px}
+.klBx{padding-bottom:76px}
+.klPh .ib svg{display:block;margin:auto}

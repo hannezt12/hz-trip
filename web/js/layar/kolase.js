@@ -99,7 +99,7 @@
       } else halo(ctx, a.t, q[0], q[1], cw * 0.044 * f, 'center');
     });
     ctx.restore();
-    return { fx: function (x, y) { return [(x - ox) / (g.bw * sc) + (ex0 - g.mnx) / g.bw, ((eh * sc - (y - oy)) / sc + ey0 - g.mny) / g.bh]; } };
+    return { px: px, fx: function (x, y) { return [(x - ox) / (g.bw * sc) + (ex0 - g.mnx) / g.bw, ((eh * sc - (y - oy)) / sc + ey0 - g.mny) / g.bh]; } };
   }
   function halo(ctx, t, x, y, fs, al) {
     ctx.font = '700 ' + Math.round(fs) + 'px sans-serif'; ctx.textAlign = al; ctx.textBaseline = 'middle';
@@ -169,7 +169,7 @@
     id = String(id); var k = ST.sel.indexOf(id);
     if (k >= 0) ST.sel.splice(k, 1);
     else { if (ST.sel.length >= MAX) { HA.toast('Maksimal ' + MAX + ' blok'); return; } ST.sel.push(id); }
-    var y = el.querySelector('.klBody') ? el.querySelector('.klBody').scrollTop : 0; main(); if (el.querySelector('.klBody')) el.querySelector('.klBody').scrollTop = y;
+    main();
   }
   function open(pre) {
     if (el) close();
@@ -192,13 +192,16 @@
   function head(title) {
     return '<div class="idh"><div class="idt" style="text-align:left;font-weight:700;padding-left:6px">' + esc(title) + '</div><button type="button" class="ib" id="klX" aria-label="Tutup">\u2715</button></div>';
   }
+  var ICO_SML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l5 5-5 5"/><path d="M20 7l-5 5 5 5"/></svg>'; // > < : kecilkan
+  var ICO_BIG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7l-5 5 5 5"/><path d="M15 7l5 5-5 5"/></svg>'; // < > : besarkan
   function main() {
+    var kb = el.querySelector('.klBody'), kl = el.querySelector('#klLs'), y0 = kb ? kb.scrollTop : 0, l0 = kl ? kl.scrollTop : 0;
     var c = cfg(), q = ST.q.trim().toLowerCase(), col = new Intl.Collator('id', { numeric: true }), all = blocks().slice().sort(function (a, b) { return col.compare(String(a.name), String(b.name)); });
     var shown = all.filter(function (b) { return !q || String(b.name).toLowerCase().indexOf(q) >= 0; }).slice(0, 60);
     var nA = 0; ST.sel.forEach(function (id) { (ST.ann[id] || []).forEach(function (a) { if (a.on) nA++; }); });
     var sh = sheetCount();
     el.className = 'klPn' + (ST.col ? ' col' : ''); if (HA.map) { try { HA.map.closePopup(); } catch (x) {} }
-    el.innerHTML = '<div class="klPh" id="klPh"><span class="klGr"></span><b>Kolase blok</b><span class="muted">' + ST.sel.length + '/' + MAX + '</span><span style="flex:1"></span><button type="button" class="ib" id="klCl" aria-label="' + (ST.col ? 'Buka' : 'Lipat') + '">' + (ST.col ? '\u25B4' : '\u25BE') + '</button><button type="button" class="ib" id="klX" aria-label="Tutup">\u2715</button></div>' +
+    el.innerHTML = '<div class="klPh" id="klPh"><span class="klGr"></span><b>Kolase blok</b><span class="muted">' + ST.sel.length + '/' + MAX + '</span><span style="flex:1"></span><button type="button" class="ib" id="klCl" aria-label="' + (ST.col ? 'Buka' : 'Lipat') + '">' + (ST.col ? ICO_BIG : ICO_SML) + '</button><button type="button" class="ib" id="klX" aria-label="Tutup">\u2715</button></div>' +
       '<div class="klBody"><div class="h">BLOK TERPILIH (' + ST.sel.length + '/' + MAX + ')</div><div class="klChips" id="klCh">' +
       (ST.sel.length ? ST.sel.map(function (id) { var b = byId(id); return b ? '<button type="button" class="klChip" data-r="' + esc(id) + '">' + esc(String(b.name)) + ' ✕</button>' : ''; }).join('') : '<span class="muted">Belum ada. Ketuk blok di peta atau cari nama di bawah.</span>') + '</div>' +
       '<input type="search" id="klQ" placeholder="Cari nama blok" value="' + esc(ST.q) + '" autocomplete="off" style="width:100%;margin-top:8px"><div class="klLs" id="klLs">' +
@@ -224,6 +227,7 @@
     $e('klF').onclick = function (e) { var b = e.target.closest && e.target.closest('[data-v]'); if (!b) return; c.fmt = b.getAttribute('data-v'); HA.saveSettings(); main(); };
     $e('klAn').onclick = function () { ann = true; if (hl) { hl.remove(); hl = null; } ST.cur = ST.cur && ST.sel.indexOf(ST.cur) >= 0 ? ST.cur : ST.sel[0]; annot(); };
     $e('klGo').onclick = go;
+    var nb = el.querySelector('.klBody'), nl = $e('klLs'); if (nb) nb.scrollTop = y0; if (nl) nl.scrollTop = l0;
   }
   function go() {
     var c = cfg(); if (!ST.sel.length) return;
@@ -245,7 +249,7 @@
       '<canvas id="klCv" style="width:100%;border-radius:10px;margin-top:8px;touch-action:manipulation"></canvas>' +
       '<div class="row" style="gap:8px;margin-top:8px"><div class="seg" id="klT"><button data-v="p"' + (ST.tool === 'p' ? ' class="on"' : '') + '>Titik</button><button data-v="t"' + (ST.tool === 't' ? ' class="on"' : '') + '>Teks</button></div>' +
       '<div class="seg" id="klZ"><button data-v="k"' + (ST.sz === 'k' ? ' class="on"' : '') + '>Kecil</button><button data-v="s"' + (ST.sz === 's' ? ' class="on"' : '') + '>Sedang</button><button data-v="b"' + (ST.sz === 'b' ? ' class="on"' : '') + '>Besar</button></div></div>' +
-      '<div class="muted" style="margin:6px 0">Ketuk gambar untuk menaruh ' + (ST.tool === 'p' ? 'titik (nama boleh kosong)' : 'teks') + '.</div>' +
+      '<div class="muted" style="margin:6px 0">Ketuk gambar untuk menaruh ' + (ST.tool === 'p' ? 'titik (nama boleh kosong)' : 'teks') + '. Tahan lalu geser untuk memindahkan yang sudah ada.</div>' +
       '<div id="klAl">' + (arr.length ? arr.map(function (a, i) { return '<div class="klRw"><input type="checkbox" data-t="' + i + '"' + (a.on ? ' checked' : '') + '><span>' + (a.k === 'p' ? '● ' : 'T ') + esc(a.t || 'Titik') + '</span><small class="muted">' + ({ k: 'Kecil', s: 'Sedang', b: 'Besar' })[a.sz] + '</small><button type="button" class="ib" data-d="' + i + '" aria-label="Hapus">✕</button></div>'; }).join('') : '<div class="muted">Belum ada titik atau teks di blok ini.</div>') + '</div></div>' +
       '<div class="klFt"><button type="button" class="btn pri" id="klOk" style="width:100%;height:52px">Selesai</button></div>';
     var cv = $e('klCv'), sz = cellSize(c.per), sc = 1.6;
@@ -261,8 +265,26 @@
     $e('klZ').onclick = function (e) { var x = e.target.closest && e.target.closest('[data-v]'); if (!x) return; ST.sz = x.getAttribute('data-v'); annot(); };
     $e('klAl').onchange = function (e) { var i = e.target.getAttribute('data-t'); if (i == null) return; arr[+i].on = e.target.checked; paint(); };
     $e('klAl').onclick = function (e) { var d = e.target.closest && e.target.closest('[data-d]'); if (!d) return; arr.splice(+d.getAttribute('data-d'), 1); annot(); };
-    cv.onclick = function (e) {
-      var r = cv.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * sz.w, y = (e.clientY - r.top) / r.height * sz.h, f = map.fx(x, y);
+    var drag = null, st0 = null;
+    function pos(e) { var r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * sz.w, y: (e.clientY - r.top) / r.height * sz.h, k: sz.w / r.width }; }
+    cv.style.touchAction = 'none';
+    cv.onpointerdown = function (e) {
+      var q = pos(e), best = null, bd = 1e9;
+      arr.forEach(function (a) { if (!a.on) return; var c = map.px(a.fx, a.fy), d = Math.hypot(c[0] - q.x, c[1] - q.y); if (d < 34 * q.k && d < bd) { bd = d; best = { a: a, dx: c[0] - q.x, dy: c[1] - q.y }; } });
+      st0 = { x: e.clientX, y: e.clientY, moved: false }; drag = best;
+      try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+    };
+    cv.onpointermove = function (e) {
+      if (!st0) return;
+      if (Math.hypot(e.clientX - st0.x, e.clientY - st0.y) > 6) st0.moved = true;
+      if (drag && st0.moved) { var q = pos(e), f = map.fx(q.x + drag.dx, q.y + drag.dy); drag.a.fx = f[0]; drag.a.fy = f[1]; paint(); }
+    };
+    cv.onpointerup = function (e) {
+      var s0 = st0, d = drag; st0 = null; drag = null;
+      if (!s0) return;
+      if (d && s0.moved) return;           // selesai menggeser
+      if (s0.moved) return;                // geseran di area kosong: abaikan
+      var q = pos(e), f = map.fx(q.x, q.y);
       var o = document.createElement('div'); o.className = 'klIn';
       o.innerHTML = '<div class="klBx"><div class="st">' + (ST.tool === 'p' ? 'TITIK' : 'TEKS') + '</div><input type="text" id="klTx" maxlength="40" placeholder="' + (ST.tool === 'p' ? 'Nama titik (boleh kosong)' : 'Isi teks') + '" style="width:100%;margin-top:8px"><div class="row" style="margin-top:10px"><button type="button" class="btn" id="klNo" style="flex:1;height:48px">Batal</button><button type="button" class="btn pri" id="klSv" style="flex:1;height:48px">Simpan</button></div></div>';
       document.body.appendChild(o); var t = o.querySelector('#klTx'); setTimeout(function () { t.focus(); }, 50);
@@ -272,6 +294,7 @@
         arr.push({ k: ST.tool, fx: f[0], fy: f[1], t: v, sz: ST.sz, on: true }); o.remove(); annot();
       };
     };
+    cv.onpointercancel = function () { st0 = null; drag = null; };
   }
   HA.kolase = open;
   HA.kolaseTest = function () { return { st: function () { return ST; }, renderSheet: renderSheet, cfg: cfg, go: go }; };
