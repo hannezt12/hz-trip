@@ -403,18 +403,13 @@
     $('pbFol').onclick = function () { HA.PB.follow = !HA.PB.follow; pbSyncUi(); };
   }
   function openMapMenu() {
-    openSheet('<div class="grab"></div><div class="st">PETA</div>' +
-      '<button class="srow" id="mmOv" style="margin-top:10px"><div class="si"><b>Peta saya</b><small>Lapisan PDF peta (tampil di mode Peta)</small></div>' + HA.CHEV + '</button>' +
-      '<button class="srow" id="mmKml"><div class="si"><b>Ekspor KML</b><small>Lintasan hari ini untuk Google Earth, dengan ketinggian</small></div>' + HA.CHEV + '</button>' +
-      '<label style="display:block;margin:6px 4px"><input type="checkbox" id="mmKc"' + (S.settings.kmlContour !== false ? ' checked' : '') + '> Sertakan kontur di KML</label>' +
-      '<div class="h" style="margin-top:12px">JARAK KONTUR</div><div class="opts" id="mmCs">' + ['auto', '1', '2', '5', '10'].map(function (v) { return '<button class="opt' + ((S.settings.contourStep || 'auto') === v ? ' on' : '') + '" data-cs="' + v + '">' + (v === 'auto' ? 'Otomatis' : v + ' m') + '</button>'; }).join('') + '</div>' +
-      '<div class="muted" style="margin-top:6px">Warna garis bergradasi: lembah merah muda pudar, makin tinggi makin abu lalu hijau muda. Otomatis: dengan data DEMNAS 10 m saat zoom jauh, 5 m menengah, 2 m dekat; tanpa DEMNAS (data gratis ±30 m) minimal 5 m.</div>' +
-      '<button class="btn" id="mmX" style="width:100%;margin-top:10px">Tutup</button>');
-    $('mmCs').onclick = function (e) { var v = e.target.getAttribute && e.target.getAttribute('data-cs'); if (!v) return; S.settings.contourStep = v; saveSettings(); document.querySelectorAll('#mmCs .opt').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-cs') === v); }); if (HA.DM.layer) HA.DM.layer.redraw(); };
-    $('mmKc').onchange = function () { S.settings.kmlContour = this.checked; saveSettings(); };
+    openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1">PETA</div><button class="ib" id="mmX" aria-label="Tutup">'+'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'+'</button></div>' +
+      '<button class="srow" id="mmOv" style="margin-top:6px"><div class="si"><b>Peta saya</b><small>Lapisan PDF peta (tampil di mode Peta)</small></div>' + HA.CHEV + '</button>' +
+      '<button class="srow" id="mmKat"><div class="si"><b>Kategori</b><small>Tambah dan ubah kategori, sub-kategori, nama, warna</small></div>' + HA.CHEV + '</button>' +
+      '<div class="muted" style="margin-top:8px">Garis kontur mengikuti zoom secara otomatis: lembah merah muda pudar, makin tinggi makin abu lalu hijau muda.</div>');
     $('mmX').onclick = closeSheet;
     $('mmOv').onclick = function () { if (HA.pbLocked('Tutup Putar dulu untuk mengubah peta saya')) return; closeSheet(); openOvSheet(); };
-    $('mmKml').onclick = function () { closeSheet(); mapKml(); };
+    $('mmKat').onclick = function () { closeSheet(); if (HA.tandaCatPage) HA.tandaCatPage(); };
   }
   // siapkan ketinggian + kontur untuk KML (butuh data ketinggian); selalu lanjut walau gagal
   function kmlPrep(ds, withC) {

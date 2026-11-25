@@ -38,7 +38,7 @@
   // ---------- kontur, lereng, profil ketinggian (data ketinggian) ----------
   HA.DM = { prev: false, edit: false, layer: null, btnK: null, btnL: null, btnP: null, pid: 0, mk: null, pr: null, miss: 0 };
   function contourStep(z) {
-    var s = S.settings.contourStep || 'auto';
+    var s = 'auto';
     if (s !== 'auto') return +s;
     var loc = false;
     try { var c = HA.map && HA.map.getCenter(); loc = !!(c && window.HzDem && HzDem.hasLocal(c.lat, c.lng)); } catch (e) {}

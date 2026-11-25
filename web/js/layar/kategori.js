@@ -47,8 +47,7 @@
     var el = $('katStrip'); if (!el) return;
     if (KM.mode !== 'kategori') { el.innerHTML = ''; return; }
     var d = HA.tandaData(), act = d.brush.cat, cc = HA.tandaCatOf(act), keep = el.querySelector('.tdKs'), sl = keep ? keep.scrollLeft : 0;
-    var boxes = d.cats.map(function (c) { return '<button type="button" class="tdk' + (c.id === act ? ' on' : '') + (c.id === KM.only ? ' only' : '') + '" data-cat="' + c.id + '" style="background:' + c.col + ';color:' + inkOn(c.col) + '">' + esc(c.name) + '</button>'; }).join('') +
-      '<button type="button" class="tdk kgear" data-gear="1" aria-label="Kelola kategori">⚙</button>';
+    var boxes = d.cats.map(function (c) { return '<button type="button" class="tdk' + (c.id === act ? ' on' : '') + (c.id === KM.only ? ' only' : '') + '" data-cat="' + c.id + '" style="background:' + c.col + ';color:' + inkOn(c.col) + '">' + esc(c.name) + '</button>'; }).join('');
     var subs = cc && cc.subs.length ? '<div class="tdSb">' + cc.subs.map(function (s, i) { var c0 = s.col || cc.col; return '<button type="button" class="tdsc' + (d.brush.sub === s.id ? ' on' : '') + '" data-sub="' + s.id + '" style="background:' + c0 + ';color:' + inkOn(c0) + '" aria-label="' + esc(s.name) + '">' + (i + 1) + '</button>'; }).join('') + '</div>' : '';
     el.innerHTML = '<div class="tdKw"><div class="tdKs">' + boxes + '</div></div>' + subs;
     var ks = el.querySelector('.tdKs'); if (ks) ks.scrollLeft = sl;
