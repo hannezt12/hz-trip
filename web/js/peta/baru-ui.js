@@ -423,7 +423,7 @@
           var on = sel && sel.indexOf(String(it.id)) >= 0;
           return '<div class="lpi' + (on ? ' on' : '') + '" data-id="' + esc(String(it.id)) + '">' + (sel ? '<i class="lpc">' + (on ? '✓' : '') + '</i>' : '') + '<div class="nm"><b>' + esc(it.title) + '</b>' + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</div></div>';
         }).join('') : '<div class="card muted">' + esc(o.empty || 'Belum ada.') + '</div>') +
-        (o.items.length && !sel ? '<div class="muted" style="margin:6px 2px">Ketuk untuk melihat. Tekan lama untuk edit, hapus, atau pilih banyak.</div>' : '');
+        (o.items.length && !sel ? '<div class="muted" style="margin:6px 2px">Ketuk untuk melihat. Tekan lama untuk opsi.</div>' : '');
       if (sel) {
         $('lpDone').onclick = function () { SEL[key] = null; draw(); };
         $('lpAll').onclick = function () { SEL[key] = sel.length === o.items.length ? [] : o.items.map(function (x) { return String(x.id); }); draw(); };
@@ -438,16 +438,13 @@
     function menu(id) {
       var it = o.items.filter(function (x) { return String(x.id) === id; })[0]; if (!it) return;
       var acts = (o.actions ? o.actions(id) : []) || [];
-      openSheet('<div class="grab"></div><div class="st">' + esc(it.title) + '</div>' +
-        (o.onEdit ? '<button class="btn" id="lmE" style="width:100%;margin-top:8px;height:48px">Edit</button>' : '') +
-        acts.map(function (a, i) { return '<button class="btn" data-a="' + i + '" style="width:100%;margin-top:8px;height:48px">' + esc(a.label) + '</button>'; }).join('') +
-        '<button class="btn" id="lmP" style="width:100%;margin-top:8px;height:48px">Pilih banyak</button>' +
-        '<button class="btn" id="lmD" style="width:100%;margin-top:8px;height:48px;color:var(--r)">Hapus</button>' +
-        '<button class="btn" id="lmX" style="width:100%;margin-top:8px">Tutup</button>');
+      openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(it.title) + '</div><button class="ib" id="lmX" aria-label="Tutup">'+'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'+'</button></div><div class="lmg">' +
+        (o.onEdit ? '<button class="btn" id="lmE">Edit</button>' : '') +
+        acts.map(function (a, i) { return '<button class="btn' + (String(a.label).length > 16 ? ' wide' : '') + '" data-a="' + i + '">' + esc(a.label) + '</button>'; }).join('') +
+        '<button class="btn" id="lmD" style="color:var(--r)">Hapus</button></div>');
       $('lmX').onclick = function () { if (o.reopen) o.reopen(); else closeSheet(); };
       if (o.onEdit) $('lmE').onclick = function () { closeSheet(); o.onEdit(id); };
       $('sheet').querySelectorAll('[data-a]').forEach(function (b) { b.onclick = function () { var a = acts[+b.getAttribute('data-a')]; closeSheet(); a.fn(id); }; });
-      $('lmP').onclick = function () { SEL[key] = [id]; if (o.reopen) o.reopen(); else { closeSheet(); draw(); } };
       $('lmD').onclick = function () { if (!o.reopen) closeSheet(); delIds([id]); };
     }
     draw();

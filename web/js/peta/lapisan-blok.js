@@ -179,14 +179,12 @@
       '<div class="lbCard"><button type="button" class="lbOpen" id="lbBt"><b>Bulan tanam</b><span class="muted">12 warna bulan \u00B7 garis tepi \u00B7 ' + btW() + ' pt</span></button><label class="lbOn"><input type="checkbox" id="lbBtOn"' + (btOn() ? ' checked' : '') + '> Ikut cetak</label></div>' +
       '<div class="lbCard"><button type="button" class="lbOpen" id="lbUm"><b>Umur tanam</b><span class="muted">' + umLim().join(' / ') + ' bulan \u00B7 5 kelompok warna</span></button></div>' +
       '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="lbCx" style="flex:1">Ekspor CSV</button><button class="btn" id="lbCi" style="flex:1">Impor CSV</button></div>' +
-      '<button class="btn" id="lbBulk" style="width:100%;margin-top:8px">Atur banyak blok</button>' +
       '<button class="btn" id="lbNew" style="width:100%;margin-top:8px">+ Lapisan baru</button>');
     $('lbX').onclick = closeSheet;
     $('sheet').querySelectorAll('.lbOpen').forEach(function (e) { e.onclick = function () { lapOpen(e.getAttribute('data-l')); }; });
     $('sheet').querySelectorAll('[data-on]').forEach(function (e) { e.onchange = function () { lapBy(e.getAttribute('data-on')).on = e.checked; save(); }; });
     if ($('lbObj')) { $('lbObj').onclick = function () { HA.obj.open(); }; $('lbObjOn').onchange = function () { S.settings.objOn = this.checked; save(); }; }
     $('lbBt').onclick = btOpen; $('lbBtOn').onchange = function () { S.settings.btOn = this.checked; save(); };
-    $('lbBulk').onclick = function () { bulk(null); };
     $('lbUm').onclick = umOpen;
     $('lbCx').onclick = csvOut; $('lbCi').onclick = csvIn;
     $('lbNew').onclick = newLap;

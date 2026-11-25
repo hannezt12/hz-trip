@@ -82,20 +82,15 @@
       $('pkList').querySelectorAll('[data-u]').forEach(function (b) { b.onclick = function () { use(b.getAttribute('data-u')); }; });
     }
     function use(id) { var m = mById(id); closeSheet(); if (m) cb(m); }
-    openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1">' + esc(title) + '</div><button class="btn pri" id="pkX">Tutup</button></div><div class="muted" style="margin:2px 0 8px">Ketuk nama untuk membuka bagian di bawahnya, tombol Pakai untuk memilih.</div><div id="pkList"></div>');
+    openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1">' + esc(title) + '</div><button class="ib" id="pkX" aria-label="Tutup">'+'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'+'</button></div><div class="muted" style="margin:2px 0 8px">Ketuk nama untuk membuka bagian di bawahnya, tombol Pakai untuk memilih.</div><div id="pkList"></div>');
     $('pkX').onclick = closeSheet; draw();
   }
   HA.pickMaster = pickMaster;
   function mById(id) { return masters().filter(function (m) { return String(m.id) === String(id); })[0]; }
   function renderMaster(box) {
     var ms = masters(); ms.forEach(function (m, i) { if (m.id == null) m.id = Date.now() + i; });
-    box.innerHTML = '<button class="btn pri" id="mkNew" style="width:100%;height:50px">Buat master baru</button>' + (ms.length ? '<button class="btn" id="mkIsi" style="width:100%;height:50px;margin-top:8px">Isi data (varietas, status, bulan tanam)</button>' : '') + '<div id="mkList" style="margin-top:10px"></div>' +
+    box.innerHTML = '<button class="btn pri" id="mkNew" style="width:100%;height:50px">Buat master baru</button>' + '<div id="mkList" style="margin-top:10px"></div>' +
       '<div class="muted" style="margin:8px 2px">Master = poligon kawasan untuk cetak PDF. Hanya blok Terkonfirmasi yang seluruh bentuknya ada di dalam poligon yang tercetak; blok di perbatasan Han putuskan sendiri. Tampilan blok di peta tidak dibatasi master.</div>';
-    if ($('mkIsi')) $('mkIsi').onclick = function () {
-      var bk = function () { S.dpTab = 'master'; go('data'); };
-      if (ms.length === 1) { HA.isiData(ms[0], bk); return; }
-      HA.pickMaster('ISI DATA: PILIH MASTER', function (m2) { HA.isiData(m2, bk); }); return;
-    };
     $('mkNew').onclick = function () {
       function startDraw(pid) {
         HA.mkParent = pid; var par = pid != null ? mById(pid) : null;
@@ -117,11 +112,9 @@
       actions: function (id) {
         var m = mById(id); if (!m) return [];
         return [
-          { label: 'Isi data (varietas, status, bulan tanam)', fn: function () { HA.isiData(m, function () { S.dpTab = 'master'; go('data'); }); } },
-          { label: 'Cetak (PDF atau KML)', fn: function () { PS.sel = m.id; printPanel(); } },
-          { label: 'Atur blok perbatasan', fn: function () { aturSheet(m); } },
+          { label: 'Blok perbatasan', fn: function () { aturSheet(m); } },
           { label: 'Edit batas', fn: function () { editBatas(m); } },
-          { label: 'Ganti nama dan induk', fn: function () { nameSheet(m, false); } }
+          { label: 'Nama dan induk', fn: function () { nameSheet(m, false); } }
         ];
       },
       delTitle: function (ids) { return ids.length === 1 ? 'Hapus master ini?' : 'Hapus ' + ids.length + ' master?'; },
@@ -310,7 +303,7 @@
     var ms = masters(); ms.forEach(function (m, i) { if (m.id == null) m.id = Date.now() + i; });
     if (!mById(PS.sel)) PS.sel = ms.length ? ms[0].id : null;
     var m = mById(PS.sel), mem = m ? members(m) : null;
-    openSheet('<div class="grab"></div><div class="st">CETAK</div>' +
+    openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1">CETAK</div><button class="ib" id="pmX" aria-label="Tutup">'+'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'+'</button></div>' +
       '<div class="seg" id="pmMode" style="margin:6px 0 10px"><button data-m="trip">Trip</button><button data-m="master" class="on">Master</button><button data-m="laporan">Laporan</button></div>' +
       (ms.length ? tplRow() + '<div class="plist"><div class="h">MASTER</div>' + ms.map(function (x) {
         var mm = members(x), n = mm.in.length + mm.man.length;
@@ -333,7 +326,7 @@
         (PS.fmt === 'pdf' && PS.map ? '<button class="btn" id="pmPosB" style="width:100%;margin-top:6px">Atur posisi teks blok</button>' : '') +
         (PS.fmt === 'pdf' ? '<button class="btn" id="pmPrev" style="width:100%;margin-top:8px">Atur tata letak</button>' : '') + '<button class="btn pri" id="pmGo" style="width:100%;margin-top:8px;height:52px">' + (PS.fmt === 'data' ? 'Kirim data blok' : 'Cetak ' + (PS.fmt === 'pdf' ? 'PDF' : 'KML')) + '</button>'
         : '<div class="card muted" style="margin-top:6px">Belum ada master. Buat di Data peta > Master: gambar poligon kawasan, lalu kembali ke sini untuk mencetak.</div>') +
-      '<button class="btn" id="pmX" style="width:100%;margin-top:8px">Tutup</button>');
+      '');
     $('pmX').onclick = closeSheet;
     $('sheet').querySelectorAll('details[data-pd]').forEach(function (d) { d.ontoggle = function () { (PS.open = PS.open || {})[d.getAttribute('data-pd')] = d.open; }; });
     ktWire(printPanel); tplWire(m);

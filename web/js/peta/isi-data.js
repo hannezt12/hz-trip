@@ -15,6 +15,7 @@
     lay: svg('<path d="M12 2.5l9 4.8-9 4.8-9-4.8z"/><path d="M3 12l9 4.8 9-4.8"/><path d="M3 16.7l9 4.8 9-4.8"/>'),
     ed: svg('<path d="M3 21l1.2-4.2L14.5 6.5l3 3L7.2 19.8z"/><path d="M19 3v5M16.5 5.5h5"/>'),
     sh: svg('<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.6M8.2 13.2l7.6 4.6"/>'),
+    bt: svg('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'),
     x: svg('<path d="M6 6l12 12M18 6L6 18"/>')
   };
   var MS3 = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
@@ -38,7 +39,7 @@
     var HS = (function () { var a = G.map(function (g) { return Math.min(g.x1 - g.x0, g.y1 - g.y0); }).sort(function (x, y) { return x - y; }); return Math.max(2, a[Math.floor(a.length / 2)] / 8); })();
     var byId = {}; list.forEach(function (b) { byId[b.id] = b; });
     var ch = {}, hist = ['{}'], hi = 0, sel = {}, mode = 'tap', lay = { v: true, s: true, t: true }, view = !!(opts && opts.mode === 'lihat'), LS = S.settings.lihat || {}, fillM = LS.fill === 'umur' ? 'umur' : 'var', V = { s: 1, tx: 0, ty: 0 }, rect = null;
-    var VF = { s: LS.s !== false, t: LS.t !== false, n: LS.n !== false, j: !!LS.j }, F = { v: {}, u: {}, s: {} }, openP = null, infoId = null, accOpen = false, AH = {};
+    var VF = { s: LS.s !== false, t: LS.t !== false, n: LS.n !== false, j: !!LS.j }, F = { v: {}, u: {}, s: {}, b: {} }, openP = null, infoId = null, accOpen = false, AH = {};
     var LN = []; (HA.linesList ? HA.linesList() : []).forEach(function (ln) { var q = (ln.pts || []).map(function (p) { return [p[1] * kx * 111320, -p[0] * 110540]; }); if (q.some(function (p) { return p[0] > BX0 - 40 && p[0] < BX1 + 40 && p[1] > BY0 - 40 && p[1] < BY1 + 40; })) LN.push({ q: q, t: ln.type, w: +ln.w || 2 }); });
     list.forEach(function (b) { AH[b.id] = window.HzBlok && HzBlok.areaHa ? HzBlok.areaHa(b.pts) : 0; });
     var el = document.createElement('div'); el.id = 'idEd'; el.className = 'idEd' + (view ? ' idv' : '');
@@ -46,7 +47,7 @@
       '<div class="idb idev"><div class="seg" id="idMd"><button data-m="tap" class="on">Ketuk</button><button data-m="area">Area</button></div><button class="btn sm" id="idBl">Belum diisi</button><input type="text" id="idQ" placeholder="Nama blok…" style="flex:1;min-width:0"><button class="btn sm" id="idQb">Pilih</button>' + (opts && opts.mode ? '<button class="btn sm" id="idVw">Lihat</button>' : '') + '</div>' +
       '<div class="idc" id="idC"><canvas id="idCv"></canvas><div class="idn" id="idN"></div>' +
       '<div class="idac idvo" id="idAc" style="display:none"><label><input type="checkbox" data-k="s"> Status</label><label><input type="checkbox" data-k="t"> Bulan tanam</label><label><input type="checkbox" data-k="n"> Nomor blok</label><label><input type="checkbox" data-k="j"> Jalan &amp; drainase</label></div>' +
-      '<div class="idtabs idvo" id="idTb"><button class="locbtn idtab" data-k="um" aria-label="Umur">' + ICO.um + '<i class="idtx" data-x="um"></i></button><button class="locbtn idtab" data-k="var" aria-label="Varietas">' + ICO.vr + '<i class="idtx" data-x="var"></i></button><button class="locbtn idtab" data-k="st" aria-label="Status">' + ICO.st + '<i class="idtx" data-x="st"></i></button></div>' +
+      '<div class="idtabs idvo" id="idTb"><button class="locbtn idtab" data-k="um" aria-label="Umur">' + ICO.um + '<i class="idtx" data-x="um"></i></button><button class="locbtn idtab" data-k="var" aria-label="Varietas">' + ICO.vr + '<i class="idtx" data-x="var"></i></button><button class="locbtn idtab" data-k="st" aria-label="Status">' + ICO.st + '<i class="idtx" data-x="st"></i></button><button class="locbtn idtab" data-k="bt" aria-label="Bulan tanam">' + ICO.bt + '<i class="idtx" data-x="bt"></i></button></div>' +
       '<div class="idpn idvo" id="idPl" style="display:none"><div class="idplh"><b id="idPt"></b><button class="ib" id="idPx" aria-label="Tutup panel">' + ICO.x + '</button></div><div class="idpsm" id="idPs"></div><div class="idpls" id="idPr"></div></div>' +
       '<div class="idfab idvo" id="idFab"><button class="locbtn" id="idEdt" aria-label="Isi data">' + ICO.ed + '</button><button class="locbtn" id="idBg" aria-label="Bagikan">' + ICO.sh + '</button></div></div>' +
       '<div class="idbt idvo" id="idBt"></div>' +
@@ -165,13 +166,14 @@
     ['v', 's', 't'].forEach(function (k) { $e('idL' + k).onchange = function () { lay[k] = this.checked; draw(); }; });
     $e('idBl').onclick = function () { var n = 0; list.forEach(function (b) { var e = E[b.id]; if (!HA.lyb.of(e, 'varietas') || !HA.lyb.of(e, 'status') || !HA.lyb.bulanOf(e)) { sel[b.id] = 1; n++; } }); info(); draw(); HA.toast(n ? n + ' blok belum lengkap dipilih' : 'Semua blok sudah lengkap'); };
     $e('idQb').onclick = function () { var q = $e('idQ').value.trim().toLowerCase(), n = 0; if (!q) return; list.forEach(function (b) { if (String(b.name).toLowerCase().indexOf(q) >= 0) { sel[b.id] = 1; n++; } }); info(); draw(); HA.toast(n + ' blok dipilih'); };
-    var FK = { var: 'v', um: 'u', st: 's' }, TT = { var: 'Varietas', um: 'Umur', st: 'Status tanaman' };
+    var FK = { var: 'v', um: 'u', st: 's', bt: 'b' }, TT = { var: 'Varietas', um: 'Umur', st: 'Status tanaman', bt: 'Bulan tanam' }, BLN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
     function fN(k) { return Object.keys(F[FK[k]]).length; }
-    function fAny() { return fN('var') + fN('um') + fN('st') > 0; }
+    function fAny() { return fN('var') + fN('um') + fN('st') + fN('bt') > 0; }
     function fMatch(e, skip) {
       var v, u, t;
       if (skip !== 'var' && fN('var')) { v = HA.lyb.of(e, 'varietas'); if (!v || !F.v[v.id]) return false; }
       if (skip !== 'um' && fN('um')) { u = HA.lyb.umBucket(e); if (u < 0 || !F.u[u]) return false; }
+      if (skip !== 'bt' && fN('bt')) { var mo = HA.lyb.bulanOf(e); if (!mo || !F.b[mo]) return false; }
       if (skip !== 'st' && fN('st')) { t = HA.lyb.of(e, 'status'); if (!t || !F.s[t.id]) return false; }
       return true;
     }
@@ -186,14 +188,15 @@
       var n = 0, ha = 0, ta = 0; list.forEach(function (b) { ta += bha(b); if (!fAny() || fMatch(E[b.id])) { n++; ha += bha(b); } });
       $e('idBt').innerHTML = (fAny() ? '<b>' + n + ' dari ' + list.length + ' blok</b> · ' + fh(ha) + ' ha cocok' : '<b>' + esc(m.name) + '</b> · ' + list.length + ' blok · ' + fh(ta) + ' ha') + '<span style="flex:1"></span><span class="muted">Rincian ▴</span>';
     }
-    function keyOf(k, e) { if (k === 'var') { var v = HA.lyb.of(e, 'varietas'); return v ? v.id : null; } if (k === 'st') { var t = HA.lyb.of(e, 'status'); return t ? t.id : null; } var u = HA.lyb.umBucket(e); return u < 0 ? null : u; }
+    function keyOf(k, e) { if (k === 'bt') { var mo = HA.lyb.bulanOf(e); return mo ? String(mo) : null; } if (k === 'var') { var v = HA.lyb.of(e, 'varietas'); return v ? v.id : null; } if (k === 'st') { var t = HA.lyb.of(e, 'status'); return t ? t.id : null; } var u = HA.lyb.umBucket(e); return u < 0 ? null : u; }
     function plRender() {
       var k = openP, pl = $e('idPl'); if (!k) { pl.style.display = 'none'; syncCb(); return; }
       var cnt = {}, rows = [], Fm = F[FK[k]], names = [];
-      var oth = ['var', 'um', 'st'].some(function (x) { return x !== k && fN(x) > 0; });
+      var oth = ['var', 'um', 'st', 'bt'].some(function (x) { return x !== k && fN(x) > 0; });
       list.forEach(function (b) { if (!fMatch(E[b.id], k)) return; var kk = keyOf(k, E[b.id]); if (kk !== null) cnt[kk] = (cnt[kk] || 0) + 1; });
       if (k === 'var' && va) rows = va.items.map(function (x) { return { key: x.id, label: x.name, col: x.col || '#999', n: cnt[x.id] || 0 }; });
       else if (k === 'um') { var L = HA.lyb.umLabels(); rows = [0, 1, 2, 3, 4].map(function (i) { return { key: String(i), label: L[i], col: HA.lyb.umCol(i), n: cnt[i] || 0 }; }); }
+      else if (k === 'bt') rows = BLN.map(function (nm, i) { return { key: String(i + 1), label: nm, col: HA.lyb.bulanCol(i + 1), n: cnt[i + 1] || 0 }; });
       else if (k === 'st' && st) rows = st.items.map(function (x) { return { key: x.id, label: x.name, it: x, n: cnt[x.id] || 0 }; });
       rows.forEach(function (r) { if (Fm[r.key]) names.push(r.label); });
       if (oth) rows = rows.filter(function (r) { return r.n > 0 || Fm[r.key]; });
@@ -228,7 +231,7 @@
     ['idTb', 'idPl', 'idFab', 'idAc'].forEach(function (id) { $e(id).addEventListener('pointerdown', function (e) { e.stopPropagation(); }); });
     // akordion lapisan
     $e('idAcB').onclick = function () { if (infoId) return; accOpen = !accOpen; $e('idAc').style.display = accOpen ? 'flex' : 'none'; if (accOpen && openP) closePanel(); };
-    $e('idAc').onchange = function (e) { var c = e.target, k = c.getAttribute && c.getAttribute('data-k'); if (!k) return; VF[k] = c.checked; if (k === 's' && !c.checked) F.s = {}; saveL(); filt(); };
+    $e('idAc').onchange = function (e) { var c = e.target, k = c.getAttribute && c.getAttribute('data-k'); if (!k) return; VF[k] = c.checked; if (k === 's' && !c.checked) F.s = {}; if (k === 't' && !c.checked) F.b = {}; saveL(); filt(); };
     $e('idFs').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-f]'); if (!b) return; fillM = b.getAttribute('data-f'); saveL(); syncCb(); draw(); };
     // panel informasi bawah
     function infoRows(b) {

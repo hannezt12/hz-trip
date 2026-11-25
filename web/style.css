@@ -1120,3 +1120,8 @@ input[type=checkbox],input[type=radio]{accent-color:var(--p)}
 .idtx{top:-12px;left:-12px;width:44px;height:44px;background:none!important;font-size:0}
 .idtx::before{content:'\2715';position:absolute;left:2px;top:2px;width:22px;height:22px;border-radius:50%;background:#1a73e8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.7rem}
 .idtab.on .idtx{display:block}
+
+/* v0.27.7 */
+.lmg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.lmg .btn{height:48px;width:100%;margin:0;min-width:0}.lmg .wide{grid-column:1/-1}
+.bth .ib{flex:0 0 auto}
