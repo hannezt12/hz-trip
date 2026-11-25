@@ -124,6 +124,7 @@
     m.on('click', function (e) {
       if (m._lakeDraw) { m._lakeDraw.tap(e.latlng); return; }
       if (m._slopeOn) { slopeTap(m, e); return; }
+      if (HA.klPick && m === HA.map) { HA.klPick(blockAt(e.latlng)); return; }
       if (HA.DM.prev || HA.DM.edit) return;
       if (m === HA.map && !HA.PB.open && S.settings.blkOn !== false && blocksList().length) { var bb = blockAt(e.latlng); if (bb) { clear(); openBlockPop(bb); return; } else if (HA.DM.pop) closeBlockPop(); }
       var grp = groupFn(), pins = [];

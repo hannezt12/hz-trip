@@ -59,17 +59,33 @@
     xy.forEach(function (p) { mnx = Math.min(mnx, p[0]); mxx = Math.max(mxx, p[0]); mny = Math.min(mny, p[1]); mxy = Math.max(mxy, p[1]); });
     return { xy: xy, mnx: mnx, mny: mny, bw: Math.max(1, mxx - mnx), bh: Math.max(1, mxy - mny) };
   }
-  // gambar sketsa dalam rect; kembali pemeta (fraksi bbox <-> piksel)
+  // gambar sketsa dalam rect: blok utuh + garis blok tetangga yang masuk bingkai; kembali pemeta piksel -> fraksi bbox blok
   function sketch(ctx, b, R, ann, cw) {
-    var g = geo(b), pad = Math.min(R.w, R.h) * 0.07, sc = Math.min((R.w - 2 * pad) / g.bw, (R.h - 2 * pad) / g.bh);
-    var ox = R.x + (R.w - g.bw * sc) / 2, oy = R.y + (R.h - g.bh * sc) / 2;
-    function px(fx, fy) { return [ox + fx * g.bw * sc, oy + (1 - fy) * g.bh * sc]; }
+    var g = geo(b), P = HzBlok.proj(b.pts[0][0], b.pts[0][1]), mg = 0.3 * Math.max(g.bw, g.bh);
+    var ex0 = g.mnx - mg, ey0 = g.mny - mg, ew = g.bw + 2 * mg, eh = g.bh + 2 * mg;
+    var sc = Math.min(R.w / ew, R.h / eh), ox = R.x + (R.w - ew * sc) / 2, oy = R.y + (R.h - eh * sc) / 2;
+    function tp(x, y) { return [ox + (x - ex0) * sc, oy + (1 - (y - ey0) / eh) * eh * sc - 0]; }
+    function px(fx, fy) { return tp(g.mnx + fx * g.bw, g.mny + fy * g.bh); }
+    // bingkai tampak penuh: perluas ke seluruh rect (bukan hanya sebesar blok + margin)
+    var vx0 = ex0 - (ox - R.x) / sc, vx1 = ex0 + (R.x + R.w - ox) / sc, vy0 = ey0 - ((R.y + R.h) - (oy + eh * sc)) / sc, vy1 = ey0 + eh + (oy - R.y) / sc;
+    ctx.save(); ctx.beginPath(); ctx.rect(R.x, R.y, R.w, R.h); ctx.clip();
+    ctx.lineJoin = 'round'; ctx.strokeStyle = '#8A98A0'; ctx.lineWidth = Math.max(1.5, cw * 0.0035); ctx.fillStyle = '#7A8890';
+    ctx.font = '600 ' + Math.round(cw * 0.026) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    blocks().forEach(function (o) {
+      if (o === b || String(o.id) === String(b.id)) return;
+      var xy = o.pts.map(P.xy), mnx = 1e18, mxx = -1e18, mny = 1e18, mxy = -1e18;
+      xy.forEach(function (p) { mnx = Math.min(mnx, p[0]); mxx = Math.max(mxx, p[0]); mny = Math.min(mny, p[1]); mxy = Math.max(mxy, p[1]); });
+      if (mxx < vx0 || mnx > vx1 || mxy < vy0 || mny > vy1) return;
+      ctx.beginPath(); xy.forEach(function (p, k) { var q = tp(p[0], p[1]); if (k) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }); ctx.closePath(); ctx.stroke();
+      var cx = (mnx + mxx) / 2, cy = (mny + mxy) / 2;
+      if (cx > vx0 && cx < vx1 && cy > vy0 && cy < vy1 && (mxx - mnx) * sc > cw * 0.08) { var t = tp(cx, cy); ctx.fillText(String(o.name), t[0], t[1]); }
+    });
     var v = HA.lyb.of(b, 'varietas');
     ctx.beginPath();
-    g.xy.forEach(function (p, i) { var q = px((p[0] - g.mnx) / g.bw, (p[1] - g.mny) / g.bh); if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); });
+    g.xy.forEach(function (p, i) { var q = tp(p[0], p[1]); if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); });
     ctx.closePath();
     ctx.fillStyle = (v && v.col) || '#E6EBEE'; ctx.globalAlpha = v && v.col ? 0.85 : 1; ctx.fill(); ctx.globalAlpha = 1;
-    ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2, cw * 0.005); ctx.strokeStyle = '#1B2A33'; ctx.stroke();
+    ctx.lineWidth = Math.max(2.5, cw * 0.0065); ctx.strokeStyle = '#1B2A33'; ctx.stroke();
     // arah utara
     var ax = R.x + R.w - cw * 0.05, ay = R.y + cw * 0.075;
     ctx.fillStyle = '#1B2A33'; ctx.beginPath(); ctx.moveTo(ax, ay - cw * 0.035); ctx.lineTo(ax - cw * 0.018, ay + cw * 0.01); ctx.lineTo(ax + cw * 0.018, ay + cw * 0.01); ctx.closePath(); ctx.fill();
@@ -82,7 +98,8 @@
         if (a.t) halo(ctx, a.t, q[0] + r * 1.6, q[1], cw * 0.036 * f, 'left');
       } else halo(ctx, a.t, q[0], q[1], cw * 0.044 * f, 'center');
     });
-    return { fx: function (x, y) { return [((x - ox) / (g.bw * sc)), 1 - (y - oy) / (g.bh * sc)]; } };
+    ctx.restore();
+    return { fx: function (x, y) { return [(x - ox) / (g.bw * sc) + (ex0 - g.mnx) / g.bw, ((eh * sc - (y - oy)) / sc + ey0 - g.mny) / g.bh]; } };
   }
   function halo(ctx, t, x, y, fs, al) {
     ctx.font = '700 ' + Math.round(fs) + 'px sans-serif'; ctx.textAlign = al; ctx.textBaseline = 'middle';
@@ -133,34 +150,57 @@
   }
 
   // ---------- layar ----------
-  var el = null, ann = null;
+  var el = null, ann = null, hl = null;
   function $e(id) { return el && el.querySelector('#' + id); }
-  function close() { HA.klBack = null; if (el) el.remove(); el = null; ST = null; ann = null; }
-  HA.klBack = null;
+  function close() { HA.klBack = null; HA.klPick = null; if (hl) { hl.remove(); hl = null; } document.querySelectorAll('.klIn').forEach(function (n) { n.remove(); }); if (el) el.remove(); el = null; ST = null; ann = null; }
+  HA.klBack = null; HA.klPick = null;
+  // tanda blok terpilih di peta (garis tebal + nomor urut)
+  function drawHl() {
+    if (hl) { hl.remove(); hl = null; }
+    if (!HA.map || !ST) return;
+    hl = L.layerGroup().addTo(HA.map);
+    ST.sel.forEach(function (id, i) {
+      var b = byId(id); if (!b) return;
+      L.polygon(b.pts, { color: '#FF9500', weight: 4, fillColor: '#FF9500', fillOpacity: 0.18, interactive: false }).addTo(hl)
+        .bindTooltip(String(i + 1), { permanent: true, direction: 'center', className: 'klTip' });
+    });
+  }
+  function toggle(id) {
+    id = String(id); var k = ST.sel.indexOf(id);
+    if (k >= 0) ST.sel.splice(k, 1);
+    else { if (ST.sel.length >= MAX) { HA.toast('Maksimal ' + MAX + ' blok'); return; } ST.sel.push(id); }
+    var y = el.querySelector('.klBody') ? el.querySelector('.klBody').scrollTop : 0; main(); if (el.querySelector('.klBody')) el.querySelector('.klBody').scrollTop = y;
+  }
   function open(pre) {
     if (el) close();
     var list = (pre || []).map(function (b) { return String(b.id); });
     if (list.length > MAX) { HA.toast('Maksimal ' + MAX + ' blok, sisanya tidak ikut'); list = list.slice(0, MAX); }
-    ST = { sel: list, q: '', ann: {}, sz: 's', tool: 'p', cur: null };
-    el = document.createElement('div'); el.id = 'klEd'; el.className = 'idEd klEd'; document.body.appendChild(el);
+    ST = { sel: list, q: '', ann: {}, sz: 's', tool: 'p', cur: null, col: false };
+    var mp = document.getElementById('map');
+    if (!mp || !mp.offsetParent) HA.go('lintasan');
+    if (S.settings.blkOn === false) { S.settings.blkOn = true; HA.saveSettings(); if (HA.drawBlocks) HA.drawBlocks(); }
+    el = document.createElement('div'); el.id = 'klEd'; document.body.appendChild(el);
+    HA.klPick = function (b) { if (b && ST && !ann) toggle(b.id); };
     HA.klBack = function () {
       if (!el) return false;
-      if (ann) { if (el.querySelector('.klIn')) { el.querySelector('.klIn').remove(); return true; } ann = null; main(); return true; }
+      var n = document.querySelector('.klIn'); if (n) { n.remove(); return true; }
+      if (ann) { ann = null; main(); return true; }
       close(); return true;
     };
     main();
   }
-  function head(title, xFn) {
-    return '<div class="idh"><div class="idt" style="text-align:left;font-weight:700;padding-left:6px">' + esc(title) + '</div><button type="button" class="ib" id="klX" aria-label="Tutup">✕</button></div>';
+  function head(title) {
+    return '<div class="idh"><div class="idt" style="text-align:left;font-weight:700;padding-left:6px">' + esc(title) + '</div><button type="button" class="ib" id="klX" aria-label="Tutup">\u2715</button></div>';
   }
   function main() {
     var c = cfg(), q = ST.q.trim().toLowerCase(), col = new Intl.Collator('id', { numeric: true }), all = blocks().slice().sort(function (a, b) { return col.compare(String(a.name), String(b.name)); });
     var shown = all.filter(function (b) { return !q || String(b.name).toLowerCase().indexOf(q) >= 0; }).slice(0, 60);
     var nA = 0; ST.sel.forEach(function (id) { (ST.ann[id] || []).forEach(function (a) { if (a.on) nA++; }); });
     var sh = sheetCount();
-    el.innerHTML = head('Kolase blok') +
+    el.className = 'klPn' + (ST.col ? ' col' : ''); if (HA.map) { try { HA.map.closePopup(); } catch (x) {} }
+    el.innerHTML = '<div class="klPh" id="klPh"><span class="klGr"></span><b>Kolase blok</b><span class="muted">' + ST.sel.length + '/' + MAX + '</span><span style="flex:1"></span><button type="button" class="ib" id="klCl" aria-label="' + (ST.col ? 'Buka' : 'Lipat') + '">' + (ST.col ? '\u25B4' : '\u25BE') + '</button><button type="button" class="ib" id="klX" aria-label="Tutup">\u2715</button></div>' +
       '<div class="klBody"><div class="h">BLOK TERPILIH (' + ST.sel.length + '/' + MAX + ')</div><div class="klChips" id="klCh">' +
-      (ST.sel.length ? ST.sel.map(function (id) { var b = byId(id); return b ? '<button type="button" class="klChip" data-r="' + esc(id) + '">' + esc(String(b.name)) + ' ✕</button>' : ''; }).join('') : '<span class="muted">Belum ada. Cari nama blok lalu ketuk.</span>') + '</div>' +
+      (ST.sel.length ? ST.sel.map(function (id) { var b = byId(id); return b ? '<button type="button" class="klChip" data-r="' + esc(id) + '">' + esc(String(b.name)) + ' ✕</button>' : ''; }).join('') : '<span class="muted">Belum ada. Ketuk blok di peta atau cari nama di bawah.</span>') + '</div>' +
       '<input type="search" id="klQ" placeholder="Cari nama blok" value="' + esc(ST.q) + '" autocomplete="off" style="width:100%;margin-top:8px"><div class="klLs" id="klLs">' +
       shown.map(function (b) { var on = ST.sel.indexOf(String(b.id)) >= 0; return '<label class="klRw"><input type="checkbox" data-b="' + esc(String(b.id)) + '"' + (on ? ' checked' : '') + '><span>' + esc(String(b.name)) + '</span><small class="muted">' + haTxt(b) + '</small></label>'; }).join('') + (all.length > shown.length ? '<div class="muted" style="padding:6px">Menampilkan 60 pertama. Persempit dengan pencarian.</div>' : '') + '</div>' +
       '<div class="h" style="margin-top:12px">ISI TIAP KOTAK</div><div class="klInf">' + INF.map(function (i) { return '<label><input type="checkbox" data-i="' + i[0] + '"' + (c.info[i[0]] ? ' checked' : '') + '> ' + i[1] + '</label>'; }).join('') + '</div>' +
@@ -170,18 +210,19 @@
       '<div class="muted" style="margin-top:6px">Titik dan teks hanya untuk kolase ini, tidak disimpan ke data blok.</div></div>' +
       '<div class="klFt"><button type="button" class="btn pri" id="klGo" style="width:100%;height:52px"' + (ST.sel.length ? '' : ' disabled') + '>Kirim ' + (ST.sel.length ? '(' + sh + ' lembar ' + (c.fmt === 'pdf' ? 'PDF' : 'PNG') + ')' : '') + '</button></div>';
     $e('klX').onclick = close;
+    $e('klPh').onclick = function (e) { if (e.target.closest && e.target.closest('#klX')) return; ST.col = !ST.col; main(); };
+    drawHl();
     $e('klQ').oninput = function () { ST.q = this.value; var p = this.selectionStart; main(); var e = $e('klQ'); if (e) { e.focus(); try { e.setSelectionRange(p, p); } catch (x) {} } };
     $e('klCh').onclick = function (e) { var b = e.target.closest && e.target.closest('[data-r]'); if (!b) return; ST.sel = ST.sel.filter(function (x) { return x !== b.getAttribute('data-r'); }); main(); };
     $e('klLs').onchange = function (e) {
       var t = e.target, id = t.getAttribute('data-b'); if (!id) return;
-      if (t.checked) { if (ST.sel.length >= MAX) { t.checked = false; HA.toast('Maksimal ' + MAX + ' blok'); return; } ST.sel.push(id); }
-      else ST.sel = ST.sel.filter(function (x) { return x !== id; });
-      var y = el.querySelector('.klBody').scrollTop; main(); el.querySelector('.klBody').scrollTop = y;
+      if (t.checked && ST.sel.length >= MAX) { t.checked = false; HA.toast('Maksimal ' + MAX + ' blok'); return; }
+      toggle(id);
     };
     el.querySelectorAll('[data-i]').forEach(function (e) { e.onchange = function () { c.info[e.getAttribute('data-i')] = e.checked; HA.saveSettings(); }; });
     $e('klP').onclick = function (e) { var b = e.target.closest && e.target.closest('[data-v]'); if (!b) return; c.per = +b.getAttribute('data-v'); HA.saveSettings(); main(); };
     $e('klF').onclick = function (e) { var b = e.target.closest && e.target.closest('[data-v]'); if (!b) return; c.fmt = b.getAttribute('data-v'); HA.saveSettings(); main(); };
-    $e('klAn').onclick = function () { ann = true; ST.cur = ST.cur && ST.sel.indexOf(ST.cur) >= 0 ? ST.cur : ST.sel[0]; annot(); };
+    $e('klAn').onclick = function () { ann = true; if (hl) { hl.remove(); hl = null; } ST.cur = ST.cur && ST.sel.indexOf(ST.cur) >= 0 ? ST.cur : ST.sel[0]; annot(); };
     $e('klGo').onclick = go;
   }
   function go() {
@@ -191,12 +232,13 @@
     var n = sheetCount(), h = '';
     for (var i = 0; i < n; i++) h += '<button type="button" class="btn" data-pg="' + i + '" style="width:100%;margin-top:8px;height:48px">Kirim lembar ' + (i + 1) + ' dari ' + n + '</button>';
     var o = document.createElement('div'); o.className = 'klIn'; o.innerHTML = '<div class="klBx"><div class="st">KIRIM PNG</div><div class="muted" style="margin:6px 0">Tiap lembar dikirim satu per satu.</div>' + h + '<button type="button" class="btn" id="klPx" style="width:100%;margin-top:10px">Tutup</button></div>';
-    el.appendChild(o); o.querySelector('#klPx').onclick = function () { o.remove(); };
+    document.body.appendChild(o); o.querySelector('#klPx').onclick = function () { o.remove(); };
     o.onclick = function (e) { var b = e.target.closest && e.target.closest('[data-pg]'); if (b) sendPng(+b.getAttribute('data-pg')); };
   }
 
   // ---------- titik dan teks ----------
   function annot() {
+    el.className = 'idEd klEd';
     var id = ST.cur, b = byId(id), c = cfg(), arr = ST.ann[id] || (ST.ann[id] = []), idx = ST.sel.indexOf(id), map = null;
     el.innerHTML = head('Titik dan teks') +
       '<div class="klBody"><div style="display:flex;align-items:center;gap:6px"><button type="button" class="btn sm" id="klPv" aria-label="Sebelumnya"' + (idx > 0 ? '' : ' disabled') + '>‹</button><b style="flex:1;text-align:center">' + esc(String(b ? b.name : '')) + ' (' + (idx + 1) + '/' + ST.sel.length + ')</b><button type="button" class="btn sm" id="klNx" aria-label="Berikutnya"' + (idx < ST.sel.length - 1 ? '' : ' disabled') + '>›</button></div>' +
@@ -223,7 +265,7 @@
       var r = cv.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * sz.w, y = (e.clientY - r.top) / r.height * sz.h, f = map.fx(x, y);
       var o = document.createElement('div'); o.className = 'klIn';
       o.innerHTML = '<div class="klBx"><div class="st">' + (ST.tool === 'p' ? 'TITIK' : 'TEKS') + '</div><input type="text" id="klTx" maxlength="40" placeholder="' + (ST.tool === 'p' ? 'Nama titik (boleh kosong)' : 'Isi teks') + '" style="width:100%;margin-top:8px"><div class="row" style="margin-top:10px"><button type="button" class="btn" id="klNo" style="flex:1;height:48px">Batal</button><button type="button" class="btn pri" id="klSv" style="flex:1;height:48px">Simpan</button></div></div>';
-      el.appendChild(o); var t = o.querySelector('#klTx'); setTimeout(function () { t.focus(); }, 50);
+      document.body.appendChild(o); var t = o.querySelector('#klTx'); setTimeout(function () { t.focus(); }, 50);
       o.querySelector('#klNo').onclick = function () { o.remove(); };
       o.querySelector('#klSv').onclick = function () {
         var v = t.value.trim(); if (ST.tool === 't' && !v) { HA.toast('Isi teks dulu'); return; }

@@ -822,6 +822,7 @@
     function live() { saveSettings(); drawBlocks(); if (HA.DM.pop && HA.DM.popId === b.id) openBlockPop(b); if (S.settings.rowOn) drawRows(); }
     function pbLbl(q) { return !q ? '–' : q.st > 0 ? String(+q.w || 1.5).replace('.', ',') : '0'; }
     function pbRefresh() {
+      if (!$('bePb')) return;
       var q = b.pb, st = q ? q.st : null, inf = '';
       $('bePb').textContent = pbLbl(q);
       if (!q) inf = 'Belum ada. Ketuk untuk membuat garis pembatas.';

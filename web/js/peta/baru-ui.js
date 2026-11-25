@@ -257,19 +257,29 @@
       card.classList.toggle('shut', !!closed);
       sv.style.top = (card.offsetTop + card.offsetHeight + 8) + 'px'; undo.style.top = (card.offsetTop + card.offsetHeight + 8) + 'px';
     }
-    // label panjang tiap sisi (meter, 1 desimal); tombol m nyala/mati
-    var segOn = S.settings.ukSeg !== false, sb = document.createElement('button');
-    sb.type = 'button'; sb.className = 'ukSb' + (segOn ? '' : ' off'); sb.textContent = 'm'; sb.setAttribute('aria-label', 'Panjang sisi'); box.appendChild(sb); L.DomEvent.disableClickPropagation(sb);
-    sb.onclick = function () { segOn = !segOn; S.settings.ukSeg = segOn; HA.saveSettings(); sb.classList.toggle('off', !segOn); toast(segOn ? 'Panjang sisi tampil' : 'Panjang sisi disembunyikan'); upd(); };
+    // label panjang tiap sisi (meter, 1 desimal), selalu nyala, ditaruh di tengah bagian garis yang terlihat di layar
     function segTxt(m) { return m < 1000 ? m.toFixed(1).replace('.', ',') + ' m' : (m / 1000).toFixed(2).replace('.', ',') + ' km'; }
+    function clipSeg(a, b, x0, y0, x1, y1) { // Liang-Barsky; kembali [t0,t1] atau null
+      var dx = b.x - a.x, dy = b.y - a.y, t0 = 0, t1 = 1, P = [-dx, dx, -dy, dy], Q = [a.x - x0, x1 - a.x, a.y - y0, y1 - a.y], k;
+      for (k = 0; k < 4; k++) {
+        if (P[k] === 0) { if (Q[k] < 0) return null; continue; }
+        var r = Q[k] / P[k];
+        if (P[k] < 0) { if (r > t1) return null; if (r > t0) t0 = r; } else { if (r < t0) return null; if (r < t1) t1 = r; }
+      }
+      return t0 <= t1 ? [t0, t1] : null;
+    }
     function segLabels(main, tail) {
-      if (!segOn) return;
       var P = main.slice(); if (tail) P = P.concat([tail]);
+      var sz = map.getSize(), x0 = 18, y0 = 112, x1 = sz.x - 18, y1 = sz.y - 96, used = [];
       for (var k = 0; k < P.length - 1; k++) {
         var a = P[k], b = P[k + 1], pa = map.latLngToContainerPoint(L.latLng(a[0], a[1])), pb = map.latLngToContainerPoint(L.latLng(b[0], b[1]));
-        if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < 46) continue;
-        var m = flat([a, b], false).len;
-        L.marker([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], { interactive: false, keyboard: false, zIndexOffset: 700, icon: L.divIcon({ className: '', html: '<div class="ukSl">' + segTxt(m) + '</div>', iconSize: [0, 0], iconAnchor: [0, 0] }) }).addTo(g);
+        if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < 22) continue;
+        var c = clipSeg(pa, pb, x0, y0, x1, y1); if (!c) continue;
+        var tm = (c[0] + c[1]) / 2, q = L.point(pa.x + (pb.x - pa.x) * tm, pa.y + (pb.y - pa.y) * tm), ok = true;
+        used.forEach(function (u) { if (Math.abs(u.x - q.x) < 56 && Math.abs(u.y - q.y) < 20) ok = false; });
+        if (!ok) continue; used.push(q);
+        var m = flat([a, b], false).len, ll = map.containerPointToLatLng(q);
+        L.marker(ll, { interactive: false, keyboard: false, zIndexOffset: 700, icon: L.divIcon({ className: '', html: '<div class="ukSl">' + segTxt(m) + '</div>', iconSize: [0, 0], iconAnchor: [0, 0] }) }).addTo(g);
       }
     }
     function setClosed(c) { var was = !!closed; closed = c; if (c && !was) toast('Poligon tertutup. Tekan Simpan'); }
