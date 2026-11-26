@@ -114,7 +114,7 @@
     function px(fx, fy) { return tp(g.mnx + fx * g.bw, g.mny + fy * g.bh); }
     if (rad) { var sh = shiftView(g, P, R.w / sc, R.h / sc, b.pts[0].join(',')); cx += sh[0]; cy += sh[1]; }
     var vx0 = cx - (R.w / 2) / sc, vx1 = cx + (R.w / 2) / sc, vy0 = cy - (R.h / 2) / sc, vy1 = cy + (R.h / 2) / sc;
-    var lfs = Math.round(cw * 0.026 * (rad >= 1500 ? 0.6 : rad >= 1000 ? 0.8 : 1));   // ukuran nomor blok seragam: 100% (Otomatis, 0,5 km), 80% (1 km), 60% (1,5 km)
+    var lfs = Math.round(cw * 0.026 * (rad >= 1500 ? 0.4 : rad >= 1000 ? 0.6 : 0.8));   // ukuran nomor blok seragam: 80% (Otomatis, 0,5 km), 60% (1 km), 40% (1,5 km)
     var cut = rad && (g.bw * sc > R.w - 2 || g.bh * sc > R.h - 2);
     ctx.save(); ctx.beginPath(); ctx.rect(R.x, R.y, R.w, R.h); ctx.clip();
     ctx.lineJoin = 'round'; ctx.strokeStyle = '#8A98A0'; ctx.lineWidth = Math.max(1.5, cw * 0.0035); ctx.fillStyle = '#7A8890';
