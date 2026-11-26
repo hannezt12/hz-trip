@@ -1167,11 +1167,10 @@ input[type=checkbox],input[type=radio]{accent-color:var(--p)}
 .shKl svg{display:block}
 .klBar{display:flex;align-items:stretch;gap:6px;padding:8px 12px 8px;border-top:1px solid #8884}
 .klPn.col .klBar{display:none}
-.klBar .klSg{flex:0 0 auto;height:52px}
-.klBar .klSg button{height:100%;min-width:44px;padding:0 10px;display:flex;align-items:center;justify-content:center;font-weight:700}
-.klBar .klTb{flex:0 0 auto;width:60px;height:52px;padding:0;display:flex;align-items:center;justify-content:center;position:relative}
-.klBar .klTb i{position:absolute;top:-4px;right:-2px;background:#FF9500;color:#111;border-radius:10px;font:800 11px/1 sans-serif;font-style:normal;padding:3px 5px}
-.klBar .klGo{flex:1;min-width:0;height:52px;font-weight:800}
+.klBar .klBt i{position:absolute;top:-4px;right:-2px;background:#FF9500;color:#111;border-radius:10px;font:800 11px/1 sans-serif;font-style:normal;padding:3px 5px}
 .klNv{display:flex;align-items:center;gap:8px;margin-top:8px}
 .klNv b{flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .klNb{flex:0 0 auto;width:64px;height:52px;padding:0;display:flex;align-items:center;justify-content:center}
+/* v0.27.15 kolase: 4 tombol sama ukuran, mode pilih blok di peta */
+.klBar .klBt{flex:1 1 0;min-width:0;height:54px;padding:0;display:flex;align-items:center;justify-content:center;position:relative;font-weight:800;font-size:1rem}
+body.klPick #map .leaflet-interactive{pointer-events:none!important}

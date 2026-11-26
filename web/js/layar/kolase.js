@@ -23,7 +23,7 @@
   function blocks() { return HA.blocksList().filter(function (b) { return b && b.pts && b.pts.length >= 3; }); }
   function byId(id) { var r = null; blocks().forEach(function (b) { if (String(b.id) === String(id)) r = b; }); return r; }
   function haTxt(b) { return HzBlok.areaHa(b.pts).toFixed(2).replace('.', ',') + ' ha'; }
-  function bulanTxt(b) { var m = HA.lyb.bulanOf(b); return m ? BN[m - 1] + ' ' + b.tn.slice(0, 4) : ''; }
+  function bulanTxt(b) { var m = HA.lyb.bulanOf(b); return m ? BN[m - 1] : ''; }
   function kats(b) {
     var d = HA.tandaData && HA.tandaData(), out = [], seen = {};
     if (!d) return out;
@@ -153,7 +153,7 @@
   // ---------- layar ----------
   var el = null, ann = null, hl = null;
   function $e(id) { return el && el.querySelector('#' + id); }
-  function close() { HA.klBack = null; HA.klPick = null; if (hl) { hl.remove(); hl = null; } document.querySelectorAll('.klIn').forEach(function (n) { n.remove(); }); if (el) el.remove(); el = null; ST = null; ann = null; }
+  function close() { document.body.classList.remove('klPick'); HA.klBack = null; HA.klPick = null; if (hl) { hl.remove(); hl = null; } document.querySelectorAll('.klIn').forEach(function (n) { n.remove(); }); if (el) el.remove(); el = null; ST = null; ann = null; }
   HA.klBack = null; HA.klPick = null;
   // tanda blok terpilih di peta (garis tebal + nomor urut)
   function drawHl() {
@@ -177,6 +177,8 @@
     var list = (pre || []).map(function (b) { return String(b.id); });
     if (list.length > MAX) { HA.toast('Maksimal ' + MAX + ' blok, sisanya tidak ikut'); list = list.slice(0, MAX); }
     ST = { sel: list, q: '', ann: {}, sz: 's', tool: 'p', cur: null, col: false };
+    try { if (HA.closeBlockPop && HA.DM && HA.DM.pop) HA.closeBlockPop(); if (HA.closeLinePop) HA.closeLinePop(); if (HA.map && HA.map._pinClear) HA.map._pinClear(); if (HA.map) HA.map.closePopup(); } catch (x) {}
+    document.body.classList.add('klPick');
     var mp = document.getElementById('map');
     if (!mp || !mp.offsetParent) HA.go('lintasan');
     if (S.settings.blkOn === false) { S.settings.blkOn = true; HA.saveSettings(); if (HA.drawBlocks) HA.drawBlocks(); }
@@ -214,10 +216,10 @@
       shown.map(function (b) { var on = ST.sel.indexOf(String(b.id)) >= 0; return '<label class="klRw"><input type="checkbox" data-b="' + esc(String(b.id)) + '"' + (on ? ' checked' : '') + '><span>' + esc(String(b.name)) + '</span><small class="muted">' + haTxt(b) + '</small></label>'; }).join('') + (all.length > shown.length ? '<div class="muted" style="padding:6px">Menampilkan 60 pertama. Persempit dengan pencarian.</div>' : '') + '</div>' +
       '<div class="h" style="margin-top:12px">ISI TIAP KOTAK</div><div class="klInf">' + INF.map(function (i) { return '<label><input type="checkbox" data-i="' + i[0] + '"' + (c.info[i[0]] ? ' checked' : '') + '> ' + i[1] + '</label>'; }).join('') + '</div>' +
       '<div class="muted" style="margin-top:10px">Titik dan teks hanya untuk kolase ini, tidak disimpan ke data blok.</div></div>' +
-      '<div class="klBar" id="klBar"><div class="seg klSg" id="klP"><button data-v="2" aria-label="2 blok per lembar"' + (c.per === 2 ? ' class="on"' : '') + '>' + ICO_2 + '</button><button data-v="4" aria-label="4 blok per lembar"' + (c.per === 4 ? ' class="on"' : '') + '>' + ICO_4 + '</button></div>' +
-      '<button type="button" class="btn klTb" id="klAn" aria-label="Titik dan teks"' + (ST.sel.length ? '' : ' disabled') + '>' + ICO_AN + (nA ? '<i>' + nA + '</i>' : '') + '</button>' +
-      '<div class="seg klSg" id="klF"><button data-v="pdf"' + (c.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-v="png"' + (c.fmt === 'png' ? ' class="on"' : '') + '>PNG</button></div>' +
-      '<button type="button" class="btn pri klGo" id="klGo"' + (ST.sel.length ? '' : ' disabled') + '>Kirim</button></div>';
+      '<div class="klBar" id="klBar"><button type="button" class="btn klBt" id="klP" aria-label="' + (c.per === 2 ? '2 blok per lembar, ketuk untuk 4 blok' : '4 blok per lembar, ketuk untuk 2 blok') + '">' + (c.per === 2 ? ICO_2 : ICO_4) + '</button>' +
+      '<button type="button" class="btn klBt" id="klAn" aria-label="Titik dan teks"' + (ST.sel.length ? '' : ' disabled') + '>' + ICO_AN + (nA ? '<i>' + nA + '</i>' : '') + '</button>' +
+      '<button type="button" class="btn klBt" id="klF" aria-label="Format, ketuk untuk mengganti">' + (c.fmt === 'png' ? 'PNG' : 'PDF') + '</button>' +
+      '<button type="button" class="btn pri klBt klGo" id="klGo"' + (ST.sel.length ? '' : ' disabled') + '>Kirim</button></div>';
     $e('klX').onclick = close;
     $e('klPh').onclick = function (e) { if (e.target.closest && e.target.closest('#klX')) return; ST.col = !ST.col; main(); };
     drawHl();
@@ -229,8 +231,8 @@
       toggle(id);
     };
     el.querySelectorAll('[data-i]').forEach(function (e) { e.onchange = function () { c.info[e.getAttribute('data-i')] = e.checked; HA.saveSettings(); }; });
-    $e('klP').onclick = function (e) { var b = e.target.closest && e.target.closest('[data-v]'); if (!b) return; c.per = +b.getAttribute('data-v'); HA.saveSettings(); main(); };
-    $e('klF').onclick = function (e) { var b = e.target.closest && e.target.closest('[data-v]'); if (!b) return; c.fmt = b.getAttribute('data-v'); HA.saveSettings(); main(); };
+    $e('klP').onclick = function () { c.per = c.per === 4 ? 2 : 4; HA.saveSettings(); main(); };
+    $e('klF').onclick = function () { c.fmt = c.fmt === 'pdf' ? 'png' : 'pdf'; HA.saveSettings(); main(); };
     $e('klAn').onclick = function () { ann = true; if (hl) { hl.remove(); hl = null; } ST.cur = ST.cur && ST.sel.indexOf(ST.cur) >= 0 ? ST.cur : ST.sel[0]; annot(); };
     $e('klGo').onclick = go;
     var nb = el.querySelector('.klBody'), nl = $e('klLs'); if (nb) nb.scrollTop = y0; if (nl) nl.scrollTop = l0;
