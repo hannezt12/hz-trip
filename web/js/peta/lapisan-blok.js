@@ -375,56 +375,44 @@
     if (!b || !b.tn || !/^\d{4}-\d{2}$/.test(b.tn)) return '';
     var m = (+d.slice(0, 4) - +b.tn.slice(0, 4)) * 12 + (+d.slice(5, 7) - +b.tn.slice(5, 7)); return m < 0 ? '' : m;
   }
-  // ---------- Panen: Mulai panen / Panen selesai (konfirmasi Han) -> Naik status aktif 7 hari, otomatis di hari ke-8 ----------
-  var PN_WIN = 7;
+  // ---------- Tebang (v0.27.16): Mulai tebang / Tebang selesai -> RC atau PC langsung, siklus baru; Urungkan 7 hari ----------
+  var TB_WIN = 7;
   function addD(d, n) { var t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); }
   var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-  function dTxt(d) { return +d.slice(8, 10) + ' ' + MON[+d.slice(5, 7) - 1]; }
-  function panenInfo(b) {
-    var q = b.pn, t = today();
-    if (!q || (!q.m && !q.s)) return { st: 0, text: 'Panen: belum dimulai', btns: [{ a: 'mulai', t: 'Mulai panen' }, { a: 'selesai', t: 'Panen selesai' }] };
-    if (!q.s) return { st: 1, text: 'Panen mulai ' + dTxt(q.m), btns: [{ a: 'selesai', t: 'Panen selesai' }, { a: 'batal', t: 'Batalkan' }] };
-    var left = PN_WIN - dayDiff(q.s, t);
-    return { st: 2, text: 'Panen selesai ' + dTxt(q.s) + (left >= 0 ? ' \u00B7 Naik status aktif sampai ' + dTxt(addD(q.s, PN_WIN)) + ', otomatis ' + dTxt(addD(q.s, PN_WIN + 1)) : ' \u00B7 menunggu naik otomatis'), left: left, btns: [{ a: 'naik', t: 'Naik status' }, { a: 'batal', t: 'Batalkan' }] };
+  function dTxt(d) { return +d.slice(8, 10) + ' ' + MON[+d.slice(5, 7) - 1] + ' ' + d.slice(0, 4); }
+  function tbInfo(b) {
+    var q = b.pn, u = b.tbU, t = today();
+    if (q && q.s) { delete b.pn; q = null; }
+    var o = { mulai: q && q.m || '', undo: !!(u && dayDiff(u.d, t) <= TB_WIN), cy: b.cy || '' };
+    if (u && !o.undo) delete b.tbU;
+    o.text = q && q.m ? 'Tebang mulai ' + dTxt(q.m) : (b.cy ? 'Tebang selesai ' + dTxt(b.cy) : 'Tebang belum dimulai');
+    return o;
   }
-  // naik satu tingkat; auto = true bila dipicu hari ke-8 (tanpa Urungkan)
-  function riseNow(b, auto) {
+  function tbMulai(b, d) { b.pn = { m: d }; save(); }
+  function tbBatal(b) { delete b.pn; save(); }
+  // mode 'rc' | 'pc'; hasil 'ok' atau kode galat
+  function tbSelesai(b, d, mode) {
     var l = lapBy('status'); if (!l || !l.items.length) return 'list';
-    var cur = of(b, 'status'), nx = nextItem(b, l); if (!cur) return 'kosong'; if (!nx) return 'akhir';
-    var q = b.pn || {}, s = q.s || today(), um = umurAt(b, s), pt = b.tn || '', pn = b.pn;
-    if (!setItem(b, 'status', nx.id)) return 'sama';
-    var e = b.lyh[b.lyh.length - 1]; e.jn = 'panen'; e.um = um; e.pi = cur.id; e.pt = pt; e.ps = ''; e.ds = s; if (pn) e.pn = pn; if (auto) e.auto = 1;
-    b.tn = s.slice(0, 7); delete b.pn; save(); return 'ok';
+    var cur = of(b, 'status'), nx = null, i;
+    if (mode === 'rc') { if (!cur) return 'kosong'; nx = nextItem(b, l); if (!nx) return 'akhir'; }
+    else { l.items.forEach(function (x) { if (!nx && String(x.id).toLowerCase() === 'pc') nx = x; }); if (!nx) nx = l.items[0]; }
+    var snap = { d: today(), done: d, ly: JSON.parse(JSON.stringify(b.ly || {})), tn: b.tn || '', cy: b.cy || '', pn: b.pn ? JSON.parse(JSON.stringify(b.pn)) : null, n: (b.lyh || []).length, st: cur ? cur.name : '', mode: mode };
+    var um = umurAt(b, d), pt = b.tn || '', pn = b.pn ? { m: b.pn.m || '', s: d } : { s: d };
+    setItem(b, 'status', nx.id);
+    var e = b.lyh[b.lyh.length - 1]; e.jn = 'tebang'; e.um = um; e.pi = cur ? cur.id : ''; e.pt = pt; e.ds = d; e.pn = pn; e.md = mode;
+    if (mode === 'pc') { setItem(b, 'varietas', ''); b.tn = ''; } else b.tn = d.slice(0, 7);
+    b.cy = d; delete b.pn; b.tbU = snap; save(); return 'ok';
   }
-  function panenAct(b, a, done) {
-    var nm = String(b.name), t = today();
-    if (a === 'mulai') HA.askConfirm('Mulai panen blok ' + nm + '?', 'Tanggal mulai: ' + dTxt(t) + '.', 'Mulai', function () { b.pn = { m: t }; save(); done(); });
-    else if (a === 'selesai') HA.askConfirm('Panen selesai blok ' + nm + '?', 'Dinyatakan selesai ' + dTxt(t) + '. Tombol Naik status aktif ' + PN_WIN + ' hari; bila tidak ditekan, status naik otomatis di hari ke-' + (PN_WIN + 1) + '.', 'Selesai', function () { b.pn = { m: (b.pn && b.pn.m) || t, s: t }; save(); done(); });
-    else if (a === 'batal') HA.askConfirm('Batalkan catatan panen?', 'Tanggal mulai/selesai panen blok ' + nm + ' dihapus. Status tidak berubah.', 'Batalkan', function () { delete b.pn; save(); done(); });
-    else if (a === 'naik') {
-      var l = lapBy('status'), nx = l && nextItem(b, l), cur = of(b, 'status');
-      if (!l || !l.items.length) { toast('Isi dulu jenis status di menu Lapisan'); return; }
-      if (!cur) { toast('Isi status blok dulu'); return; }
-      if (!nx) { toast('Sudah di status terakhir'); return; }
-      var s = (b.pn && b.pn.s) || t;
-      HA.askConfirm('Naik status blok ' + nm + '?', cur.name + ' \u2192 ' + nx.name + '. Bulan tanam menjadi bulan panen (' + MON[+s.slice(5, 7) - 1] + ' ' + s.slice(0, 4) + ').', 'Naik', function () { riseNow(b, false); done(); });
-    }
+  function tbUndo(b) {
+    var u = b.tbU; if (!u || dayDiff(u.d, today()) > TB_WIN) return false;
+    b.ly = JSON.parse(JSON.stringify(u.ly)); b.tn = u.tn; if (u.cy) b.cy = u.cy; else delete b.cy;
+    if (u.pn) b.pn = u.pn; else delete b.pn;
+    if (b.lyh) b.lyh = b.lyh.slice(0, u.n);
+    delete b.tbU; save(); return true;
   }
-  // cek harian: Panen selesai + lewat 7 hari -> naik otomatis di hari ke-8
-  function autoCheck() {
-    var t = today(), n = 0;
-    HA.blocksList().forEach(function (b) {
-      var q = b.pn; if (!q || !q.s || dayDiff(q.s, t) < PN_WIN + 1) return;
-      if (riseNow(b, true) === 'ok') n++; else { delete b.pn; save(); }
-    });
-    if (n) toast(n + ' blok naik status otomatis setelah panen selesai');
-  }
-  setTimeout(function () { try { autoCheck(); } catch (e) {} }, 3000);
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) { try { autoCheck(); } catch (e) {} } });
   function undoLast(b) {
     var h = b.lyh || [], e = h[h.length - 1]; if (!e || e.ps === undefined) return false;
     if (e.pi) { b.ly = b.ly || {}; b.ly[e.l] = e.pi; } else if (b.ly) delete b.ly[e.l];
-    if (e.auto) return false;
     b.tn = e.pt || ''; if (e.ps) b.stSug = e.ps; else delete b.stSug; if (e.pn) b.pn = e.pn; h.pop(); save(); return true;
   }
 
@@ -525,13 +513,13 @@
   function hist(b, back) {
     var h = (b.lyh || []).slice().reverse();
     openSheet('<div class="grab"></div><div class="bth"><div class="st">RIWAYAT STATUS \u00B7 BLOK ' + esc(String(b.name)).toUpperCase() + '</div><button class="btn pri" id="rhX">Tutup</button></div>' +
-      (h.length ? '<div class="lbList">' + h.map(function (x) { var l = lapBy(x.l), it = l && itemBy(l, x.i); return '<div class="lbRow" style="min-height:2.75rem;align-items:center"><span class="muted" style="width:6.5rem;flex:none">' + esc(x.d) + '</span><span><b>' + esc(l ? l.name : x.l) + '</b>: ' + esc(it ? it.name : 'dikosongkan') + (x.jn ? ' <span class="muted">\u00B7 panen' + (x.auto ? ' (otomatis)' : '') + (x.um !== '' && x.um != null ? ' \u00B7 umur ' + x.um + ' bln' : '') + '</span>' : '') + '</span></div>'; }).join('') + '</div>' : '<div class="muted" style="margin:10px 0">Belum ada perubahan.</div>') +
-      (((b.lyh || []).length && b.lyh[b.lyh.length - 1].ps !== undefined && !b.lyh[b.lyh.length - 1].auto) ? '<button class="btn" id="rhUn"' + (HA.plUn ? '' : ' disabled') + ' style="width:100%;margin-top:8px">Urungkan perubahan terakhir</button>' + (HA.plUn ? '' : '<div class="muted">Terkunci. Buka kunci di Edit blok > Lainnya.</div>') : '') +
+      (h.length ? '<div class="lbList">' + h.map(function (x) { var l = lapBy(x.l), it = l && itemBy(l, x.i); return '<div class="lbRow" style="min-height:2.75rem;align-items:center"><span class="muted" style="width:6.5rem;flex:none">' + esc(x.d) + '</span><span><b>' + esc(l ? l.name : x.l) + '</b>: ' + esc(it ? it.name : 'dikosongkan') + (x.jn ? ' <span class="muted">\u00B7 tebang' + (x.md ? ' ' + x.md.toUpperCase() : '') + (x.um !== '' && x.um != null ? ' \u00B7 umur ' + x.um + ' bln' : '') + '</span>' : '') + '</span></div>'; }).join('') + '</div>' : '<div class="muted" style="margin:10px 0">Belum ada perubahan.</div>') +
+      (((b.lyh || []).length && b.lyh[b.lyh.length - 1].ps !== undefined) ? '<button class="btn" id="rhUn"' + (HA.plUn ? '' : ' disabled') + ' style="width:100%;margin-top:8px">Urungkan perubahan terakhir</button>' + (HA.plUn ? '' : '<div class="muted">Terkunci. Buka kunci di Edit blok > Lainnya.</div>') : '') +
       (b.tn ? '<div class="muted" style="margin-top:8px">Bulan tanam/tebang terakhir: ' + esc(b.tn) + '</div>' : ''));
     $('rhX').onclick = function () { if (back) back(); else closeSheet(); };
     if ($('rhUn')) $('rhUn').onclick = function () { if (undoLast(b)) { toast('Perubahan terakhir diurungkan'); hist(b, back); } };
   }
-  HA.lyb = { btOpen: btOpen, hist: hist, panenInfo: panenInfo, panenAct: panenAct, autoCheck: autoCheck, all: all, by: lapBy, of: of, set: setItem, umur: umur, umurM: umurM, umBucket: umBucket, umCol: function (i) { return umCols()[i]; }, umLabels: umLabels, umCols: umCols, txt: txt, next: nextItem, active: active, fillPdf: fillPdf, swatchPdf: swatchPdf, rgb: rgb, pathOf: pathOf, PATS: PATS, PAL: PAL, prevSvg: prevSvg, diceN: diceN, isVec: isVec, symPdf: symPdf, symK: symK, symW: symW, symHtml: symHtml, symTxt: symTxt, bulanCol: bulanCol, bulanOf: bulanOf, btOn: btOn, btW: btW, BN: BN, home: home, bulk: bulk, today: today };
+  HA.lyb = { btOpen: btOpen, hist: hist, tbInfo: tbInfo, tbMulai: tbMulai, tbBatal: tbBatal, tbSelesai: tbSelesai, tbUndo: tbUndo, all: all, by: lapBy, of: of, set: setItem, umur: umur, umurM: umurM, umBucket: umBucket, umCol: function (i) { return umCols()[i]; }, umLabels: umLabels, umCols: umCols, txt: txt, next: nextItem, active: active, fillPdf: fillPdf, swatchPdf: swatchPdf, rgb: rgb, pathOf: pathOf, PATS: PATS, PAL: PAL, prevSvg: prevSvg, diceN: diceN, isVec: isVec, symPdf: symPdf, symK: symK, symW: symW, symHtml: symHtml, symTxt: symTxt, bulanCol: bulanCol, bulanOf: bulanOf, btOn: btOn, btW: btW, BN: BN, home: home, bulk: bulk, today: today };
   document.addEventListener('DOMContentLoaded', wire); if (document.readyState !== 'loading') wire();
   function wire() {
     var a = document.querySelector('#drawer a[data-lyb]'); if (!a || a._w) return; a._w = 1;

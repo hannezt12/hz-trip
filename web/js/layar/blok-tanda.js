@@ -36,14 +36,15 @@
     var best = -1, mid = null; for (i = 0; i + 1 < xs.length; i += 2) if (xs[i + 1] - xs[i] > best) { best = xs[i + 1] - xs[i]; mid = (xs[i] + xs[i + 1]) / 2; }
     return mid === null ? P[0] : [m[0], mid];
   }
-  function itemsOf(b) {
-    var bb = bbox(b.pts), out = [];
-    HA.tandaData().items.forEach(function (it) { var r = rep(it); if (r[0] < bb[0] || r[0] > bb[2] || r[1] < bb[1] || r[1] > bb[3]) return; if (pipPts(r, b.pts)) out.push(it); });
+  // siklus: tanda bertanggal sebelum b.cy (tebang selesai) milik siklus sebelumnya; all=true -> semua
+  function itemsOf(b, all) {
+    var bb = bbox(b.pts), out = [], cy = all ? '' : (b.cy || '');
+    HA.tandaData().items.forEach(function (it) { var r = rep(it); if (r[0] < bb[0] || r[0] > bb[2] || r[1] < bb[1] || r[1] > bb[3]) return; if (cy && HA.tandaU.dateOf(it) < cy) return; if (pipPts(r, b.pts)) out.push(it); });
     return out;
   }
   function countsAll(list) {
     var res = {}, its = HA.tandaData().items.map(function (it) { return [it, rep(it)]; });
-    list.forEach(function (b) { var bb = bbox(b.pts), n = 0; its.forEach(function (x) { var r = x[1]; if (r[0] < bb[0] || r[0] > bb[2] || r[1] < bb[1] || r[1] > bb[3]) return; if (pipPts(r, b.pts)) n++; }); res[b.id] = n; });
+    list.forEach(function (b) { var bb = bbox(b.pts), n = 0, cy = b.cy || ''; its.forEach(function (x) { var r = x[1]; if (cy && HA.tandaU.dateOf(x[0]) < cy) return; if (r[0] < bb[0] || r[0] > bb[2] || r[1] < bb[1] || r[1] > bb[3]) return; if (pipPts(r, b.pts)) n++; }); res[b.id] = n; });
     return res;
   }
   // poligon digeser keluar sejauh d meter (miter dibatasi)

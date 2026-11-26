@@ -1174,3 +1174,6 @@ input[type=checkbox],input[type=radio]{accent-color:var(--p)}
 /* v0.27.15 kolase: 4 tombol sama ukuran, mode pilih blok di peta */
 .klBar .klBt{flex:1 1 0;min-width:0;height:54px;padding:0;display:flex;align-items:center;justify-content:center;position:relative;font-weight:800;font-size:1rem}
 body.klPick #map .leaflet-interactive{pointer-events:none!important}
+/* v0.27.16 siklus sebelumnya */
+.rbPv{margin-top:0.6rem;border:1px solid var(--line);border-radius:0.6rem;padding:0.2rem 0.6rem}
+.rbPv summary{min-height:2.75rem;display:flex;align-items:center;font-weight:600;cursor:pointer}

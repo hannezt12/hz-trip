@@ -793,7 +793,7 @@
     var ls = HA.lyb.all();
     return '<label style="margin-top:8px"><input type="checkbox" id="beUk"> Buka kunci data tanaman</label><div class="muted" style="margin-bottom:4px">Varietas, status dan bulan tanam terkunci agar tidak berubah tanpa sengaja.</div><div class="lbG2">' + ls.map(function (l) {
       return '<div><div class="muted">' + esc(l.name) + '</div><select id="beLy_' + l.id + '"><option value="">\u2014</option>' + l.items.map(function (x) { return '<option value="' + x.id + '"' + (b.ly && b.ly[l.id] === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>';
-    }).join('') + '</div><div class="lbG"><div><div class="muted">Bulan tanam</div><input type="month" id="beTn" value="' + esc(b.tn || '') + '"></div><div><div class="muted">Umur</div><div id="beUm" style="min-height:2.5rem;display:flex;align-items:center">' + (HA.lyb.umur(b) || '\u2014') + '</div></div></div><div id="bePn"></div>' + ((b.lyh && b.lyh.length) ? '<button class="btn sm" id="beLh" style="margin-top:8px">Riwayat status</button>' : '');
+    }).join('') + '</div><div class="lbG"><div><div class="muted">Bulan tanam</div><input type="month" id="beTn" value="' + esc(b.tn || '') + '"></div><div><div class="muted">Umur</div><div id="beUm" style="min-height:2.5rem;display:flex;align-items:center">' + (HA.lyb.umur(b) || '\u2014') + '</div></div></div>' + ((b.lyh && b.lyh.length) ? '<button class="btn sm" id="beLh" style="margin-top:8px">Riwayat status</button>' : '');
   }
   function openBlockEdit(b) {
     HA.pbStopForEdit(); if (HA.DM.closePanel) HA.DM.closePanel(); if (HA.closeLinePop) HA.closeLinePop();
@@ -810,7 +810,6 @@
       '<div class="muted" id="beLk" style="display:none;margin-top:8px;color:#FFB020">Blok terkunci. Hilangkan centang Terkonfirmasi untuk mengedit.</div>' +
       '<div class="muted" id="beDt" style="margin-top:8px">' + dtText() + '</div>' +
       '<div class="row" style="margin-top:6px;gap:6px"><button class="btn" id="beP" style="flex:1">Ketuk 2 titik</button><button class="btn" id="beB" style="flex:1">Edit batas</button></div>' +
-      '<button class="btn" id="beHi" style="width:100%;margin-top:8px">Riwayat blok</button>' +
       '<button class="btn" id="beMo" style="width:100%;margin-top:8px">Lainnya ▾</button>' +
       '<div class="bmore" id="beMore"><div class="lbG"><div><div class="muted">Jarak row (m)</div><input type="number" id="beJ" step="0.05" min="0.5" max="5" value="' + blkSp(b) + '"></div><div><div class="muted">Kurangi tepi (m)</div><input type="number" id="beM" step="1" min="0" max="50" value="' + (+b.margin || 0) + '"></div><div><div class="muted">Pembatas</div><button class="btn" id="bePb" style="width:100%">–</button></div></div>' + lybHtml(b) +
       '<div class="row" style="margin-top:6px;gap:6px"><button class="btn" id="bePbE" style="flex:1;display:none">Atur garis</button></div><div class="muted" id="bePbI" style="margin-top:4px"></div>' +
@@ -857,11 +856,6 @@
       HA.lyb.all().forEach(function (l) { var e = $('beLy_' + l.id); if (e) e.onchange = function () { HA.lyb.set(b, l.id, e.value); live(); }; });
       if ($('beTn')) $('beTn').onchange = function () { b.tn = this.value || ''; $('beUm').textContent = HA.lyb.umur(b) || '\u2014'; live(); };
       if ($('beLh')) $('beLh').onclick = function () { HA.onSheetClose = null; HA.lyb.hist(b, function () { HA.plUnKeep = true; openBlockEdit(b); if ($('beMo')) $('beMo').click(); }); };
-      if ($('bePn')) {
-        $('bePn').onclick = function (e) { var a = e.target.getAttribute && e.target.getAttribute('data-a'); if (!a) return; HA.lyb.panenAct(b, a, function () { live(); openBlockEdit(b); if ($('beMo')) $('beMo').click(); }); };
-        var pi = HA.lyb.panenInfo(b);
-        $('bePn').innerHTML = '<div class="muted" style="margin:10px 0 4px">' + esc(pi.text) + '</div><div class="row" style="gap:6px">' + pi.btns.map(function (x) { return '<button type="button" class="btn" data-a="' + x.a + '" style="flex:1;height:46px">' + x.t + '</button>'; }).join('') + '</div>';
-      }
     }
     function plLock() {
       var u = $('beUk'); if (!u) return; var lk = !u.checked;
@@ -875,7 +869,6 @@
       $('beLk').style.display = lk ? '' : 'none';
     }
     $('beC').onchange = function () { if ($('beC').checked && b.dir == null) { $('beC').checked = false; toast('Atur arah row dulu'); return; } b.conf = $('beC').checked; live(); applyLock(); };
-    $('beHi').onclick = function () { HA.onSheetClose = null; if (HA.BRiw) HA.BRiw.open(b, function () { openBlockEdit(b); }); };
     $('beT').onchange = function () { b.note = $('beT').value.trim(); live(); };
     $('beP').onclick = function () { HA.onSheetClose = null; pbClear(); closeSheet(); needMap(b.pts, function () { tapDir(b); }); };
     $('beB').onclick = function () { HA.onSheetClose = null; pbClear(); closeSheet(); needMap(b.pts, function () { closeBlockPop(); editPoly(b.pts, true, function (res) { if (res) { b.pts = res; delete b._bb; saveSettings(); } drawBlocks(); drawRows(); openBlockPop(b); openBlockEdit(b); }); }); };

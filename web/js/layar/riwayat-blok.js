@@ -120,6 +120,52 @@
       confirmChange('Tanggal diubah ke ' + U.d8(v) + '.', function () { it.date = v; it.mod = Date.now(); persist(); back(); }, function () { pickDate(it, back); });
     };
   }
+
+  // ---- Tebang: Mulai tebang / Tebang selesai (RC atau PC) / Urungkan
+  function tebang(b, back) {
+    var L = HA.lyb, t = L.today(), nm = String(b.name);
+    function go() { tebang(b, back); }
+    function back2() { HA.onSheetClose = null; back(); }
+    function dv() { var v = $('tbD').value; if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || v > t) { HA.toast('Tanggal tidak valid'); return ''; } return v; }
+    var I = L.tbInfo(b);
+    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TEBANG · BLOK ' + esc(nm).toUpperCase() + '</div><button class="btn" id="tbX" aria-label="Tutup">✕</button></div>' +
+      '<div class="muted" style="margin:4px 0">' + esc(I.text) + '</div>' +
+      '<label class="calL" style="margin-top:8px">Tanggal<input type="date" id="tbD" max="' + t + '" value="' + t + '"></label>' +
+      '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="tbM" style="flex:1;height:46px">Mulai tebang</button><button class="btn pri" id="tbS" style="flex:1;height:46px">Tebang selesai</button></div>' +
+      (I.mulai ? '<button class="btn" id="tbB" style="width:100%;margin-top:8px">Batalkan mulai tebang</button>' : '') +
+      (I.undo ? '<button class="btn" id="tbU" style="width:100%;margin-top:8px">Urungkan tebang selesai</button><div class="muted" style="margin-top:4px">Bisa diurungkan sampai 7 hari setelah tebang selesai.</div>' : ''));
+    HA.onSheetClose = back2;
+    $('tbX').onclick = function () { HA.closeSheet(); };
+    $('tbM').onclick = function () {
+      var d = dv(); if (!d) return; HA.onSheetClose = null;
+      HA.askConfirm('Mulai tebang blok ' + nm + '?', 'Tanggal mulai: ' + HA.tandaU.d8(d) + '.', 'Mulai', function () { L.tbMulai(b, d); if (HA.drawBlocks) HA.drawBlocks(); go(); });
+      var cn = $('cfNo'); if (cn) cn.onclick = go;
+    };
+    if ($('tbB')) $('tbB').onclick = function () { L.tbBatal(b); go(); };
+    $('tbS').onclick = function () {
+      var d = dv(); if (!d) return;
+      if (I.mulai && d < I.mulai) { HA.toast('Tanggal selesai sebelum tanggal mulai'); return; }
+      HA.onSheetClose = null;
+      HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TEBANG SELESAI · ' + HA.tandaU.d8(d) + '</div><button class="btn" id="tcX" aria-label="Kembali">✕</button></div>' +
+        '<div class="muted" style="margin:4px 0 8px">Pilih kegiatan setelah tebang. Status berubah otomatis dan blok memulai siklus baru (riwayat lama tetap tersimpan).</div>' +
+        '<button class="btn pri" id="tcRc" style="width:100%;height:52px">RC · Rawat ulang</button><div class="muted" style="margin:2px 0 10px">Status naik (PC→RC1, RC1→RC2 …). Varietas tetap.</div>' +
+        '<button class="btn pri" id="tcPc" style="width:100%;height:52px">PC · Tanam ulang</button><div class="muted" style="margin:2px 0 10px">Status menjadi PC. Varietas dan bulan tanam dikosongkan.</div>');
+      HA.onSheetClose = go;
+      $('tcX').onclick = function () { HA.closeSheet(); };
+      function fin(mode) {
+        var r = L.tbSelesai(b, d, mode);
+        if (r === 'ok') { HA.onSheetClose = null; if (HA.drawBlocks) HA.drawBlocks(); if (HA.KM && HA.KM.sync) HA.KM.sync(); HA.toast('Tebang selesai: siklus baru dimulai (' + mode.toUpperCase() + ')'); back2(); return; }
+        HA.toast(r === 'list' ? 'Isi dulu jenis status di menu Lapisan' : r === 'kosong' ? 'Isi status blok dulu' : r === 'akhir' ? 'Sudah di status terakhir, pilih PC' : 'Tidak bisa diproses');
+      }
+      $('tcRc').onclick = function () { fin('rc'); };
+      $('tcPc').onclick = function () { fin('pc'); };
+    };
+    if ($('tbU')) $('tbU').onclick = function () {
+      HA.onSheetClose = null;
+      HA.askConfirm('Urungkan tebang selesai?', 'Status, varietas, bulan tanam dan siklus blok ' + nm + ' kembali seperti sebelum tebang selesai.', 'Urungkan', function () { if (L.tbUndo(b)) { if (HA.drawBlocks) HA.drawBlocks(); if (HA.KM && HA.KM.sync) HA.KM.sync(); HA.toast('Tebang selesai diurungkan'); } go(); });
+      var cn = $('cfNo'); if (cn) cn.onclick = go;
+    };
+  }
   // ---- daftar riwayat blok
   BR.open = function (b, onClose) {
     var key = String(b.id);
@@ -130,29 +176,30 @@
       all.forEach(function (it) { var k = HA.tandaCatKey(it); if (!cats[k]) { var inf = HA.tandaCatInfo(it); cats[k] = { k: k, name: inf.name, col: inf.col, n: 0, last: '' }; ord.push(cats[k]); } var c = cats[k]; c.n++; var d = U.dateOf(it); if (d > c.last) c.last = d; });
       if (filt[key] && !cats[filt[key]]) filt[key] = null;
       var f = filt[key], list = f ? all.filter(function (it) { return HA.tandaCatKey(it) === f; }) : all;
+      var prevL = b.cy ? HA.BT.itemsOf(b, true).filter(function (it) { return U.dateOf(it) < b.cy; }).sort(function (x, y) { var a = BR.ordKey(x), c = BR.ordKey(y); return a < c ? 1 : a > c ? -1 : 0; }) : [], disp = list.concat(prevL);
       var sum = ord.map(function (c) { return '<div class="rbS"><i style="background:' + c.col + '"></i><span>' + esc(c.name) + ' ' + c.n + '× · terakhir ' + U.d8(c.last) + '</span></div>'; }).join('');
       var chips = ord.length > 1 ? '<div class="rbC"><button type="button" data-k=""' + (!f ? ' class="on"' : '') + '>Semua</button>' + ord.map(function (c) { return '<button type="button" data-k="' + esc(c.k) + '"' + (f === c.k ? ' class="on"' : '') + '>' + esc(c.name) + '</button>'; }).join('') + '</div>' : '';
-      var rows = list.map(function (it, i) {
+      var rowsA = disp.map(function (it, i) {
         var inf = HA.tandaCatInfo(it), sn = subName(it);
         return '<div class="rbR" data-i="' + i + '"><i style="background:' + inf.col + '"></i><div class="rbT"><b>' + esc(inf.name) + (sn ? ' / ' + esc(sn) : '') + seqTxt(it) + '</b><small>' + U.d8(U.dateOf(it)) + wkTxt(it) + ' · ' + statTxt(it) + (it.note ? ' · ' + esc(String(it.note).slice(0, 30)) : '') + '</small></div><span class="rbG" aria-hidden="true">›</span></div>';
-      }).join('');
-      HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">RIWAYAT · ' + esc(b.name) + '</div><button class="btn pri" id="rbOk">Tutup</button></div>' +
-        (ord.length ? sum + chips + '<div class="rbL">' + rows + '</div>' : '<div class="muted" style="padding:12px 2px">Belum ada riwayat. Tanda yang disimpan di blok ini akan muncul di sini.</div>') +
-        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="rbFull" style="flex:1">Tandai blok penuh</button>' + (ord.length ? '<button class="btn" id="rbSh" style="flex:1">Bagikan blok (PDF)</button>' : '') + '</div>');
+      });
+      var rows = rowsA.slice(0, list.length).join(''), prevRows = rowsA.slice(list.length).join(''), ti = HA.lyb ? HA.lyb.tbInfo(b) : null;
+      HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">RIWAYAT · ' + esc(b.name) + '</div><button class="btn" id="rbOk" aria-label="Tutup">\u2715</button></div>' +
+        (ti && (ti.mulai || ti.cy) ? '<div class="muted" style="margin:2px 0 4px">' + esc(ti.text) + '</div>' : '') +
+        (ord.length ? sum + chips + '<div class="rbL">' + rows + '</div>' : '<div class="muted" style="padding:12px 2px">' + (b.cy ? 'Belum ada riwayat di siklus ini.' : 'Belum ada riwayat. Tanda yang disimpan di blok ini akan muncul di sini.') + '</div>') +
+        (prevL.length ? '<details class="rbPv"><summary>Siklus sebelumnya (' + prevL.length + ')</summary><div class="rbL">' + prevRows + '</div></details>' : '') +
+        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="rbTb" style="flex:1">Tebang</button><button class="btn" id="rbFull" style="flex:1">Tandai blok penuh</button></div>');
       HA.onSheetClose = onClose || null;
       $('rbOk').onclick = function () { HA.closeSheet(); };
       $('rbFull').onclick = function () {
         if (!b.conf) { HA.toast('Hanya blok terkonfirmasi yang bisa ditandai'); return; }
         var h = HA.onSheetClose; if (HA.KM.fillBlock(b, null)) { render(); HA.onSheetClose = h; }
       };
-      if ($('rbSh')) $('rbSh').onclick = function () {
-        if (!b.conf) { HA.toast('Hanya blok terkonfirmasi yang bisa dibagikan'); return; }
-        HA.onSheetClose = null; HA.closeSheet(); HA.BT.share([b]);
-      };
+      $('rbTb').onclick = function () { tebang(b, function () { render(); HA.onSheetClose = onClose || null; }); };
       var sh = $('sheet');
       sh.querySelectorAll('.rbC button').forEach(function (e) { e.onclick = function () { filt[key] = e.getAttribute('data-k') || null; var h = HA.onSheetClose; render(); HA.onSheetClose = h; }; });
       sh.querySelectorAll('.rbR').forEach(function (e) {
-        e.onclick = function () { var it = list[+e.getAttribute('data-i')]; if (it) detail(it, function () { render(); }); };
+        e.onclick = function () { var it = disp[+e.getAttribute('data-i')]; if (it) detail(it, function () { render(); }); };
       });
     }
     render();
