@@ -246,26 +246,27 @@
   function annot() {
     el.className = 'idEd klEd';
     var id = ST.cur, b = byId(id), c = cfg(), arr = ST.ann[id] || (ST.ann[id] = []), idx = ST.sel.indexOf(id), map = null;
-    el.innerHTML = head('Titik dan teks') +
-      '<div class="klBody">' +
-      '<canvas id="klCv" style="width:100%;border-radius:10px;margin-top:8px;touch-action:manipulation"></canvas>' +
-      '<div class="klNv"><button type="button" class="btn klNb" id="klPv" aria-label="Sebelumnya"' + (idx > 0 ? '' : ' disabled') + '>' + ICO_CH_L + '</button><b>' + esc(String(b ? b.name : '')) + ' \u00B7 ' + (idx + 1) + '/' + ST.sel.length + '</b><button type="button" class="btn klNb" id="klNx" aria-label="Berikutnya"' + (idx < ST.sel.length - 1 ? '' : ' disabled') + '>' + ICO_CH_R + '</button></div>' +
-      '<div class="row" style="gap:8px;margin-top:8px"><div class="seg" id="klT"><button data-v="p"' + (ST.tool === 'p' ? ' class="on"' : '') + '>Titik</button><button data-v="t"' + (ST.tool === 't' ? ' class="on"' : '') + '>Teks</button></div>' +
-      '<div class="seg" id="klZ"><button data-v="k"' + (ST.sz === 'k' ? ' class="on"' : '') + '>Kecil</button><button data-v="s"' + (ST.sz === 's' ? ' class="on"' : '') + '>Sedang</button><button data-v="b"' + (ST.sz === 'b' ? ' class="on"' : '') + '>Besar</button></div></div>' +
-      '<div class="muted" style="margin:6px 0">Ketuk gambar untuk menaruh ' + (ST.tool === 'p' ? 'titik (nama boleh kosong)' : 'teks') + '. Tahan lalu geser untuk memindahkan yang sudah ada.</div>' +
-      '<div id="klAl">' + (arr.length ? arr.map(function (a, i) { return '<div class="klRw"><input type="checkbox" data-t="' + i + '"' + (a.on ? ' checked' : '') + '><span>' + (a.k === 'p' ? '● ' : 'T ') + esc(a.t || 'Titik') + '</span><small class="muted">' + ({ k: 'Kecil', s: 'Sedang', b: 'Besar' })[a.sz] + '</small><button type="button" class="ib" data-d="' + i + '" aria-label="Hapus">✕</button></div>'; }).join('') : '<div class="muted">Belum ada titik atau teks di blok ini.</div>') + '</div></div>' +
-      '<div class="klFt"><button type="button" class="btn pri" id="klOk" style="width:100%;height:52px">Selesai</button></div>';
+    var SZN = { k: 'Kecil', s: 'Sedang', b: 'Besar' }, X_ICO = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>', LS_ICO = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="3.6" cy="6" r="1.3" fill="currentColor"/><circle cx="3.6" cy="12" r="1.3" fill="currentColor"/><circle cx="3.6" cy="18" r="1.3" fill="currentColor"/></svg>';
+    function alRows() { return arr.length ? arr.map(function (a, i) { return '<div class="klRw"><input type="checkbox" data-t="' + i + '"' + (a.on ? ' checked' : '') + '><span>' + (a.k === 'p' ? '● ' : 'T ') + esc(a.t || 'Titik') + '</span><small class="muted">' + SZN[a.sz] + '</small><button type="button" class="ib" data-d="' + i + '" aria-label="Hapus">✕</button></div>'; }).join('') : '<div class="muted" style="padding:10px">Belum ada titik atau teks.</div>'; }
+    el.innerHTML = '<div class="idh klAh"><div class="idt">Titik dan teks</div>' + (arr.length ? '<button type="button" class="ib klLb" id="klLb" aria-label="Daftar titik dan teks">' + LS_ICO + '<i>' + arr.length + '</i></button>' : '') + '<button type="button" class="ib klXb" id="klX" aria-label="Tutup">' + X_ICO + '</button></div>' +
+      '<div class="klAb" id="klAb"><canvas id="klCv" style="border-radius:8px;touch-action:manipulation"></canvas><div class="klAlp" id="klAl"' + (ST.al && arr.length ? '' : ' hidden') + '>' + alRows() + '</div></div>' +
+      '<div class="klAs"><div class="klNv"><button type="button" class="btn klNb" id="klPv" aria-label="Sebelumnya"' + (idx > 0 ? '' : ' disabled') + '>' + ICO_CH_L + '</button><b>' + esc(String(b ? b.name : '')) + ' · ' + (idx + 1) + '/' + ST.sel.length + '</b><button type="button" class="btn klNb" id="klNx" aria-label="Berikutnya"' + (idx < ST.sel.length - 1 ? '' : ' disabled') + '>' + ICO_CH_R + '</button></div>' +
+      '<div class="klBar"><button type="button" class="btn klBt" id="klT" aria-label="Jenis, ketuk untuk mengganti"></button><button type="button" class="btn klBt" id="klZ" aria-label="Ukuran, ketuk untuk mengganti"></button><button type="button" class="btn pri klBt" id="klOk">Simpan</button></div></div>';
+    function btns() { $e('klT').textContent = ST.tool === 'p' ? 'Titik' : 'Teks'; $e('klZ').textContent = SZN[ST.sz] || 'Sedang'; }
+    btns();
     var cv = $e('klCv'), sz = cellSize(c.per), sc = 1.6;
     cv.width = Math.round(sz.w * sc / 1); cv.height = Math.round(sz.h * sc / 1);
-    cv.style.aspectRatio = sz.w + ' / ' + sz.h;
+    function fit() { var w = $e('klAb'); if (!w || !cv.isConnected) return; var r = w.getBoundingClientRect(), k = Math.min((r.width - 8) / sz.w, (r.height - 8) / sz.h); if (k > 0) { cv.style.width = Math.floor(sz.w * k) + 'px'; cv.style.height = Math.floor(sz.h * k) + 'px'; } }
+    fit(); setTimeout(fit, 60); window.onresize = fit;
     function paint() { var ctx = cv.getContext('2d'); ctx.setTransform(sc, 0, 0, sc, 0, 0); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, sz.w, sz.h); map = cell(ctx, b, 0, 0, sz.w, sz.h, c.info, arr); }
     paint();
     $e('klX').onclick = function () { ann = null; main(); };
     $e('klOk').onclick = function () { ann = null; main(); };
     $e('klPv').onclick = function () { ST.cur = ST.sel[idx - 1]; annot(); };
     $e('klNx').onclick = function () { ST.cur = ST.sel[idx + 1]; annot(); };
-    $e('klT').onclick = function (e) { var x = e.target.closest && e.target.closest('[data-v]'); if (!x) return; ST.tool = x.getAttribute('data-v'); annot(); };
-    $e('klZ').onclick = function (e) { var x = e.target.closest && e.target.closest('[data-v]'); if (!x) return; ST.sz = x.getAttribute('data-v'); annot(); };
+    $e('klT').onclick = function () { ST.tool = ST.tool === 'p' ? 't' : 'p'; btns(); };
+    $e('klZ').onclick = function () { ST.sz = ST.sz === 'k' ? 's' : ST.sz === 's' ? 'b' : 'k'; btns(); };
+    if ($e('klLb')) $e('klLb').onclick = function () { var l = $e('klAl'); l.hidden = !l.hidden; ST.al = !l.hidden; };
     $e('klAl').onchange = function (e) { var i = e.target.getAttribute('data-t'); if (i == null) return; arr[+i].on = e.target.checked; paint(); };
     $e('klAl').onclick = function (e) { var d = e.target.closest && e.target.closest('[data-d]'); if (!d) return; arr.splice(+d.getAttribute('data-d'), 1); annot(); };
     var drag = null, st0 = null;

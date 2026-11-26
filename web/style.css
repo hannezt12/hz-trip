@@ -1177,3 +1177,16 @@ body.klPick #map .leaflet-interactive{pointer-events:none!important}
 /* v0.27.16 siklus sebelumnya */
 .rbPv{margin-top:0.6rem;border:1px solid var(--line);border-radius:0.6rem;padding:0.2rem 0.6rem}
 .rbPv summary{min-height:2.75rem;display:flex;align-items:center;font-weight:600;cursor:pointer}
+/* v0.27.17 laman sketsa (A•): header kecil transparan, bawah sticky */
+.klEd .klAh{border-bottom:0;background:transparent;padding:calc(env(safe-area-inset-top,0px) + 2px) 4px 0 14px;min-height:0;gap:2px}
+.klEd .klAh .idt{text-align:left;font-weight:700;font-size:.85rem;opacity:.85}
+.klEd .klAh .ib{width:48px;height:44px}
+.klEd .klAh .klXb svg{display:block}
+.klLb{position:relative}
+.klLb i{position:absolute;top:2px;right:0;background:#FF9500;color:#111;border-radius:10px;font:800 11px/1 sans-serif;font-style:normal;padding:3px 5px}
+.klAb{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:2px 4px}
+.klAlp{position:absolute;left:8px;right:8px;top:4px;max-height:60%;overflow-y:auto;background:var(--card2,#151C21);border:1px solid #8886;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:3}
+.klAlp[hidden]{display:none}
+.klAs{border-top:1px solid #8884;padding-bottom:4px}
+.klAs .klNv{margin-top:6px;padding:0 12px}
+.klAs .klBar{border-top:0;padding-top:6px}

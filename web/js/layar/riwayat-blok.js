@@ -14,7 +14,7 @@
     var U = HA.tandaU, st = HA.tandaStat(it), a = [];
     if (it.t === 'pt') return 'titik';
     if (it.t === 'ln') return U.ribu(st.m) + ' m garis';
-    a.push(U.ha(st.ha) + ' ha'); if (st.lm) a.push(U.ribu(st.lm) + ' m lajur');
+    a.push(U.ha(st.ha) + ' ha'); if (it.part) a.push(it.part.pct + '% blok'); if (st.lm) a.push(U.ribu(st.lm) + ' m lajur');
     return a.join(' · ');
   }
   function flash(it) {
@@ -166,6 +166,60 @@
       var cn = $('cfNo'); if (cn) cn.onclick = go;
     };
   }
+
+  // ---- Tandai: Penuh atau Sebagian (persen/ha saling mengisi, mulai dari satu sisi blok)
+  var SISI = { U: 'Utara', S: 'Selatan', T: 'Timur', B: 'Barat' }, lastSisi = 'U';
+  function prevParts(b, br) {
+    var its = HA.BT.itemsOf(b).filter(function (it) { return it.t === 'pg' && it.cat === br.cat && (it.sub || null) === (br.sub || null); });
+    its.sort(function (x, y) { var a = BR.ordKey(x), c = BR.ordKey(y); return a < c ? -1 : a > c ? 1 : 0; });
+    var ser = [], A = HzBlok.areaHa(b.pts);
+    its.forEach(function (it) {
+      if (it.full || !it.part) { ser = []; return; }
+      ser.push(it);
+      var tot = 0; ser.forEach(function (z) { tot += HzBlok.areaHa(z.pts); });
+      if (tot >= A * 0.98) ser = [];
+    });
+    return ser.map(function (z) { return z.pts; });
+  }
+  function tandai(b, back) {
+    if (!b.conf) { HA.toast('Hanya blok terkonfirmasi yang bisa ditandai'); return; }
+    var br = HA.tandaBrush(), A = HzBlok.areaHa(b.pts), nm = String(b.name);
+    function back2() { HA.onSheetClose = null; back(); }
+    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TANDAI · ' + esc(br.name).toUpperCase() + '</div><button class="btn" id="tdX" aria-label="Tutup">✕</button></div>' +
+      '<div class="muted" style="margin:4px 0 10px">Blok ' + esc(nm) + ' · ' + HA.tandaU.ha(A) + ' ha</div>' +
+      '<div class="row" style="gap:8px"><button class="btn pri" id="tdP" style="flex:1;height:56px">Penuh</button><button class="btn pri" id="tdS" style="flex:1;height:56px">Sebagian</button></div>');
+    HA.onSheetClose = back2;
+    $('tdX').onclick = function () { HA.closeSheet(); };
+    $('tdP').onclick = function () { HA.onSheetClose = null; if (HA.KM.fillBlock(b, null)) back2(); else tandai(b, back); };
+    $('tdS').onclick = function () { sebagian(b, br, A, back, function () { tandai(b, back); }); };
+  }
+  function sebagian(b, br, A, back, bk) {
+    var prev = prevParts(b, br), inf = HA.KM.strip(b, 'U', null, prev), remHa = inf.rem == null ? A : inf.rem, side = lastSisi, pct = '', ha = '';
+    function fmt(v, d) { return String(Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).replace('.', ','); }
+    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TANDAI SEBAGIAN · ' + esc(br.name).toUpperCase() + '</div><button class="btn" id="tsX" aria-label="Kembali">✕</button></div>' +
+      '<div class="muted" style="margin:4px 0 6px">Blok ' + esc(String(b.name)) + ' · ' + HA.tandaU.ha(A) + ' ha' + (prev.length ? ' · sisa belum ditandai ' + HA.tandaU.ha(remHa) + ' ha' : '') + '</div>' +
+      '<div class="rbC" id="tsQ"><button type="button" data-p="25">25%</button><button type="button" data-p="50">50%</button><button type="button" data-p="75">75%</button></div>' +
+      '<div class="row" style="gap:8px"><label class="calL" style="flex:1">Persen (%)<input type="number" id="tsP" inputmode="decimal" min="1" max="100" step="1"></label><label class="calL" style="flex:1">Luas (ha)<input type="number" id="tsH" inputmode="decimal" min="0.01" step="0.01"></label></div>' +
+      '<div class="muted" style="margin:10px 0 4px">Mulai dari sisi</div><div class="seg" id="tsD">' + ['U', 'S', 'T', 'B'].map(function (k) { return '<button type="button" data-v="' + k + '"' + (k === side ? ' class="on"' : '') + '>' + SISI[k] + '</button>'; }).join('') + '</div>' +
+      '<div class="row" style="gap:8px;margin-top:12px"><button class="btn" id="tsN" style="flex:1;height:50px">Batal</button><button class="btn pri" id="tsY" style="flex:1;height:50px">Tandai</button></div>');
+    HA.onSheetClose = bk;
+    $('tsX').onclick = function () { HA.closeSheet(); }; $('tsN').onclick = function () { HA.closeSheet(); };
+    function setP(v) { pct = v; ha = v === '' ? '' : A * v / 100; $('tsP').value = v === '' ? '' : fmt(v, 1).replace(',', '.'); $('tsH').value = ha === '' ? '' : fmt(ha, 2).replace(',', '.'); }
+    $('tsQ').onclick = function (e) { var v = e.target.getAttribute && e.target.getAttribute('data-p'); if (v) setP(+v); };
+    $('tsP').oninput = function () { var v = parseFloat(this.value); if (!(v > 0)) { pct = ''; ha = ''; $('tsH').value = ''; return; } if (v > 100) { v = 100; this.value = '100'; } pct = v; ha = A * v / 100; $('tsH').value = fmt(ha, 2).replace(',', '.'); };
+    $('tsH').oninput = function () { var v = parseFloat(this.value); if (!(v > 0)) { pct = ''; ha = ''; $('tsP').value = ''; return; } if (v > A) { v = A; this.value = fmt(A, 2).replace(',', '.'); } ha = v; pct = v / A * 100; $('tsP').value = fmt(pct, 1).replace(',', '.'); };
+    $('tsD').onclick = function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-v'); if (!k) return; side = lastSisi = k; $('tsD').querySelectorAll('button').forEach(function (x) { x.className = x.getAttribute('data-v') === k ? 'on' : ''; }); };
+    $('tsY').onclick = function () {
+      if (!(ha > 0)) { HA.toast('Isi persen atau luas dulu'); return; }
+      var r = HA.KM.strip(b, side, ha, prev);
+      if (r.err === 'penuh') { HA.toast('Seluruh blok sudah ditandai kategori ini'); return; }
+      if (r.err) { HA.toast('Gagal menggambar bagian blok'); return; }
+      var part = { pct: Math.round(r.ha / A * 1000) / 10, ha: Math.round(r.ha * 100) / 100, sisi: side };
+      HA.onSheetClose = null; var n = 0;
+      r.rings.forEach(function (ring) { if (HA.KM.fillBlock(b, ring, { part: part })) n++; });
+      if (n) back(); else sebagian(b, br, A, back, bk);
+    };
+  }
   // ---- daftar riwayat blok
   BR.open = function (b, onClose) {
     var key = String(b.id);
@@ -188,13 +242,10 @@
         (ti && (ti.mulai || ti.cy) ? '<div class="muted" style="margin:2px 0 4px">' + esc(ti.text) + '</div>' : '') +
         (ord.length ? sum + chips + '<div class="rbL">' + rows + '</div>' : '<div class="muted" style="padding:12px 2px">' + (b.cy ? 'Belum ada riwayat di siklus ini.' : 'Belum ada riwayat. Tanda yang disimpan di blok ini akan muncul di sini.') + '</div>') +
         (prevL.length ? '<details class="rbPv"><summary>Siklus sebelumnya (' + prevL.length + ')</summary><div class="rbL">' + prevRows + '</div></details>' : '') +
-        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="rbTb" style="flex:1">Tebang</button><button class="btn" id="rbFull" style="flex:1">Tandai blok penuh</button></div>');
+        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="rbTb" style="flex:1">Tebang</button><button class="btn" id="rbFull" style="flex:1">Tandai</button></div>');
       HA.onSheetClose = onClose || null;
       $('rbOk').onclick = function () { HA.closeSheet(); };
-      $('rbFull').onclick = function () {
-        if (!b.conf) { HA.toast('Hanya blok terkonfirmasi yang bisa ditandai'); return; }
-        var h = HA.onSheetClose; if (HA.KM.fillBlock(b, null)) { render(); HA.onSheetClose = h; }
-      };
+      $('rbFull').onclick = function () { tandai(b, function () { render(); HA.onSheetClose = onClose || null; }); };
       $('rbTb').onclick = function () { tebang(b, function () { render(); HA.onSheetClose = onClose || null; }); };
       var sh = $('sheet');
       sh.querySelectorAll('.rbC button').forEach(function (e) { e.onclick = function () { filt[key] = e.getAttribute('data-k') || null; var h = HA.onSheetClose; render(); HA.onSheetClose = h; }; });

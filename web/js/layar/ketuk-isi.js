@@ -40,18 +40,55 @@
     return hit[0].slice(0, hit[0].length - 1).map(back);
   }
   // tandai blok (seluruh atau satu bagian). Kembali true bila tanda ditambah.
-  KM.fillBlock = function (b, ring) {
+  KM.fillBlock = function (b, ring, extra) {
     if (!b || !b.conf) { HA.toast('Ketuk di dalam blok terkonfirmasi'); return false; }
     var br = HA.tandaBrush(), dt = fillDate(), pts = ring || b.pts.map(function (p) { return [p[0], p[1]]; });
     var sig = ring ? ring[0][0] + ',' + ring[0][1] : 'full';
     var dup = HA.tandaData().items.filter(function (i) { return String(i.bid) === String(b.id) && i.cat === br.cat && (i.sub || null) === (br.sub || null) && HA.tandaU.dateOf(i) === dt && (i.fsig || 'full') === sig; })[0];
     if (dup) { HA.toast('Blok ' + b.name + ' sudah ditandai ' + br.name + ' pada ' + HA.tandaU.d8(dt)); return false; }
     var it = { id: HA.tandaNewId(), t: 'pg', pts: pts, cat: br.cat, sub: br.sub || null, name: String(b.name || ''), note: '', bid: b.id, full: !ring, fsig: sig, date: dt, wk: HA.wkAuto(dt), ts: Date.now() };
+    if (extra) for (var xk in extra) it[xk] = extra[xk];
     HA.tandaAdd(it); HA.tandaSave();
     var st = HA.tandaStat(it);
     HA.toast('Blok ' + b.name + ' · ' + br.name + ' · ' + HA.tandaU.ha(st.ha) + ' ha' + (ring ? ' (bagian)' : ''));
     if (KM.sync) KM.sync();
     return true;
+  };
+
+  // ---- Tandai sebagian: jalur dari satu sisi (U/S/T/B) seluas haT, melanjutkan dari bagian yang sudah ditandai (tanpa tumpang tindih)
+  // prev = daftar ring [lat,lng] yang sudah ditandai; haT null -> hanya hitung sisa. Hasil {rem, ha, rings} atau {err}
+  KM.strip = function (b, side, haT, prev) {
+    if (typeof polygonClipping === 'undefined') return { err: 'lib' };
+    var ref = b.pts[0], kx = 111320 * Math.cos(ref[0] * Math.PI / 180), ky = 110540;
+    function xy(p) { return [(p[1] - ref[1]) * kx, (p[0] - ref[0]) * ky]; }
+    function back(q) { return [+(ref[0] + q[1] / ky).toFixed(7), +(ref[1] + q[0] / kx).toFixed(7)]; }
+    function cl(r) { var o = r.map(xy); o.push(o[0]); return o; }
+    function ar(mp) { var t = 0; mp.forEach(function (poly) { poly.forEach(function (r, i) { var a = 0, j; for (j = 0; j < r.length - 1; j++) a += r[j][0] * r[j + 1][1] - r[j + 1][0] * r[j][1]; t += (i ? -1 : 1) * Math.abs(a / 2); }); }); return t; }
+    var ring = cl(b.pts), rem;
+    try { rem = prev && prev.length ? polygonClipping.difference([ring], prev.map(function (r) { return [cl(r)]; })) : [[ring]]; } catch (e) { return { err: 'geom' }; }
+    var remA = ar(rem); if (remA < 5) return { err: 'penuh', rem: 0 };
+    if (haT == null) return { rem: remA / 1e4 };
+    var xs = ring.map(function (p) { return p[0]; }), ys = ring.map(function (p) { return p[1]; });
+    var x0 = Math.min.apply(null, xs) - 1, x1 = Math.max.apply(null, xs) + 1, y0 = Math.min.apply(null, ys) - 1, y1 = Math.max.apply(null, ys) + 1;
+    var tg = Math.min(haT * 1e4, remA), res;
+    function rect(u) {
+      if (side === 'U') { var t = y1 + (y0 - y1) * u; return [[x0, t], [x1, t], [x1, y1], [x0, y1], [x0, t]]; }
+      if (side === 'S') { var t2 = y0 + (y1 - y0) * u; return [[x0, y0], [x1, y0], [x1, t2], [x0, t2], [x0, y0]]; }
+      if (side === 'T') { var t3 = x1 + (x0 - x1) * u; return [[t3, y0], [x1, y0], [x1, y1], [t3, y1], [t3, y0]]; }
+      var t4 = x0 + (x1 - x0) * u; return [[x0, y0], [t4, y0], [t4, y1], [x0, y1], [x0, y0]];
+    }
+    function cut(u) { try { return polygonClipping.intersection(rem, [rect(u)]); } catch (e) { return null; } }
+    if (remA - tg < Math.max(5, remA * 0.01)) res = rem;
+    else {
+      var lo = 0, hi = 1, g = null, i;
+      for (i = 0; i < 36; i++) { var mid = (lo + hi) / 2, c = cut(mid); if (!c) return { err: 'geom' }; if (ar(c) < tg) lo = mid; else hi = mid; }
+      res = cut(hi);
+    }
+    if (!res) return { err: 'geom' };
+    var rings = [];
+    res.forEach(function (poly) { var r = poly[0]; if (!r || r.length < 4) return; var one = [[r]]; if (ar(one) < 5) return; rings.push(r.slice(0, r.length - 1).map(back)); });
+    if (!rings.length) return { err: 'geom' };
+    return { rings: rings, ha: ar(res) / 1e4, rem: remA / 1e4 };
   };
   function onClick(e) {
     if (!KM.fillTap || KM.mode !== 'kategori' || !HA.map) return;
