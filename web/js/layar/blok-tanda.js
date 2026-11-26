@@ -535,7 +535,7 @@
     var hasObj = !!(HA.obj && HA.obj.objs().length);
     var lyList = HA.lyb ? HA.lyb.all().filter(function (l) { return l.items.length && list.some(function (b) { return HA.lyb.of(b, l.id); }); }) : [];
     var stTitle = 'BAGIKAN ' + (many ? list.length + ' BLOK' : 'BLOK ' + esc(String(list[0].name)).toUpperCase());
-    openSheet('<div class="grab"></div><div class="st shHd"><span>' + stTitle + '</span><button type="button" class="btn sm" id="shKl">Kolase</button></div>' +
+    openSheet('<div class="grab"></div><div class="st shHd"><span>' + stTitle + '</span><button type="button" class="btn shKl" id="shKl" aria-label="Kolase"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="8" height="18" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg><span>Kolase</span></button></div>' +
       '<div id="shS1">' +
       '<div class="muted" style="margin-bottom:8px">' + n + ' tanda' + (n ? '' : ' · blok akan dicetak tanpa tanda') + (nNoCat ? ' · ' + nNoCat + ' tanpa kategori tidak ikut PDF' : '') + '</div>' +
       '<button type="button" class="shRow" id="shBc"><span class="shL">Kategori</span><span class="shV" id="shBcV"></span><span class="lsAr">›</span></button>' +

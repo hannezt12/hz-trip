@@ -144,9 +144,10 @@
     for (i = 0; i < n; i++) { if (i) doc.addPage(); doc.addImage(renderSheet(i).toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297); }
     return HA.saveFile('Kolase_' + stamp() + '.pdf', doc.output('datauristring').split(',')[1], 'application/pdf');
   }
-  function sendPng(i) {
-    var d = renderSheet(i).toDataURL('image/png');
-    return HA.saveFile('Kolase_' + stamp() + (sheetCount() > 1 ? '_' + (i + 1) : '') + '.png', d.split(',')[1], 'image/png');
+  function sendPngAll() {
+    var n = sheetCount(), list = [], i;
+    for (i = 0; i < n; i++) list.push({ name: 'Kolase_' + stamp() + (n > 1 ? '_' + (i + 1) : '') + '.png', b64: renderSheet(i).toDataURL('image/png').split(',')[1], mime: 'image/png' });
+    return HA.saveFiles(list);
   }
 
   // ---------- layar ----------
@@ -192,6 +193,11 @@
   function head(title) {
     return '<div class="idh"><div class="idt" style="text-align:left;font-weight:700;padding-left:6px">' + esc(title) + '</div><button type="button" class="ib" id="klX" aria-label="Tutup">\u2715</button></div>';
   }
+  var ICO_2 = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="8" rx="1.5"/><rect x="5" y="13" width="14" height="8" rx="1.5"/></svg>';
+  var ICO_4 = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>';
+  var ICO_AN = '<svg width="30" height="26" viewBox="0 0 30 24" fill="currentColor"><text x="1" y="18" font-family="sans-serif" font-weight="800" font-size="17">A</text><circle cx="23" cy="13" r="4.2"/></svg>';
+  var ICO_CH_L = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l-8 8 8 8"/></svg>';
+  var ICO_CH_R = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4l8 8-8 8"/></svg>';
   var ICO_SML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l5 5-5 5"/><path d="M20 7l-5 5 5 5"/></svg>'; // > < : kecilkan
   var ICO_BIG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7l-5 5 5 5"/><path d="M15 7l5 5-5 5"/></svg>'; // < > : besarkan
   function main() {
@@ -201,17 +207,17 @@
     var nA = 0; ST.sel.forEach(function (id) { (ST.ann[id] || []).forEach(function (a) { if (a.on) nA++; }); });
     var sh = sheetCount();
     el.className = 'klPn' + (ST.col ? ' col' : ''); if (HA.map) { try { HA.map.closePopup(); } catch (x) {} }
-    el.innerHTML = '<div class="klPh" id="klPh"><span class="klGr"></span><b>Kolase blok</b><span class="muted">' + ST.sel.length + '/' + MAX + '</span><span style="flex:1"></span><button type="button" class="ib" id="klCl" aria-label="' + (ST.col ? 'Buka' : 'Lipat') + '">' + (ST.col ? ICO_BIG : ICO_SML) + '</button><button type="button" class="ib" id="klX" aria-label="Tutup">\u2715</button></div>' +
+    el.innerHTML = '<div class="klPh" id="klPh"><span class="klGr"></span><b>Kolase blok</b><span class="muted">' + ST.sel.length + '/' + MAX + (ST.sel.length ? ' \u00B7 ' + sh + ' lembar' : '') + '</span><span style="flex:1"></span><button type="button" class="ib" id="klCl" aria-label="' + (ST.col ? 'Buka' : 'Lipat') + '">' + (ST.col ? ICO_BIG : ICO_SML) + '</button><button type="button" class="ib" id="klX" aria-label="Tutup">\u2715</button></div>' +
       '<div class="klBody"><div class="h">BLOK TERPILIH (' + ST.sel.length + '/' + MAX + ')</div><div class="klChips" id="klCh">' +
       (ST.sel.length ? ST.sel.map(function (id) { var b = byId(id); return b ? '<button type="button" class="klChip" data-r="' + esc(id) + '">' + esc(String(b.name)) + ' ✕</button>' : ''; }).join('') : '<span class="muted">Belum ada. Ketuk blok di peta atau cari nama di bawah.</span>') + '</div>' +
       '<input type="search" id="klQ" placeholder="Cari nama blok" value="' + esc(ST.q) + '" autocomplete="off" style="width:100%;margin-top:8px"><div class="klLs" id="klLs">' +
       shown.map(function (b) { var on = ST.sel.indexOf(String(b.id)) >= 0; return '<label class="klRw"><input type="checkbox" data-b="' + esc(String(b.id)) + '"' + (on ? ' checked' : '') + '><span>' + esc(String(b.name)) + '</span><small class="muted">' + haTxt(b) + '</small></label>'; }).join('') + (all.length > shown.length ? '<div class="muted" style="padding:6px">Menampilkan 60 pertama. Persempit dengan pencarian.</div>' : '') + '</div>' +
       '<div class="h" style="margin-top:12px">ISI TIAP KOTAK</div><div class="klInf">' + INF.map(function (i) { return '<label><input type="checkbox" data-i="' + i[0] + '"' + (c.info[i[0]] ? ' checked' : '') + '> ' + i[1] + '</label>'; }).join('') + '</div>' +
-      '<div class="h" style="margin-top:12px">BLOK PER LEMBAR</div><div class="seg" id="klP"><button data-v="4"' + (c.per === 4 ? ' class="on"' : '') + '>4 blok</button><button data-v="2"' + (c.per === 2 ? ' class="on"' : '') + '>2 blok</button></div>' +
-      '<div class="h" style="margin-top:12px">KELUARAN</div><div class="seg" id="klF"><button data-v="pdf"' + (c.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-v="png"' + (c.fmt === 'png' ? ' class="on"' : '') + '>PNG</button></div>' +
-      '<button type="button" class="btn" id="klAn" style="width:100%;margin-top:12px"' + (ST.sel.length ? '' : ' disabled') + '>Titik dan teks' + (nA ? ' (' + nA + ')' : '') + '</button>' +
-      '<div class="muted" style="margin-top:6px">Titik dan teks hanya untuk kolase ini, tidak disimpan ke data blok.</div></div>' +
-      '<div class="klFt"><button type="button" class="btn pri" id="klGo" style="width:100%;height:52px"' + (ST.sel.length ? '' : ' disabled') + '>Kirim ' + (ST.sel.length ? '(' + sh + ' lembar ' + (c.fmt === 'pdf' ? 'PDF' : 'PNG') + ')' : '') + '</button></div>';
+      '<div class="muted" style="margin-top:10px">Titik dan teks hanya untuk kolase ini, tidak disimpan ke data blok.</div></div>' +
+      '<div class="klBar" id="klBar"><div class="seg klSg" id="klP"><button data-v="2" aria-label="2 blok per lembar"' + (c.per === 2 ? ' class="on"' : '') + '>' + ICO_2 + '</button><button data-v="4" aria-label="4 blok per lembar"' + (c.per === 4 ? ' class="on"' : '') + '>' + ICO_4 + '</button></div>' +
+      '<button type="button" class="btn klTb" id="klAn" aria-label="Titik dan teks"' + (ST.sel.length ? '' : ' disabled') + '>' + ICO_AN + (nA ? '<i>' + nA + '</i>' : '') + '</button>' +
+      '<div class="seg klSg" id="klF"><button data-v="pdf"' + (c.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-v="png"' + (c.fmt === 'png' ? ' class="on"' : '') + '>PNG</button></div>' +
+      '<button type="button" class="btn pri klGo" id="klGo"' + (ST.sel.length ? '' : ' disabled') + '>Kirim</button></div>';
     $e('klX').onclick = close;
     $e('klPh').onclick = function (e) { if (e.target.closest && e.target.closest('#klX')) return; ST.col = !ST.col; main(); };
     drawHl();
@@ -231,13 +237,7 @@
   }
   function go() {
     var c = cfg(); if (!ST.sel.length) return;
-    if (c.fmt === 'pdf') { sendPdf(); return; }
-    if (sheetCount() === 1) { sendPng(0); return; }
-    var n = sheetCount(), h = '';
-    for (var i = 0; i < n; i++) h += '<button type="button" class="btn" data-pg="' + i + '" style="width:100%;margin-top:8px;height:48px">Kirim lembar ' + (i + 1) + ' dari ' + n + '</button>';
-    var o = document.createElement('div'); o.className = 'klIn'; o.innerHTML = '<div class="klBx"><div class="st">KIRIM PNG</div><div class="muted" style="margin:6px 0">Tiap lembar dikirim satu per satu.</div>' + h + '<button type="button" class="btn" id="klPx" style="width:100%;margin-top:10px">Tutup</button></div>';
-    document.body.appendChild(o); o.querySelector('#klPx').onclick = function () { o.remove(); };
-    o.onclick = function (e) { var b = e.target.closest && e.target.closest('[data-pg]'); if (b) sendPng(+b.getAttribute('data-pg')); };
+    if (c.fmt === 'pdf') sendPdf(); else sendPngAll();
   }
 
   // ---------- titik dan teks ----------
@@ -245,8 +245,9 @@
     el.className = 'idEd klEd';
     var id = ST.cur, b = byId(id), c = cfg(), arr = ST.ann[id] || (ST.ann[id] = []), idx = ST.sel.indexOf(id), map = null;
     el.innerHTML = head('Titik dan teks') +
-      '<div class="klBody"><div style="display:flex;align-items:center;gap:6px"><button type="button" class="btn sm" id="klPv" aria-label="Sebelumnya"' + (idx > 0 ? '' : ' disabled') + '>‹</button><b style="flex:1;text-align:center">' + esc(String(b ? b.name : '')) + ' (' + (idx + 1) + '/' + ST.sel.length + ')</b><button type="button" class="btn sm" id="klNx" aria-label="Berikutnya"' + (idx < ST.sel.length - 1 ? '' : ' disabled') + '>›</button></div>' +
+      '<div class="klBody">' +
       '<canvas id="klCv" style="width:100%;border-radius:10px;margin-top:8px;touch-action:manipulation"></canvas>' +
+      '<div class="klNv"><button type="button" class="btn klNb" id="klPv" aria-label="Sebelumnya"' + (idx > 0 ? '' : ' disabled') + '>' + ICO_CH_L + '</button><b>' + esc(String(b ? b.name : '')) + ' \u00B7 ' + (idx + 1) + '/' + ST.sel.length + '</b><button type="button" class="btn klNb" id="klNx" aria-label="Berikutnya"' + (idx < ST.sel.length - 1 ? '' : ' disabled') + '>' + ICO_CH_R + '</button></div>' +
       '<div class="row" style="gap:8px;margin-top:8px"><div class="seg" id="klT"><button data-v="p"' + (ST.tool === 'p' ? ' class="on"' : '') + '>Titik</button><button data-v="t"' + (ST.tool === 't' ? ' class="on"' : '') + '>Teks</button></div>' +
       '<div class="seg" id="klZ"><button data-v="k"' + (ST.sz === 'k' ? ' class="on"' : '') + '>Kecil</button><button data-v="s"' + (ST.sz === 's' ? ' class="on"' : '') + '>Sedang</button><button data-v="b"' + (ST.sz === 'b' ? ' class="on"' : '') + '>Besar</button></div></div>' +
       '<div class="muted" style="margin:6px 0">Ketuk gambar untuk menaruh ' + (ST.tool === 'p' ? 'titik (nama boleh kosong)' : 'teks') + '. Tahan lalu geser untuk memindahkan yang sudah ada.</div>' +

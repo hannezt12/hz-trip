@@ -179,6 +179,27 @@
     return Promise.resolve();
   }
 
+  // banyak berkas dalam satu kali bagikan (v0.27.14)
+  function saveFiles(list) {
+    if (!list.length) return Promise.resolve();
+    if (list.length === 1) return saveFile(list[0].name, list[0].b64, list[0].mime);
+    window.__lastExports = list.slice(); window.__lastExport = list[list.length - 1];
+    var P = window.Capacitor && window.Capacitor.Plugins;
+    if (native && P && P.Filesystem) {
+      if (sharing) { toast('Masih ada proses bagikan berkas, tunggu sebentar'); return Promise.resolve(); }
+      sharing = true;
+      return Promise.all(list.map(function (f) { return P.Filesystem.writeFile({ path: 'HZTrip/' + f.name, data: f.b64, directory: 'CACHE', recursive: true }); })).then(function (ws) {
+        return P.Share ? P.Share.share({ title: list[0].name, files: ws.map(function (w) { return w.uri; }), dialogTitle: 'Simpan atau bagikan' }) : null;
+      }).catch(function (e) {
+        var m = e && e.message || String(e);
+        if (!/cancel/i.test(m)) toast('Gagal menyimpan: ' + m);
+      }).then(function () { sharing = false; });
+    }
+    list.forEach(function (f, i) { setTimeout(function () { saveFile(f.name, f.b64, f.mime); }, i * 400); });
+    return Promise.resolve();
+  }
+  HA.saveFiles = saveFiles;
+
   // ---------- data untuk ekspor ----------
   function loadDay(ymd) {
     return Plug.readDay({ date: ymd }).then(function (r) {
