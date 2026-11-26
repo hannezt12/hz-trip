@@ -1190,3 +1190,16 @@ body.klPick #map .leaflet-interactive{pointer-events:none!important}
 .klAs{border-top:1px solid #8884;padding-bottom:4px}
 .klAs .klNv{margin-top:6px;padding:0 12px}
 .klAs .klBar{border-top:0;padding-top:6px}
+/* v0.27.18 kolase: saran blok 5 baris, radius sketsa */
+.klPn .klLs{max-height:none;overflow:visible}
+.klPn .klRw{padding:6px 10px}
+/* v0.27.19 bar bawah Spidometer (Home, Lintasan, Cetak): hanya di halaman Spidometer, selalu tampil, di atas bar Android */
+#v-spido{position:relative;height:100%}
+#spNav{display:none;position:absolute;left:0;right:0;bottom:0;z-index:6;gap:0.5rem;padding:0.5rem 0.75rem 64px;background:var(--bg);border-top:1px solid var(--line)}
+#app:not(.spm) #spNav{display:flex}
+#spNav button{flex:1;height:3.5rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:1px solid var(--line);border-radius:0.875rem;background:var(--sf,transparent);color:var(--tx);font-size:max(0.75rem,calc(0.8125rem * var(--fs,1)));font-weight:600;cursor:pointer}
+#spNav button.on{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+:root[data-theme=light] #spNav button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+#spNav button:active{filter:brightness(1.3)}
+#app:not(.spm) #spMain{padding-bottom:calc(3.5rem + 64px + 1.25rem)}
+#app:not(.spm) #spDots{bottom:calc(3.5rem + 64px + 1.5rem)}

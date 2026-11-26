@@ -15,6 +15,8 @@
     if (!c.info) { c.info = {}; INF.forEach(function (i) { c.info[i[0]] = true; }); }
     if (c.per !== 2 && c.per !== 4) c.per = 4;
     if (c.fmt !== 'png') c.fmt = 'pdf';
+    if ([0, 250, 500, 750, 1000].indexOf(c.rad) < 0) c.rad = 0;
+    if (!Array.isArray(c.rec)) c.rec = [];
     return c;
   }
   var ST = null; // { sel:[ids], q:'', ann:{id:[{k,fx,fy,t,sz,on}]}, sz:'s', tool:'t', cur:id|null }
@@ -61,13 +63,14 @@
   }
   // gambar sketsa dalam rect: blok utuh + garis blok tetangga yang masuk bingkai; kembali pemeta piksel -> fraksi bbox blok
   function sketch(ctx, b, R, ann, cw) {
-    var g = geo(b), P = HzBlok.proj(b.pts[0][0], b.pts[0][1]), mg = 0.3 * Math.max(g.bw, g.bh);
-    var ex0 = g.mnx - mg, ey0 = g.mny - mg, ew = g.bw + 2 * mg, eh = g.bh + 2 * mg;
-    var sc = Math.min(R.w / ew, R.h / eh), ox = R.x + (R.w - ew * sc) / 2, oy = R.y + (R.h - eh * sc) / 2;
-    function tp(x, y) { return [ox + (x - ex0) * sc, oy + (1 - (y - ey0) / eh) * eh * sc - 0]; }
+    var g = geo(b), P = HzBlok.proj(b.pts[0][0], b.pts[0][1]), mg = 0.3 * Math.max(g.bw, g.bh), rad = cfg().rad || 0;
+    var ew = g.bw + 2 * mg, eh = g.bh + 2 * mg, cx = g.mnx + g.bw / 2, cy = g.mny + g.bh / 2;
+    // rad > 0: skala seragam, setengah sisi pendek kotak = rad meter; rad = 0: pas blok
+    var sc = rad ? Math.min(R.w, R.h) / (2 * rad) : Math.min(R.w / ew, R.h / eh), rcx = R.x + R.w / 2, rcy = R.y + R.h / 2;
+    function tp(x, y) { return [rcx + (x - cx) * sc, rcy - (y - cy) * sc]; }
     function px(fx, fy) { return tp(g.mnx + fx * g.bw, g.mny + fy * g.bh); }
-    // bingkai tampak penuh: perluas ke seluruh rect (bukan hanya sebesar blok + margin)
-    var vx0 = ex0 - (ox - R.x) / sc, vx1 = ex0 + (R.x + R.w - ox) / sc, vy0 = ey0 - ((R.y + R.h) - (oy + eh * sc)) / sc, vy1 = ey0 + eh + (oy - R.y) / sc;
+    var vx0 = cx - (R.w / 2) / sc, vx1 = cx + (R.w / 2) / sc, vy0 = cy - (R.h / 2) / sc, vy1 = cy + (R.h / 2) / sc;
+    var cut = rad && (g.bw * sc > R.w - 2 || g.bh * sc > R.h - 2);
     ctx.save(); ctx.beginPath(); ctx.rect(R.x, R.y, R.w, R.h); ctx.clip();
     ctx.lineJoin = 'round'; ctx.strokeStyle = '#8A98A0'; ctx.lineWidth = Math.max(1.5, cw * 0.0035); ctx.fillStyle = '#7A8890';
     ctx.font = '600 ' + Math.round(cw * 0.026) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -98,8 +101,15 @@
         if (a.t) halo(ctx, a.t, q[0] + r * 1.6, q[1], cw * 0.036 * f, 'left');
       } else halo(ctx, a.t, q[0], q[1], cw * 0.044 * f, 'center');
     });
+    if (rad) {
+      var fs = Math.round(cw * 0.03), tx = (rad >= 1000 ? (rad / 1000) + ' km' : rad + ' m');
+      ctx.font = '700 ' + fs + 'px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.lineWidth = Math.max(3, fs * 0.28); ctx.strokeStyle = '#fff'; ctx.lineJoin = 'round';
+      var lt = 'Radius ' + tx.replace('.', ',') + (cut ? ' \u00B7 terpotong' : '');
+      ctx.strokeText(lt, R.x + cw * 0.02, R.y + R.h - cw * 0.012); ctx.fillStyle = cut ? '#D9480F' : '#5A6A73'; ctx.fillText(lt, R.x + cw * 0.02, R.y + R.h - cw * 0.012);
+    }
     ctx.restore();
-    return { px: px, fx: function (x, y) { return [(x - ox) / (g.bw * sc) + (ex0 - g.mnx) / g.bw, ((eh * sc - (y - oy)) / sc + ey0 - g.mny) / g.bh]; } };
+    return { px: px, fx: function (x, y) { return [((x - rcx) / sc + cx - g.mnx) / g.bw, ((rcy - y) / sc + cy - g.mny) / g.bh]; } };
   }
   function halo(ctx, t, x, y, fs, al) {
     ctx.font = '700 ' + Math.round(fs) + 'px sans-serif'; ctx.textAlign = al; ctx.textBaseline = 'middle';
@@ -166,10 +176,13 @@
         .bindTooltip(String(i + 1), { permanent: true, direction: 'center', className: 'klTip' });
     });
   }
+  // riwayat 10 blok terakhir dipilih (terbaru di depan), dipakai untuk urutan saran
+  function recAdd(id) { var c = cfg(); id = String(id); c.rec = [id].concat(c.rec.filter(function (x) { return x !== id; })).slice(0, 10); HA.saveSettings(); }
   function toggle(id) {
     id = String(id); var k = ST.sel.indexOf(id);
     if (k >= 0) ST.sel.splice(k, 1);
     else { if (ST.sel.length >= MAX) { HA.toast('Maksimal ' + MAX + ' blok'); return; } ST.sel.push(id); }
+    recAdd(id);
     main();
   }
   function open(pre) {
@@ -177,6 +190,7 @@
     var list = (pre || []).map(function (b) { return String(b.id); });
     if (list.length > MAX) { HA.toast('Maksimal ' + MAX + ' blok, sisanya tidak ikut'); list = list.slice(0, MAX); }
     ST = { sel: list, q: '', ann: {}, sz: 's', tool: 'p', cur: null, col: false };
+    list.slice().reverse().forEach(recAdd);
     try { if (HA.closeBlockPop && HA.DM && HA.DM.pop) HA.closeBlockPop(); if (HA.closeLinePop) HA.closeLinePop(); if (HA.map && HA.map._pinClear) HA.map._pinClear(); if (HA.map) HA.map.closePopup(); } catch (x) {}
     document.body.classList.add('klPick');
     var mp = document.getElementById('map');
@@ -205,7 +219,9 @@
   function main() {
     var kb = el.querySelector('.klBody'), kl = el.querySelector('#klLs'), y0 = kb ? kb.scrollTop : 0, l0 = kl ? kl.scrollTop : 0;
     var c = cfg(), q = ST.q.trim().toLowerCase(), col = new Intl.Collator('id', { numeric: true }), all = blocks().slice().sort(function (a, b) { return col.compare(String(a.name), String(b.name)); });
-    var shown = all.filter(function (b) { return !q || String(b.name).toLowerCase().indexOf(q) >= 0; }).slice(0, 60);
+    var rk = function (b) { var i = c.rec.indexOf(String(b.id)); return i < 0 ? 99 : i; };
+    var match = all.filter(function (b) { return !q || String(b.name).toLowerCase().indexOf(q) >= 0; }).sort(function (a, b) { return rk(a) - rk(b) || col.compare(String(a.name), String(b.name)); });
+    var shown = match.slice(0, 5);
     var nA = 0; ST.sel.forEach(function (id) { (ST.ann[id] || []).forEach(function (a) { if (a.on) nA++; }); });
     var sh = sheetCount();
     el.className = 'klPn' + (ST.col ? ' col' : ''); if (HA.map) { try { HA.map.closePopup(); } catch (x) {} }
@@ -213,7 +229,8 @@
       '<div class="klBody"><div class="h">BLOK TERPILIH (' + ST.sel.length + '/' + MAX + ')</div><div class="klChips" id="klCh">' +
       (ST.sel.length ? ST.sel.map(function (id) { var b = byId(id); return b ? '<button type="button" class="klChip" data-r="' + esc(id) + '">' + esc(String(b.name)) + ' ✕</button>' : ''; }).join('') : '<span class="muted">Belum ada. Ketuk blok di peta atau cari nama di bawah.</span>') + '</div>' +
       '<input type="search" id="klQ" placeholder="Cari nama blok" value="' + esc(ST.q) + '" autocomplete="off" style="width:100%;margin-top:8px"><div class="klLs" id="klLs">' +
-      shown.map(function (b) { var on = ST.sel.indexOf(String(b.id)) >= 0; return '<label class="klRw"><input type="checkbox" data-b="' + esc(String(b.id)) + '"' + (on ? ' checked' : '') + '><span>' + esc(String(b.name)) + '</span><small class="muted">' + haTxt(b) + '</small></label>'; }).join('') + (all.length > shown.length ? '<div class="muted" style="padding:6px">Menampilkan 60 pertama. Persempit dengan pencarian.</div>' : '') + '</div>' +
+      shown.map(function (b) { var on = ST.sel.indexOf(String(b.id)) >= 0; return '<label class="klRw"><input type="checkbox" data-b="' + esc(String(b.id)) + '"' + (on ? ' checked' : '') + '><span>' + esc(String(b.name)) + '</span><small class="muted">' + haTxt(b) + '</small></label>'; }).join('') + '</div>' + (match.length > shown.length ? '<div class="muted" style="font-size:.8rem;margin-top:4px">' + shown.length + ' dari ' + match.length + ' blok. Ketik nama untuk mempersempit.</div>' : '') +
+      '<div class="h" style="margin-top:12px">RADIUS SKETSA</div><div class="seg" id="klRd" style="margin-top:6px">' + [[0, 'Otomatis'], [250, '0,25'], [500, '0,5'], [750, '0,75'], [1000, '1 km']].map(function (r) { return '<button type="button" data-r="' + r[0] + '"' + (c.rad === r[0] ? ' class="on"' : '') + '>' + r[1] + '</button>'; }).join('') + '</div>' +
       '<div class="h" style="margin-top:12px">ISI TIAP KOTAK</div><div class="klInf">' + INF.map(function (i) { return '<label><input type="checkbox" data-i="' + i[0] + '"' + (c.info[i[0]] ? ' checked' : '') + '> ' + i[1] + '</label>'; }).join('') + '</div>' +
       '<div class="muted" style="margin-top:10px">Titik dan teks hanya untuk kolase ini, tidak disimpan ke data blok.</div></div>' +
       '<div class="klBar" id="klBar"><button type="button" class="btn klBt" id="klP" aria-label="' + (c.per === 2 ? '2 blok per lembar, ketuk untuk 4 blok' : '4 blok per lembar, ketuk untuk 2 blok') + '">' + (c.per === 2 ? ICO_2 : ICO_4) + '</button>' +
@@ -231,6 +248,7 @@
       toggle(id);
     };
     el.querySelectorAll('[data-i]').forEach(function (e) { e.onchange = function () { c.info[e.getAttribute('data-i')] = e.checked; HA.saveSettings(); }; });
+    $e('klRd').onclick = function (e) { var v = e.target.getAttribute && e.target.getAttribute('data-r'); if (v == null) return; c.rad = +v; HA.saveSettings(); main(); };
     $e('klP').onclick = function () { c.per = c.per === 4 ? 2 : 4; HA.saveSettings(); main(); };
     $e('klF').onclick = function () { c.fmt = c.fmt === 'pdf' ? 'png' : 'pdf'; HA.saveSettings(); main(); };
     $e('klAn').onclick = function () { ann = true; if (hl) { hl.remove(); hl = null; } ST.cur = ST.cur && ST.sel.indexOf(ST.cur) >= 0 ? ST.cur : ST.sel[0]; annot(); };

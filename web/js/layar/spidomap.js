@@ -44,13 +44,11 @@
   function spShow(which) { var p = $('spPager'); p.scrollTo({ left: which === 'map' ? p.clientWidth : 0, behavior: 'smooth' }); }
   function spResetMain() { var p = $('spPager'); if (p) { p.scrollLeft = 0; $('spMain').scrollTop = 0; } }
   function spBtns() {
-    $('spFol').textContent = 'Ikuti: ' + (HA.SP.follow ? 'ya' : 'tidak'); $('spFol').classList.toggle('on', HA.SP.follow);
-    $('spZoom').textContent = 'Zoom otomatis: ' + (HA.SP.zoomAuto ? 'ya' : 'tidak'); $('spZoom').classList.toggle('on', HA.SP.zoomAuto);
-    var aw = !!S.settings.spAwake;
-    $('spAwake').textContent = 'Layar menyala: ' + (aw ? 'ya' : 'tidak'); $('spAwake').classList.toggle('on', aw);
+    $('spFol').classList.toggle('on', HA.SP.follow);
+    $('spAwake').classList.toggle('on', S.settings.spAwake !== false);
   }
   function spAwake(on) {
-    var want = on && HA.SP.active && !!S.settings.spAwake;
+    var want = on && HA.SP.active && S.settings.spAwake !== false;
     try { Plug.keepScreen({ on: want }).catch(function () {}); } catch (e) {}
     if (navigator.wakeLock && !native) {
       if (want && !HA.SP.wl) navigator.wakeLock.request('screen').then(function (l) { HA.SP.wl = l; }).catch(function () {});
@@ -261,8 +259,7 @@
     $('spLoc').onclick = spLocate;
     $('spBat').onclick = function () { var bb = batSet(), on = !(bb.desa || bb.kec); bb.desa = on; bb.kec = on; saveSettings(); batRedraw(); toast(on ? 'Batas desa dan kecamatan nyala' : 'Batas wilayah mati'); };
     $('spFol').onclick = function () { HA.SP.follow = !HA.SP.follow; if (HA.SP.follow && HA.SP.cur) HA.SP.map.setView(HA.SP.cur, HA.SP.map.getZoom(), { animate: true }); spBtns(); };
-    $('spZoom').onclick = function () { HA.SP.zoomAuto = !HA.SP.zoomAuto; if (HA.SP.zoomAuto) HA.SP.autoPaused = false; spBtns(); };
-    $('spAwake').onclick = function () { S.settings.spAwake = !S.settings.spAwake; saveSettings(); spBtns(); spAwake(true); };
+    $('spAwake').onclick = function () { S.settings.spAwake = S.settings.spAwake === false; saveSettings(); spBtns(); spAwake(true); };
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) { if (HA.SP.active) { HA.SP.active = false; cancelAnimationFrame(HA.SP.raf); spAwake(false); spCompassOn(false); HA.SP.resume = true; } }
       else if (HA.SP.resume) { HA.SP.resume = false; HA.SP.keepView = true; spSetActive(S.view === 'spido' && spIdx() === 1); }
