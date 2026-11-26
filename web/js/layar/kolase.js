@@ -9,7 +9,6 @@
   var INF = [['nama', 'Nama blok'], ['luas', 'Luas'], ['varietas', 'Varietas'], ['status', 'Status'], ['umur', 'Umur'], ['bulan', 'Bulan tanam'], ['kategori', 'Kategori']];
   var SZ = { k: 0.7, s: 1, b: 1.5 };
   var PW = 1240, PH = 1754, K = 2;     // A4 portrait, ukuran logis 150 dpi; keluaran K x (300 dpi)
-  var NF = '700 {s}px Arimo, Arial, "Liberation Sans", Helvetica, sans-serif';   // huruf nomor blok (mirip Arial Windows)
   function esc(x) { return HA.esc(x); }
   function cfg() {
     var c = S.settings.kolase || (S.settings.kolase = {});
@@ -115,6 +114,7 @@
     function px(fx, fy) { return tp(g.mnx + fx * g.bw, g.mny + fy * g.bh); }
     if (rad) { var sh = shiftView(g, P, R.w / sc, R.h / sc, b.pts[0].join(',')); cx += sh[0]; cy += sh[1]; }
     var vx0 = cx - (R.w / 2) / sc, vx1 = cx + (R.w / 2) / sc, vy0 = cy - (R.h / 2) / sc, vy1 = cy + (R.h / 2) / sc;
+    var lfs = Math.round(cw * 0.026 * (rad >= 1500 ? 0.6 : rad >= 1000 ? 0.8 : 1));   // ukuran nomor blok seragam: 100% (Otomatis, 0,5 km), 80% (1 km), 60% (1,5 km)
     var cut = rad && (g.bw * sc > R.w - 2 || g.bh * sc > R.h - 2);
     ctx.save(); ctx.beginPath(); ctx.rect(R.x, R.y, R.w, R.h); ctx.clip();
     ctx.lineJoin = 'round'; ctx.strokeStyle = '#8A98A0'; ctx.lineWidth = Math.max(1.5, cw * 0.0035); ctx.fillStyle = '#7A8890';
@@ -126,11 +126,11 @@
       if (mxx < vx0 || mnx > vx1 || mxy < vy0 || mny > vy1) return;
       ctx.beginPath(); xy.forEach(function (p, k) { var q = tp(p[0], p[1]); if (k) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }); ctx.closePath(); ctx.stroke();
       var cx = (mnx + mxx) / 2, cy = (mny + mxy) / 2;
-      var ox2 = (mnx + mxx) / 2, oy2 = (mny + mxy) / 2, sp = Math.min(mxx - mnx, mxy - mny) * sc, fs2 = Math.min(cw * 0.034, sp * 0.3);
-      if (ox2 > vx0 && ox2 < vx1 && oy2 > vy0 && oy2 < vy1 && fs2 >= cw * 0.02) {
-        ctx.save(); ctx.font = NF.replace('{s}', Math.round(fs2)); var nm = String(o.name);
-        if (ctx.measureText(nm).width <= (mxx - mnx) * sc * 0.9) {
-          var t = tp(ox2, oy2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2.5, fs2 * 0.24); ctx.strokeStyle = '#fff'; ctx.strokeText(nm, t[0], t[1]); ctx.fillStyle = '#33434B'; ctx.fillText(nm, t[0], t[1]);
+      var ox2 = (mnx + mxx) / 2, oy2 = (mny + mxy) / 2;
+      if (ox2 > vx0 && ox2 < vx1 && oy2 > vy0 && oy2 < vy1) {
+        ctx.save(); ctx.font = '600 ' + lfs + 'px sans-serif'; var nm = String(o.name);
+        if (ctx.measureText(nm).width <= (mxx - mnx) * sc * 0.9 && lfs <= Math.min(mxx - mnx, mxy - mny) * sc * 0.6) {
+          var t = tp(ox2, oy2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2.5, lfs * 0.26); ctx.strokeStyle = '#fff'; ctx.strokeText(nm, t[0], t[1]); ctx.fillStyle = '#5E6C74'; ctx.fillText(nm, t[0], t[1]);
         }
         ctx.restore();
       }
@@ -241,7 +241,6 @@
     if (el) close();
     var list = (pre || []).map(function (b) { return String(b.id); });
     if (list.length > MAX) { HA.toast('Maksimal ' + MAX + ' blok, sisanya tidak ikut'); list = list.slice(0, MAX); }
-    try { if (document.fonts && document.fonts.load) document.fonts.load('700 20px Arimo'); } catch (x) {}
     ST = { sel: list, q: '', ann: {}, sz: 's', tool: 'p', cur: null, col: false };
     list.slice().reverse().forEach(recAdd);
     try { if (HA.closeBlockPop && HA.DM && HA.DM.pop) HA.closeBlockPop(); if (HA.closeLinePop) HA.closeLinePop(); if (HA.map && HA.map._pinClear) HA.map._pinClear(); if (HA.map) HA.map.closePopup(); } catch (x) {}

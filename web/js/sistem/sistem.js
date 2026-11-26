@@ -281,7 +281,7 @@
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'ikon', t: 'Ikon tanda titik', s: function () { var i = S.settings.ikon; return 'Huruf ' + ((i && i.h) || 'A') + ' · ' + ((i && i.p) || 'bulat') + ' · dinyalakan lewat tombol Tanda di Ukur/Walking'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.27.20'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.27.21'; } }
   ];
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + HA.CHEV + '</button>'; }).join('');
