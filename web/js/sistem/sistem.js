@@ -277,12 +277,23 @@
     { k: 'tempat', t: 'Tempat (pagar virtual)', s: function () { var n = (S.settings.places || []).length; return n ? n + ' tempat · app diam di dalamnya' : 'Belum ada tempat'; } },
     { k: 'unit', t: 'Unit dan pengemudi', s: function () { return 'Dipakai: ' + unitAt(Date.now()) + ' · ' + S.settings.units.length + ' unit'; } },
     { k: 'peta', t: 'Peta', s: function () { var n = ovList().length; return n + ' peta saya · cache peta'; } },
-    { k: 'data', t: 'Data dan cadangan', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
+    { k: 'data', t: 'Data', s: function () { var n = (S.ov.hidden || []).length; return (S.settings.lastBackup ? 'Cadangan ' + bkAge() + ' hari lalu' : 'Belum ada cadangan') + (n ? ' · ' + n + ' trip dihapus' : ''); } },
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'ikon', t: 'Ikon tanda titik', s: function () { var i = S.settings.ikon; return 'Huruf ' + ((i && i.h) || 'A') + ' · ' + ((i && i.p) || 'bulat') + ' · dinyalakan lewat tombol Tanda di Ukur/Walking'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.27.22'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.27.23'; } }
   ];
+  // Versi simpanan master: pilih master dulu (bila lebih dari satu), lalu buka daftar versinya
+  HA.vmPick = function () {
+    var ms = S.settings.masters || [];
+    if (!HA.VM) { toast('Fitur belum tersedia'); return; }
+    if (!ms.length) { toast('Belum ada master'); return; }
+    if (ms.length === 1) { HA.VM.open(ms[0], function () {}); return; }
+    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">VERSI SIMPANAN · PILIH MASTER</div><button class="btn" id="vpX" aria-label="Tutup">\u2715</button></div>' +
+      ms.map(function (m, i) { return '<button class="btn" data-i="' + i + '" style="width:100%;margin-top:8px;height:48px">' + esc(m.name) + '</button>'; }).join(''));
+    $('vpX').onclick = function () { HA.closeSheet(); };
+    $('sheet').querySelectorAll('button[data-i]').forEach(function (b) { b.onclick = function () { var m = ms[+b.getAttribute('data-i')]; HA.closeSheet(); HA.VM.open(m, function () {}); }; });
+  };
   function renderSetMenu() {
     $('setMenu').innerHTML = SPAGES.map(function (p) { return '<button class="srow" data-sp="' + p.k + '"><div class="si"><b>' + p.t + '</b><small>' + esc(p.s()) + '</small></div>' + HA.CHEV + '</button>'; }).join('');
   }

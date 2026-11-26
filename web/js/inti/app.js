@@ -214,7 +214,11 @@
     $('hidList').onclick = onHidden;
     $('miniX').onclick = function () { closeMini(); };
     $('dpTabs').onclick = function (e) { var t = e.target.getAttribute && e.target.getAttribute('data-tab'); if (t) { S.dpTab = t; renderData(); } };
-    $('ovGoData').onclick = function () { S.dpTab = 'pdf'; go('data'); };
+    $('imBlok').onclick = function () { S.dpTab = 'blok'; go('data'); };
+    $('imBatas').onclick = function () { S.dpTab = 'batas'; go('data'); };
+    $('imPdf').onclick = function () { S.dpTab = 'pdf'; go('data'); };
+    $('imDem').onclick = function () { if (HA.openSet) HA.openSet('peta'); };
+    $('vmOpen').onclick = function () { HA.vmPick(); };
     $('ovAdd').onclick = function () { $('ovFile').value = ''; $('ovFile').click(); };
     $('ovFile').onchange = function () { if (this.files && this.files[0]) importOv(this.files[0]); };
     $('ovImp').onclick = function () { $('ovHz').value = ''; $('ovHz').click(); };
