@@ -8,14 +8,16 @@
   var BN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
   var INF = [['nama', 'Nama blok'], ['luas', 'Luas'], ['varietas', 'Varietas'], ['status', 'Status'], ['umur', 'Umur'], ['bulan', 'Bulan tanam'], ['kategori', 'Kategori']];
   var SZ = { k: 0.7, s: 1, b: 1.5 };
-  var PW = 1240, PH = 1754;     // A4 portrait 150 dpi
+  var PW = 1240, PH = 1754, K = 2;     // A4 portrait, ukuran logis 150 dpi; keluaran K x (300 dpi)
+  var NF = '700 {s}px Arimo, Arial, "Liberation Sans", Helvetica, sans-serif';   // huruf nomor blok (mirip Arial Windows)
   function esc(x) { return HA.esc(x); }
   function cfg() {
     var c = S.settings.kolase || (S.settings.kolase = {});
     if (!c.info) { c.info = {}; INF.forEach(function (i) { c.info[i[0]] = true; }); }
     if (c.per !== 2 && c.per !== 4) c.per = 4;
     if (c.fmt !== 'png') c.fmt = 'pdf';
-    if ([0, 250, 500, 750, 1000].indexOf(c.rad) < 0) c.rad = 0;
+    if (c.rad === 250) c.rad = 500; else if (c.rad === 750) c.rad = 1000;
+    if ([0, 500, 1000, 1500].indexOf(c.rad) < 0) c.rad = 0;
     if (!Array.isArray(c.rec)) c.rec = [];
     return c;
   }
@@ -61,6 +63,48 @@
     xy.forEach(function (p) { mnx = Math.min(mnx, p[0]); mxx = Math.max(mxx, p[0]); mny = Math.min(mny, p[1]); mxy = Math.max(mxy, p[1]); });
     return { xy: xy, mnx: mnx, mny: mny, bw: Math.max(1, mxx - mnx), bh: Math.max(1, mxy - mny) };
   }
+
+  // ---- geser jendela sketsa ke arah kebun: ruang kosong (di luar bentuk pembungkus seluruh blok master) sasaran <= 10%, toleransi 25% ----
+  function hullXY(pts) {
+    var a = pts.slice().sort(function (p, q) { return p[0] - q[0] || p[1] - q[1]; }), i, lo = [], up = [];
+    function cr(o, p, q) { return (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]); }
+    for (i = 0; i < a.length; i++) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], a[i]) <= 0) lo.pop(); lo.push(a[i]); }
+    for (i = a.length - 1; i >= 0; i--) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], a[i]) <= 0) up.pop(); up.push(a[i]); }
+    lo.pop(); up.pop(); return lo.concat(up);
+  }
+  function areaMP(mp) { var t = 0; mp.forEach(function (poly) { poly.forEach(function (r, k) { var a = 0, j; for (j = 0; j < r.length - 1; j++) a += r[j][0] * r[j + 1][1] - r[j + 1][0] * r[j][1]; t += (k ? -1 : 1) * Math.abs(a / 2); }); }); return t; }
+  var hullCache = null;
+  function shiftView(g, P, ww, hh, ref) {
+    if (typeof polygonClipping === 'undefined') return [0, 0];
+    var key = blocks().length + ':' + (blocks()[0] ? blocks()[0].pts[0].join(',') : '');
+    var h;
+    if (hullCache && hullCache.key === key && hullCache.ref === ref) h = hullCache.h;
+    else { var all = []; blocks().forEach(function (o) { o.pts.forEach(function (q) { all.push(P.xy(q)); }); }); h = hullXY(all); hullCache = { key: key, ref: ref, h: h }; }
+    if (h.length < 3) return [0, 0];
+    var ring = h.concat([h[0]]), cx = g.mnx + g.bw / 2, cy = g.mny + g.bh / 2, m = 0.03;
+    // geser maksimal agar blok tetap utuh di dalam jendela (margin 3%)
+    var mx = ww / 2 - g.bw / 2 - ww * m, my = hh / 2 - g.bh / 2 - hh * m;
+    if (mx < 0 || my < 0) return [0, 0];
+    function empty(dx, dy) {
+      var x0 = cx + dx - ww / 2, x1 = cx + dx + ww / 2, y0 = cy + dy - hh / 2, y1 = cy + dy + hh / 2, r;
+      try { r = polygonClipping.intersection([ring], [[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]]); } catch (e) { return 1; }
+      return 1 - areaMP(r) / (ww * hh);
+    }
+    var e0 = empty(0, 0); if (e0 <= 0.10) return [0, 0];
+    var N = 12, i, j, near = null, nearD = 1e18, cands = [], minE = e0, hx0 = 1e18, hx1 = -1e18, hy0 = 1e18, hy1 = -1e18;
+    h.forEach(function (q) { hx0 = Math.min(hx0, q[0]); hx1 = Math.max(hx1, q[0]); hy0 = Math.min(hy0, q[1]); hy1 = Math.max(hy1, q[1]); });
+    var hcx = (hx0 + hx1) / 2, hcy = (hy0 + hy1) / 2;
+    // kandidat <= 10%: pilih yang paling dekat ke tengah blok; bila tidak ada, ambil yang kosongnya paling kecil dan paling dekat ke tengah kebun
+    for (i = -N; i <= N; i++) for (j = -N; j <= N; j++) {
+      var dx = mx * i / N, dy = my * j / N, e = empty(dx, dy), d = dx * dx + dy * dy;
+      if (e <= 0.10 && d < nearD) { nearD = d; near = [dx, dy]; }
+      cands.push([dx, dy, e]); if (e < minE) minE = e;
+    }
+    if (near) return near;
+    var best = null, bd = 1e18;
+    cands.forEach(function (c) { if (c[2] > minE + 0.01) return; var d = Math.pow(cx + c[0] - hcx, 2) + Math.pow(cy + c[1] - hcy, 2); if (d < bd) { bd = d; best = c; } });
+    return best ? [best[0], best[1]] : [0, 0];
+  }
   // gambar sketsa dalam rect: blok utuh + garis blok tetangga yang masuk bingkai; kembali pemeta piksel -> fraksi bbox blok
   function sketch(ctx, b, R, ann, cw) {
     var g = geo(b), P = HzBlok.proj(b.pts[0][0], b.pts[0][1]), mg = 0.3 * Math.max(g.bw, g.bh), rad = cfg().rad || 0;
@@ -69,11 +113,12 @@
     var sc = rad ? Math.min(R.w, R.h) / (2 * rad) : Math.min(R.w / ew, R.h / eh), rcx = R.x + R.w / 2, rcy = R.y + R.h / 2;
     function tp(x, y) { return [rcx + (x - cx) * sc, rcy - (y - cy) * sc]; }
     function px(fx, fy) { return tp(g.mnx + fx * g.bw, g.mny + fy * g.bh); }
+    if (rad) { var sh = shiftView(g, P, R.w / sc, R.h / sc, b.pts[0].join(',')); cx += sh[0]; cy += sh[1]; }
     var vx0 = cx - (R.w / 2) / sc, vx1 = cx + (R.w / 2) / sc, vy0 = cy - (R.h / 2) / sc, vy1 = cy + (R.h / 2) / sc;
     var cut = rad && (g.bw * sc > R.w - 2 || g.bh * sc > R.h - 2);
     ctx.save(); ctx.beginPath(); ctx.rect(R.x, R.y, R.w, R.h); ctx.clip();
     ctx.lineJoin = 'round'; ctx.strokeStyle = '#8A98A0'; ctx.lineWidth = Math.max(1.5, cw * 0.0035); ctx.fillStyle = '#7A8890';
-    ctx.font = '600 ' + Math.round(cw * 0.026) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     blocks().forEach(function (o) {
       if (o === b || String(o.id) === String(b.id)) return;
       var xy = o.pts.map(P.xy), mnx = 1e18, mxx = -1e18, mny = 1e18, mxy = -1e18;
@@ -81,7 +126,14 @@
       if (mxx < vx0 || mnx > vx1 || mxy < vy0 || mny > vy1) return;
       ctx.beginPath(); xy.forEach(function (p, k) { var q = tp(p[0], p[1]); if (k) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }); ctx.closePath(); ctx.stroke();
       var cx = (mnx + mxx) / 2, cy = (mny + mxy) / 2;
-      if (cx > vx0 && cx < vx1 && cy > vy0 && cy < vy1 && (mxx - mnx) * sc > cw * 0.08) { var t = tp(cx, cy); ctx.fillText(String(o.name), t[0], t[1]); }
+      var ox2 = (mnx + mxx) / 2, oy2 = (mny + mxy) / 2, sp = Math.min(mxx - mnx, mxy - mny) * sc, fs2 = Math.min(cw * 0.034, sp * 0.3);
+      if (ox2 > vx0 && ox2 < vx1 && oy2 > vy0 && oy2 < vy1 && fs2 >= cw * 0.02) {
+        ctx.save(); ctx.font = NF.replace('{s}', Math.round(fs2)); var nm = String(o.name);
+        if (ctx.measureText(nm).width <= (mxx - mnx) * sc * 0.9) {
+          var t = tp(ox2, oy2); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2.5, fs2 * 0.24); ctx.strokeStyle = '#fff'; ctx.strokeText(nm, t[0], t[1]); ctx.fillStyle = '#33434B'; ctx.fillText(nm, t[0], t[1]);
+        }
+        ctx.restore();
+      }
     });
     var v = HA.lyb.of(b, 'varietas');
     ctx.beginPath();
@@ -134,8 +186,8 @@
   function cellSize(per) { var cw = per === 4 ? (PW - 120 - 30) / 2 : PW - 120, ch = ((PH - 90 - 70) - 30) / 2; return { w: cw, h: ch }; }
   function sheetCount() { return Math.max(1, Math.ceil(ST.sel.length / cfg().per)); }
   function renderSheet(i) {
-    var c = cfg(), per = c.per, cv = document.createElement('canvas'); cv.width = PW; cv.height = PH;
-    var ctx = cv.getContext('2d'), sz = cellSize(per), ids = ST.sel.slice(i * per, i * per + per);
+    var c = cfg(), per = c.per, cv = document.createElement('canvas'); cv.width = PW * K; cv.height = PH * K;
+    var ctx = cv.getContext('2d'); ctx.scale(K, K); var  sz = cellSize(per), ids = ST.sel.slice(i * per, i * per + per);
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, PW, PH);
     ctx.fillStyle = '#5A6A73'; ctx.font = '600 26px sans-serif'; ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.fillText('Kolase blok', 60, 40);
     ctx.textAlign = 'right'; var n = new Date(); ctx.fillText(n.getDate() + ' ' + BN[n.getMonth()] + ' ' + n.getFullYear(), PW - 60, 40);
@@ -189,6 +241,7 @@
     if (el) close();
     var list = (pre || []).map(function (b) { return String(b.id); });
     if (list.length > MAX) { HA.toast('Maksimal ' + MAX + ' blok, sisanya tidak ikut'); list = list.slice(0, MAX); }
+    try { if (document.fonts && document.fonts.load) document.fonts.load('700 20px Arimo'); } catch (x) {}
     ST = { sel: list, q: '', ann: {}, sz: 's', tool: 'p', cur: null, col: false };
     list.slice().reverse().forEach(recAdd);
     try { if (HA.closeBlockPop && HA.DM && HA.DM.pop) HA.closeBlockPop(); if (HA.closeLinePop) HA.closeLinePop(); if (HA.map && HA.map._pinClear) HA.map._pinClear(); if (HA.map) HA.map.closePopup(); } catch (x) {}
@@ -230,7 +283,7 @@
       (ST.sel.length ? ST.sel.map(function (id) { var b = byId(id); return b ? '<button type="button" class="klChip" data-r="' + esc(id) + '">' + esc(String(b.name)) + ' ✕</button>' : ''; }).join('') : '<span class="muted">Belum ada. Ketuk blok di peta atau cari nama di bawah.</span>') + '</div>' +
       '<input type="search" id="klQ" placeholder="Cari nama blok" value="' + esc(ST.q) + '" autocomplete="off" style="width:100%;margin-top:8px"><div class="klLs" id="klLs">' +
       shown.map(function (b) { var on = ST.sel.indexOf(String(b.id)) >= 0; return '<label class="klRw"><input type="checkbox" data-b="' + esc(String(b.id)) + '"' + (on ? ' checked' : '') + '><span>' + esc(String(b.name)) + '</span><small class="muted">' + haTxt(b) + '</small></label>'; }).join('') + '</div>' + (match.length > shown.length ? '<div class="muted" style="font-size:.8rem;margin-top:4px">' + shown.length + ' dari ' + match.length + ' blok. Ketik nama untuk mempersempit.</div>' : '') +
-      '<div class="h" style="margin-top:12px">RADIUS SKETSA</div><div class="seg" id="klRd" style="margin-top:6px">' + [[0, 'Otomatis'], [250, '0,25'], [500, '0,5'], [750, '0,75'], [1000, '1 km']].map(function (r) { return '<button type="button" data-r="' + r[0] + '"' + (c.rad === r[0] ? ' class="on"' : '') + '>' + r[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="h" style="margin-top:12px">RADIUS SKETSA</div><div class="seg" id="klRd" style="margin-top:6px">' + [[0, 'Otomatis'], [500, '0,5'], [1000, '1'], [1500, '1,5 km']].map(function (r) { return '<button type="button" data-r="' + r[0] + '"' + (c.rad === r[0] ? ' class="on"' : '') + '>' + r[1] + '</button>'; }).join('') + '</div>' +
       '<div class="h" style="margin-top:12px">ISI TIAP KOTAK</div><div class="klInf">' + INF.map(function (i) { return '<label><input type="checkbox" data-i="' + i[0] + '"' + (c.info[i[0]] ? ' checked' : '') + '> ' + i[1] + '</label>'; }).join('') + '</div>' +
       '<div class="muted" style="margin-top:10px">Titik dan teks hanya untuk kolase ini, tidak disimpan ke data blok.</div></div>' +
       '<div class="klBar" id="klBar"><button type="button" class="btn klBt" id="klP" aria-label="' + (c.per === 2 ? '2 blok per lembar, ketuk untuk 4 blok' : '4 blok per lembar, ketuk untuk 2 blok') + '">' + (c.per === 2 ? ICO_2 : ICO_4) + '</button>' +
