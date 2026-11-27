@@ -356,7 +356,6 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 #cleanUI .leaflet-control-zoom{margin:0.625rem}
 
 /* v0.8.0: tombol spidometer di atas tombol posisi */
-#spToMain{position:absolute;right:0.625rem;bottom:4rem;z-index:600;margin:0}
 #spStrip{display:none}
 #spBar{padding-bottom:calc(1.5rem + env(safe-area-inset-bottom,0px))}
 
@@ -636,8 +635,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 #spMapWrap.tdon #spBat{display:none}
 #spMapWrap.tdon.tdmo .tdmi{display:flex}
 #spMapWrap.tdon.tdmo #spLoc{bottom:4rem}
-#spMapWrap.tdon.tdmo #spToMain{bottom:7.375rem}
-#spMapWrap.tdon.tdmo #spTanda{bottom:10.75rem}
+#spMapWrap.tdon.tdmo #spMapWrap.tdon.tdmo #spTanda{bottom:10.75rem}
 #spMapWrap.tdon.tdmo #tdCat{bottom:14.125rem}
 #spMapWrap.tdon.tdmo #tdLay{bottom:17.5rem}
 #spMapWrap.tdon.tdmo #tdSr{bottom:20.875rem}
@@ -651,7 +649,7 @@ body::before{content:'';position:fixed;top:0;left:0;right:0;height:env(safe-area
 #app.spm #btnMenu{pointer-events:auto;width:2.75rem;height:2.75rem;border-radius:50%;background:var(--ov);border:1px solid var(--line)}
 #spHud{left:3.875rem}
 #tdTop{left:3.875rem}
-#spMapWrap.tdon #spToMain,#spMapWrap.tdon #spTanda{display:none}
+#spMapWrap.tdon #spTanda{display:none}
 #spMapWrap.tdon #spNote{display:none!important}
 #spMapWrap.tdon.tdmo #spLoc{bottom:4rem}
 #spMapWrap.tdon.tdmo #tdCat{bottom:7.375rem}
@@ -1203,3 +1201,6 @@ body.klPick #map .leaflet-interactive{pointer-events:none!important}
 #spNav button:active{filter:brightness(1.3)}
 #app:not(.spm) #spMain{padding-bottom:calc(3.5rem + 64px + 1.25rem)}
 #app:not(.spm) #spDots{bottom:calc(3.5rem + 64px + 1.5rem)}
+
+/* v0.27.25 ikon: tombol Kirim/Bagikan berikon */
+.btn .shI{vertical-align:-4px;margin-right:6px}

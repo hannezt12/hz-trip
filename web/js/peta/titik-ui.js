@@ -135,7 +135,7 @@
   HA.titikKml = kirimKml;
   function edit(t, back) {
     openSheet('<div class="grab"></div><div class="tkHd"><span class="tkHi">' + svg(t.p, t.c, code(t), 40) + '</span><div class="tkHt"><b>' + esc(lab(t)) + '</b><small>' + (t.bn ? 'Blok ' + esc(t.bn) : 'Di luar blok') + '</small></div>' +
-      '<button type="button" class="btn sm" id="tkKr">Kirim</button><button type="button" class="ib" id="tkX" aria-label="Tutup">\u2715</button></div>' +
+      '<button type="button" class="ib" id="tkKr" aria-label="Kirim"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></button><button type="button" class="ib" id="tkX" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
       '<div class="muted" style="margin:6px 0">' + t.ll[0].toFixed(6) + ', ' + t.ll[1].toFixed(6) + (t.je != null ? ' · ' + t.je + ' m dari tepi blok' : '') + '</div>' +
       '<label class="ukDt" style="display:block">Nama<input type="text" id="tkNm" maxlength="40" placeholder="' + esc(code(t)) + '" value="' + esc(t.nm || '') + '" style="width:100%"></label>' +
       '<label class="ukDt" style="display:block">Catatan<textarea id="tkN" rows="3" style="width:100%" maxlength="300">' + esc(t.note || '') + '</textarea></label>' +

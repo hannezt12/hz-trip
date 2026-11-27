@@ -255,7 +255,6 @@
       clearTimeout(tm);
       tm = setTimeout(function () { spSetActive(S.view === 'spido' && !document.hidden && spIdx() === 1); }, 120);
     });
-    $('spToMain').onclick = function () { spShow('main'); };
     $('spLoc').onclick = spLocate;
     $('spBat').onclick = function () { var bb = batSet(), on = !(bb.desa || bb.kec); bb.desa = on; bb.kec = on; saveSettings(); batRedraw(); toast(on ? 'Batas desa dan kecamatan nyala' : 'Batas wilayah mati'); };
     $('spFol').onclick = function () { HA.SP.follow = !HA.SP.follow; if (HA.SP.follow && HA.SP.cur) HA.SP.map.setView(HA.SP.cur, HA.SP.map.getZoom(), { animate: true }); spBtns(); };
@@ -400,7 +399,7 @@
     $('pbFol').onclick = function () { HA.PB.follow = !HA.PB.follow; pbSyncUi(); };
   }
   function openMapMenu() {
-    openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1">PETA</div><button class="ib" id="mmX" aria-label="Tutup">'+'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'+'</button></div>' +
+    openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1">PETA</div><button class="ib" id="mmX" aria-label="Tutup">'+'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'+'</button></div>' +
       '<button class="srow" id="mmOv" style="margin-top:6px"><div class="si"><b>Peta saya</b><small>Lapisan PDF peta (tampil di mode Peta)</small></div>' + HA.CHEV + '</button>' +
       '<button class="srow" id="mmKat"><div class="si"><b>Kategori</b><small>Tambah dan ubah kategori, sub-kategori, nama, warna</small></div>' + HA.CHEV + '</button>' +
       '<div class="muted" style="margin-top:8px">Garis kontur mengikuti zoom secara otomatis: lembah merah muda pudar, makin tinggi makin abu lalu hijau muda.</div>');

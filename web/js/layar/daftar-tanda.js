@@ -50,7 +50,7 @@
   function foot() {
     var s = selData(), n = s.blks.length, nr = 0; Object.keys(LS.sel).forEach(function (k) { if (LS.sel[k]) nr++; });
     if ($('lsPv')) { $('lsPv').disabled = !n; $('lsPv').textContent = n ? 'Preview ' + n + ' blok' : 'Preview'; }
-    if ($('lsGo')) { $('lsGo').disabled = !n; $('lsGo').textContent = n ? 'Bagikan ' + n + ' blok' : 'Bagikan'; }
+    if ($('lsGo')) { $('lsGo').disabled = !n; $('lsGo').innerHTML = '<svg class="shI" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.6M8.2 13.2l7.6 4.6"/></svg>' + (n ? 'Bagikan ' + n + ' blok' : 'Bagikan'); }
     if ($('lsDl')) { $('lsDl').disabled = !nr; $('lsDl').textContent = nr ? 'Hapus ' + nr : 'Hapus'; }
     var v = all.filter(vis), c = v.filter(function (r) { return LS.sel[r.key]; }).length;
     if ($('lsAll')) { $('lsAll').checked = !!v.length && c === v.length; $('lsAll').indeterminate = c > 0 && c < v.length; }
@@ -92,7 +92,7 @@
       '<div class="lsCh" id="lsCh">' + co.map(function (c) { return '<label class="lsC"><input type="checkbox" data-c="' + esc(c.k) + '"' + (LS.off[c.k] ? '' : ' checked') + '><i style="background:' + c.col + '"></i>' + esc(c.name) + '</label>'; }).join('') + '</div>' +
       '<label class="lsA"><input type="checkbox" id="lsAll"> Pilih semua yang tampil <span class="muted" id="lsCnt"></span></label></div>' +
       '<div id="lsBody"></div>' +
-      '<div class="lsFoot"><button class="btn" id="lsPv" disabled>Preview</button><button class="btn pri" id="lsGo" disabled>Bagikan</button><button class="btn lsDel" id="lsDl" disabled>Hapus</button></div>' +
+      '<div class="lsFoot"><button class="btn" id="lsPv" disabled>Preview</button><button class="btn pri" id="lsGo" disabled><svg class="shI" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.6M8.2 13.2l7.6 4.6"/></svg>Bagikan</button><button class="btn lsDel" id="lsDl" disabled>Hapus</button></div>' +
       '<button class="btn" id="lsX" style="width:100%;margin-top:8px">Tutup</button>');
     paint();
     $('lsKt').onclick = function () { if (!HA.tandaCatPage) return; HA.tandaCatPage(); HA.onSheetClose = function () { setTimeout(open, 60); }; };

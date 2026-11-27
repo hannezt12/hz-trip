@@ -259,7 +259,7 @@
     main();
   }
   function head(title) {
-    return '<div class="idh"><div class="idt" style="text-align:left;font-weight:700;padding-left:6px">' + esc(title) + '</div><button type="button" class="ib" id="klX" aria-label="Tutup">\u2715</button></div>';
+    return '<div class="idh"><div class="idt" style="text-align:left;font-weight:700;padding-left:6px">' + esc(title) + '</div><button type="button" class="ib" id="klX" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
   }
   var ICO_2 = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="8" rx="1.5"/><rect x="5" y="13" width="14" height="8" rx="1.5"/></svg>';
   var ICO_4 = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>';
@@ -277,7 +277,7 @@
     var nA = 0; ST.sel.forEach(function (id) { (ST.ann[id] || []).forEach(function (a) { if (a.on) nA++; }); });
     var sh = sheetCount();
     el.className = 'klPn' + (ST.col ? ' col' : ''); if (HA.map) { try { HA.map.closePopup(); } catch (x) {} }
-    el.innerHTML = '<div class="klPh" id="klPh"><span class="klGr"></span><b>Kolase blok</b><span class="muted">' + ST.sel.length + '/' + MAX + (ST.sel.length ? ' \u00B7 ' + sh + ' lembar' : '') + '</span><span style="flex:1"></span><button type="button" class="ib" id="klCl" aria-label="' + (ST.col ? 'Buka' : 'Lipat') + '">' + (ST.col ? ICO_BIG : ICO_SML) + '</button><button type="button" class="ib" id="klX" aria-label="Tutup">\u2715</button></div>' +
+    el.innerHTML = '<div class="klPh" id="klPh"><span class="klGr"></span><b>Kolase blok</b><span class="muted">' + ST.sel.length + '/' + MAX + (ST.sel.length ? ' \u00B7 ' + sh + ' lembar' : '') + '</span><span style="flex:1"></span><button type="button" class="ib" id="klCl" aria-label="' + (ST.col ? 'Buka' : 'Lipat') + '">' + (ST.col ? ICO_BIG : ICO_SML) + '</button><button type="button" class="ib" id="klX" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
       '<div class="klBody"><div class="h">BLOK TERPILIH (' + ST.sel.length + '/' + MAX + ')</div><div class="klChips" id="klCh">' +
       (ST.sel.length ? ST.sel.map(function (id) { var b = byId(id); return b ? '<button type="button" class="klChip" data-r="' + esc(id) + '">' + esc(String(b.name)) + ' ✕</button>' : ''; }).join('') : '<span class="muted">Belum ada. Ketuk blok di peta atau cari nama di bawah.</span>') + '</div>' +
       '<input type="search" id="klQ" placeholder="Cari nama blok" value="' + esc(ST.q) + '" autocomplete="off" style="width:100%;margin-top:8px"><div class="klLs" id="klLs">' +
@@ -288,7 +288,7 @@
       '<div class="klBar" id="klBar"><button type="button" class="btn klBt" id="klP" aria-label="' + (c.per === 2 ? '2 blok per lembar, ketuk untuk 4 blok' : '4 blok per lembar, ketuk untuk 2 blok') + '">' + (c.per === 2 ? ICO_2 : ICO_4) + '</button>' +
       '<button type="button" class="btn klBt" id="klAn" aria-label="Titik dan teks"' + (ST.sel.length ? '' : ' disabled') + '>' + ICO_AN + (nA ? '<i>' + nA + '</i>' : '') + '</button>' +
       '<button type="button" class="btn klBt" id="klF" aria-label="Format, ketuk untuk mengganti">' + (c.fmt === 'png' ? 'PNG' : 'PDF') + '</button>' +
-      '<button type="button" class="btn pri klBt klGo" id="klGo"' + (ST.sel.length ? '' : ' disabled') + '>Kirim</button></div>';
+      '<button type="button" class="btn pri klBt klGo" id="klGo"' + (ST.sel.length ? '' : ' disabled') + '><svg class="shI" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.6M8.2 13.2l7.6 4.6"/></svg>Kirim</button></div>';
     $e('klX').onclick = close;
     $e('klPh').onclick = function (e) { if (e.target.closest && e.target.closest('#klX')) return; ST.col = !ST.col; main(); };
     drawHl();

@@ -128,7 +128,7 @@
     function back2() { HA.onSheetClose = null; back(); }
     function dv() { var v = $('tbD').value; if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || v > t) { HA.toast('Tanggal tidak valid'); return ''; } return v; }
     var I = L.tbInfo(b);
-    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TEBANG · BLOK ' + esc(nm).toUpperCase() + '</div><button class="btn" id="tbX" aria-label="Tutup">✕</button></div>' +
+    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TEBANG · BLOK ' + esc(nm).toUpperCase() + '</div><button class="ib" id="tbX" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
       '<div class="muted" style="margin:4px 0">' + esc(I.text) + '</div>' +
       '<label class="calL" style="margin-top:8px">Tanggal<input type="date" id="tbD" max="' + t + '" value="' + t + '"></label>' +
       '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="tbM" style="flex:1;height:46px">Mulai tebang</button><button class="btn pri" id="tbS" style="flex:1;height:46px">Tebang selesai</button></div>' +
@@ -146,7 +146,7 @@
       var d = dv(); if (!d) return;
       if (I.mulai && d < I.mulai) { HA.toast('Tanggal selesai sebelum tanggal mulai'); return; }
       HA.onSheetClose = null;
-      HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TEBANG SELESAI · ' + HA.tandaU.d8(d) + '</div><button class="btn" id="tcX" aria-label="Kembali">✕</button></div>' +
+      HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TEBANG SELESAI · ' + HA.tandaU.d8(d) + '</div><button class="ib" id="tcX" aria-label="Kembali"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
         '<div class="muted" style="margin:4px 0 8px">Pilih kegiatan setelah tebang. Status berubah otomatis dan blok memulai siklus baru (riwayat lama tetap tersimpan).</div>' +
         '<button class="btn pri" id="tcRc" style="width:100%;height:52px">RC · Rawat ulang</button><div class="muted" style="margin:2px 0 10px">Status naik (PC→RC1, RC1→RC2 …). Varietas tetap.</div>' +
         '<button class="btn pri" id="tcPc" style="width:100%;height:52px">PC · Tanam ulang</button><div class="muted" style="margin:2px 0 10px">Status menjadi PC. Varietas dan bulan tanam dikosongkan.</div>');
@@ -185,7 +185,7 @@
     if (!b.conf) { HA.toast('Hanya blok terkonfirmasi yang bisa ditandai'); return; }
     var br = HA.tandaBrush(), A = HzBlok.areaHa(b.pts), nm = String(b.name);
     function back2() { HA.onSheetClose = null; back(); }
-    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TANDAI · ' + esc(br.name).toUpperCase() + '</div><button class="btn" id="tdX" aria-label="Tutup">✕</button></div>' +
+    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TANDAI · ' + esc(br.name).toUpperCase() + '</div><button class="ib" id="tdX" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
       '<div class="muted" style="margin:4px 0 10px">Blok ' + esc(nm) + ' · ' + HA.tandaU.ha(A) + ' ha</div>' +
       '<div class="row" style="gap:8px"><button class="btn pri" id="tdP" style="flex:1;height:56px">Penuh</button><button class="btn pri" id="tdS" style="flex:1;height:56px">Sebagian</button></div>');
     HA.onSheetClose = back2;
@@ -196,7 +196,7 @@
   function sebagian(b, br, A, back, bk) {
     var prev = prevParts(b, br), inf = HA.KM.strip(b, 'U', null, prev), remHa = inf.rem == null ? A : inf.rem, side = lastSisi, pct = '', ha = '';
     function fmt(v, d) { return String(Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).replace('.', ','); }
-    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TANDAI SEBAGIAN · ' + esc(br.name).toUpperCase() + '</div><button class="btn" id="tsX" aria-label="Kembali">✕</button></div>' +
+    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TANDAI SEBAGIAN · ' + esc(br.name).toUpperCase() + '</div><button class="ib" id="tsX" aria-label="Kembali"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
       '<div class="muted" style="margin:4px 0 6px">Blok ' + esc(String(b.name)) + ' · ' + HA.tandaU.ha(A) + ' ha' + (prev.length ? ' · sisa belum ditandai ' + HA.tandaU.ha(remHa) + ' ha' : '') + '</div>' +
       '<div class="rbC" id="tsQ"><button type="button" data-p="25">25%</button><button type="button" data-p="50">50%</button><button type="button" data-p="75">75%</button></div>' +
       '<div class="row" style="gap:8px"><label class="calL" style="flex:1">Persen (%)<input type="number" id="tsP" inputmode="decimal" min="1" max="100" step="1"></label><label class="calL" style="flex:1">Luas (ha)<input type="number" id="tsH" inputmode="decimal" min="0.01" step="0.01"></label></div>' +
@@ -238,7 +238,7 @@
         return '<div class="rbR" data-i="' + i + '"><i style="background:' + inf.col + '"></i><div class="rbT"><b>' + esc(inf.name) + (sn ? ' / ' + esc(sn) : '') + seqTxt(it) + '</b><small>' + U.d8(U.dateOf(it)) + wkTxt(it) + ' · ' + statTxt(it) + (it.note ? ' · ' + esc(String(it.note).slice(0, 30)) : '') + '</small></div><span class="rbG" aria-hidden="true">›</span></div>';
       });
       var rows = rowsA.slice(0, list.length).join(''), prevRows = rowsA.slice(list.length).join(''), ti = HA.lyb ? HA.lyb.tbInfo(b) : null;
-      HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">RIWAYAT · ' + esc(b.name) + '</div><button class="btn" id="rbOk" aria-label="Tutup">\u2715</button></div>' +
+      HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">RIWAYAT · ' + esc(b.name) + '</div><button class="ib" id="rbOk" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
         (ti && (ti.mulai || ti.cy) ? '<div class="muted" style="margin:2px 0 4px">' + esc(ti.text) + '</div>' : '') +
         (ord.length ? sum + chips + '<div class="rbL">' + rows + '</div>' : '<div class="muted" style="padding:12px 2px">' + (b.cy ? 'Belum ada riwayat di siklus ini.' : 'Belum ada riwayat. Tanda yang disimpan di blok ini akan muncul di sini.') + '</div>') +
         (prevL.length ? '<details class="rbPv"><summary>Siklus sebelumnya (' + prevL.length + ')</summary><div class="rbL">' + prevRows + '</div></details>' : '') +

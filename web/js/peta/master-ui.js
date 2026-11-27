@@ -82,7 +82,7 @@
       $('pkList').querySelectorAll('[data-u]').forEach(function (b) { b.onclick = function () { use(b.getAttribute('data-u')); }; });
     }
     function use(id) { var m = mById(id); closeSheet(); if (m) cb(m); }
-    openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1">' + esc(title) + '</div><button class="ib" id="pkX" aria-label="Tutup">'+'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'+'</button></div><div class="muted" style="margin:2px 0 8px">Ketuk nama untuk membuka bagian di bawahnya, tombol Pakai untuk memilih.</div><div id="pkList"></div>');
+    openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1">' + esc(title) + '</div><button class="ib" id="pkX" aria-label="Tutup">'+'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'+'</button></div><div class="muted" style="margin:2px 0 8px">Ketuk nama untuk membuka bagian di bawahnya, tombol Pakai untuk memilih.</div><div id="pkList"></div>');
     $('pkX').onclick = closeSheet; draw();
   }
   HA.pickMaster = pickMaster;
@@ -302,7 +302,7 @@
     var ms = masters(); ms.forEach(function (m, i) { if (m.id == null) m.id = Date.now() + i; });
     if (!mById(PS.sel)) PS.sel = ms.length ? ms[0].id : null;
     var m = mById(PS.sel), mem = m ? members(m) : null;
-    openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1">CETAK</div><button class="ib" id="pmX" aria-label="Tutup">'+'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'+'</button></div>' +
+    openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1">CETAK</div><button class="ib" id="pmX" aria-label="Tutup">'+'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'+'</button></div>' +
       '<div class="seg" id="pmMode" style="margin:6px 0 10px"><button data-m="trip">Trip</button><button data-m="master" class="on">Master</button><button data-m="laporan">Laporan</button></div>' +
       (ms.length ? tplRow() + '<div class="plist"><div class="h">MASTER</div>' + ms.map(function (x) {
         var mm = members(x), n = mm.in.length + mm.man.length;

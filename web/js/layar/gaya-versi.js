@@ -20,7 +20,7 @@
   // ---- panel gaya
   function panelHtml() {
     var g = cur(), cc = HA.tandaBrush(), base = cc && cc.color ? cc.color : '#ff9800';
-    return '<div class="fgH"><b>Ketuk isi</b><button type="button" id="fgX" aria-label="Tutup">✕</button></div>' +
+    return '<div class="fgH"><b>Ketuk isi</b><button type="button" class="ib" id="fgX" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
       '<div class="fgR"><span>Cakupan</span><div class="seg" id="fgSc"><button data-v="blok"' + (!fgArea ? ' class="on"' : '') + '>Blok penuh</button><button data-v="area"' + (fgArea ? ' class="on"' : '') + '>Area gambar</button></div></div>' +
       '<div class="fgR"><span>Gaya</span><div class="seg" id="fgM"><button data-v=""' + (!g.m ? ' class="on"' : '') + '>Ikut kategori</button><button data-v="isi"' + (g.m === 'isi' ? ' class="on"' : '') + '>Isi</button><button data-v="tepi"' + (g.m === 'tepi' ? ' class="on"' : '') + '>Garis tepi</button></div></div>' +
       '<div class="fgR"><span>Tebal tepi</span><input type="number" id="fgW" min="1" max="12" step="1" value="' + (g.w || '') + '" placeholder="kategori"><span>Warna</span><input type="color" id="fgC" value="' + (g.col || base) + '"><button type="button" class="btn" id="fgC0">Ikut kategori</button></div>' +

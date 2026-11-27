@@ -209,7 +209,7 @@
   }
 
   // ---------- tombol lokasi saya (tropong) ----------
-  var LOC_SVG = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg>';
+  var LOC_SVG = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/></svg>';
   function locStop(m) {
     var st = m && m._loc; if (!st) return;
     if (st.id !== null) { try { navigator.geolocation.clearWatch(st.id); } catch (e) {} st.id = null; }

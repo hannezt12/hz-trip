@@ -329,7 +329,7 @@
   function mk() {
     var w = $('spMapWrap'); if (!w || $('spLay')) return;
     var b = document.createElement('button'); b.className = 'locbtn'; b.id = 'spLay'; b.setAttribute('aria-label', 'Lapisan berkas');
-    b.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>';
+    b.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l9 4.8-9 4.8-9-4.8z"/><path d="M3 12l9 4.8 9-4.8"/><path d="M3 16.7l9 4.8 9-4.8"/></svg>';
     b.onclick = panel; w.appendChild(b);
   }
   mk();

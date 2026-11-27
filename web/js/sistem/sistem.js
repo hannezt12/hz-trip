@@ -281,7 +281,7 @@
     { k: 'latar', t: 'Perekaman latar belakang', s: function () { return native ? ((S.bg && S.battFree) ? 'Siap' : 'Perlu diatur') : 'Mode uji'; } },
     { k: 'ikon', t: 'Ikon tanda titik', s: function () { var i = S.settings.ikon; return 'Huruf ' + ((i && i.h) || 'A') + ' · ' + ((i && i.p) || 'bulat') + ' · dinyalakan lewat tombol Tanda di Ukur/Walking'; } },
     { k: 'tampil', t: 'Tampilan', s: function () { return { dark: 'Tema gelap', light: 'Tema terang', auto: 'Ikuti sistem' }[S.settings.theme || 'dark']; } },
-    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.27.24'; } }
+    { k: 'tentang', t: 'Tentang', s: function () { return 'by Yohanes div2 · Versi 0.27.25'; } }
   ];
   // Versi simpanan master: pilih master dulu (bila lebih dari satu), lalu buka daftar versinya
   HA.vmPick = function () {
@@ -289,7 +289,7 @@
     if (!HA.VM) { toast('Fitur belum tersedia'); return; }
     if (!ms.length) { toast('Belum ada master'); return; }
     if (ms.length === 1) { HA.VM.open(ms[0], function () {}); return; }
-    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">VERSI SIMPANAN · PILIH MASTER</div><button class="btn" id="vpX" aria-label="Tutup">\u2715</button></div>' +
+    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">VERSI SIMPANAN · PILIH MASTER</div><button class="ib" id="vpX" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
       ms.map(function (m, i) { return '<button class="btn" data-i="' + i + '" style="width:100%;margin-top:8px;height:48px">' + esc(m.name) + '</button>'; }).join(''));
     $('vpX').onclick = function () { HA.closeSheet(); };
     $('sheet').querySelectorAll('button[data-i]').forEach(function (b) { b.onclick = function () { var m = ms[+b.getAttribute('data-i')]; HA.closeSheet(); HA.VM.open(m, function () {}); }; });
