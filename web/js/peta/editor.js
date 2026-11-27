@@ -157,7 +157,7 @@
     if (E.tool === 'ln' || E.tool === 'pg') h += '<button type="button" class="btn" data-a="dun"' + (E.draft.length ? '' : ' disabled') + '>Urung titik</button><button type="button" class="btn" data-a="dx"' + (E.draft.length ? '' : ' disabled') + '>Batal</button><button type="button" class="btn pri" data-a="dok"' + (E.draft.length >= (E.tool === 'pg' ? 3 : 2) ? '' : ' disabled') + '>Selesai</button>';
     else if (E.tool === 'sel' && E.sel != null) {
       var o = E.objs[E.sel];
-      h += '<button type="button" class="btn" data-a="pr">Properti</button>' + (o && o.k !== 'p' ? '<button type="button" class="btn" data-a="dv"' + (E.vi != null ? '' : ' disabled') + '>Hapus titik</button>' : '') + '<button type="button" class="btn edDel" data-a="do">Hapus</button>';
+      h += '<button type="button" class="btn" data-a="pr">Properti</button>' + (o && o.k !== 'p' ? '<button type="button" class="btn danger" data-a="dv"' + (E.vi != null ? '' : ' disabled') + '>Hapus titik</button>' : '') + '<button type="button" class="btn edDel" data-a="do">Hapus</button>';
     } else if (E.tool === 'pt' || E.tool === 'tx') h += '<span class="edHint">Ketuk peta untuk menaruh ' + (E.tool === 'tx' ? 'teks' : 'titik') + '</span>';
     else h += '<span class="edHint">Ketuk objek untuk memilih' + (E.objs.length ? '' : ', atau pilih alat untuk mulai') + '</span>';
     $('edBar').innerHTML = h + '</div>';

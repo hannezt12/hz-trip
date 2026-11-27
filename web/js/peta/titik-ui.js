@@ -140,7 +140,7 @@
       '<label class="ukDt" style="display:block">Nama<input type="text" id="tkNm" maxlength="40" placeholder="' + esc(code(t)) + '" value="' + esc(t.nm || '') + '" style="width:100%"></label>' +
       '<label class="ukDt" style="display:block">Catatan<textarea id="tkN" rows="3" style="width:100%" maxlength="300">' + esc(t.note || '') + '</textarea></label>' +
       '<label class="ukDt">Tanggal<input type="date" id="tkD" value="' + t.date + '" max="' + S.today + '"></label>' +
-      '<div class="row" style="margin-top:12px"><button class="btn" id="tkDl" style="flex:1;height:50px;color:var(--r)">Hapus</button><button class="btn pri" id="tkOk" style="flex:1;height:50px">Simpan</button></div>');
+      '<div class="row" style="margin-top:12px"><button class="btn danger" id="tkDl" style="flex:1;height:50px">Hapus</button><button class="btn pri" id="tkOk" style="flex:1;height:50px">Simpan</button></div>');
     function out() { if (back) back(); }
     function keep() { t.nm = $('tkNm').value.trim(); t.note = $('tkN').value.trim(); var d = $('tkD').value; if (/^\d{4}-\d{2}-\d{2}$/.test(d)) t.date = d; }
     $('tkX').onclick = function () { closeSheet(); out(); };

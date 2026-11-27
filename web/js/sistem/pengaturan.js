@@ -107,7 +107,7 @@
       var k = typeOf(u);
       return '<div class="unit"><span>' + esc(u) + ' <span class="chip ' + (k === 'Kerja' ? 'k' : 'p') + '">' + k + '</span></span>' +
         '<button class="btn sm" data-type="' + i + '">Jadi ' + (k === 'Kerja' ? 'Pribadi' : 'Kerja') + '</button>' +
-        (S.settings.units.length > 1 ? '<button class="btn sm" data-del="' + i + '">Hapus</button>' : '') + '</div>';
+        (S.settings.units.length > 1 ? '<button class="btn sm danger" data-del="' + i + '">Hapus</button>' : '') + '</div>';
     }).join('');
     renderUnitCard();
     $('splitSel').value = String(S.settings.splitSec);

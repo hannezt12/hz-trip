@@ -815,7 +815,7 @@
       '<div class="row" style="margin-top:6px;gap:6px"><button class="btn" id="bePbE" style="flex:1;display:none">Atur garis</button></div><div class="muted" id="bePbI" style="margin-top:4px"></div>' +
       '<div class="row" id="bePbR" style="margin-top:6px;gap:6px;display:none"><button class="btn" id="bePbD" style="flex:1">Arah sisi B</button><button class="btn" id="bePbS" style="flex:1">Samakan arah</button></div>' +
       '<textarea id="beT" rows="2" maxlength="200" placeholder="Catatan (varietas, R&D, dll.)" style="margin-top:8px;width:100%">' + esc(b.note || '') + '</textarea>' +
-      '<div class="row" style="margin-top:10px;gap:6px"><button class="btn" id="beD2" style="flex:1;color:var(--r)">Hapus</button></div></div>');
+      '<div class="row" style="margin-top:10px;gap:6px"><button class="btn danger" id="beD2" style="flex:1">Hapus</button></div></div>');
     if (inMap) { $('scrim').classList.remove('on'); $('sheet').classList.add('cmp'); }
     $('beMo').onclick = function () { var m = $('beMore'), on = !m.classList.contains('on'); m.classList.toggle('on', on); $('beMo').textContent = on ? 'Lainnya ▴' : 'Lainnya ▾'; if (on) $('sheet').scrollTop = $('sheet').scrollHeight; setTimeout(function () { fitBlockVisible(b, true); }, 60); };
     function live() { saveSettings(); drawBlocks(); if (HA.DM.pop && HA.DM.popId === b.id) openBlockPop(b); if (S.settings.rowOn) drawRows(); }
@@ -889,7 +889,7 @@
     var listHtml = '<div class="row" style="gap:6px"><input type="text" id="bkQ" placeholder="Cari no blok (mis. 12 BS)" value="' + esc(S.blkQ || '') + '"><button class="btn sm" id="bkQb">Cari</button></div>' +
       (fl.length ? '<div id="bkList" style="margin-top:8px"></div>' +
         '<div class="row" style="margin-top:10px;gap:6px;align-items:center"><button class="btn sm" id="bkPv"' + (pg ? '' : ' disabled') + '>‹</button><div class="muted" style="flex:1;text-align:center">Hal ' + (pg + 1) + ' / ' + pages + ' · ' + fl.length + ' blok</div><button class="btn sm" id="bkNx"' + (pg < pages - 1 ? '' : ' disabled') + '>›</button></div>' +
-        (bl.filter(isScanBlk).length ? '<button class="btn" id="bkScan" style="width:100%;margin-top:12px;color:var(--r)">Hapus blok hasil deteksi (' + bl.filter(isScanBlk).length + ')</button>' : '')
+        (bl.filter(isScanBlk).length ? '<button class="btn danger" id="bkScan" style="width:100%;margin-top:12px">Hapus blok hasil deteksi (' + bl.filter(isScanBlk).length + ')</button>' : '')
         : '<div class="card muted">' + (bl.length ? 'Tidak ada yang cocok.' : 'Belum ada.') + '</div>');
     box.innerHTML = '<div class="card"><div class="muted">' + (bl.length ? bl.length + ' blok · ' + set + ' sudah diatur arahnya · ' + conf + ' terkonfirmasi' : 'Belum ada blok.') + '</div></div>' +
       (S.settings.shiftBackup ? '<div class="card"><div class="muted">Blok terakhir digeser. Posisi lama masih tersimpan.</div><button class="btn" id="shUn" style="width:100%;margin-top:8px">Urungkan geser terakhir</button></div>' : '') +

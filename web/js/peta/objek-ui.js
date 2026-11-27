@@ -155,7 +155,7 @@
     }
     function draw2() {
       openSheet('<div class="grab"></div><div class="bth"><div class="st">' + (nw ? 'JENIS BARU' : 'EDIT JENIS') + '</div><button class="btn pri" id="jeOk">Simpan</button></div><div id="jeB">' + body() + '</div>' +
-        (nw ? '' : '<button class="btn" id="jeDel" style="width:100%;margin-top:10px;color:var(--r)">Hapus jenis</button>') + '<button class="btn" id="jeBk" style="width:100%;margin-top:8px">Batal</button>');
+        (nw ? '' : '<button class="btn danger" id="jeDel" style="width:100%;margin-top:10px">Hapus jenis</button>') + '<button class="btn" id="jeBk" style="width:100%;margin-top:8px">Batal</button>');
       $('jeN').oninput = function () { d.name = this.value; };
       $('jeT').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-v]'); if (b) { d.t = b.getAttribute('data-v'); keep(); } };
       $('sheet').querySelectorAll('[data-c]').forEach(function (e) { e.onclick = function () { d.col = e.getAttribute('data-c'); keep(); }; });
@@ -245,7 +245,7 @@
       '<div class="muted" style="margin:6px 0">' + BENTUK[ob.t] + ' · ' + esc(sizeTxt(ob)) + '</div>' + (ob.note ? '<div class="card">' + esc(ob.note) + '</div>' : '<div class="muted">Tanpa catatan.</div>') +
       '<button class="btn" id="ioK" style="width:100%;margin-top:10px">Ke peta</button>' +
       '<div class="row" style="gap:6px;margin-top:8px"><button class="btn" id="ioE" style="flex:1">Catatan / jenis</button><button class="btn" id="ioB" style="flex:1">Ubah bentuk</button></div>' +
-      '<button class="btn" id="ioD" style="width:100%;margin-top:8px;color:var(--r)">Hapus objek</button>');
+      '<button class="btn danger" id="ioD" style="width:100%;margin-top:8px">Hapus objek</button>');
     $('ioX').onclick = closeSheet;
     $('ioK').onclick = function () { closeSheet(); needMap(function () { var b = bb(ob.pts); if (ob.t === 'pt') HA.map.setView(ob.pts[0], Math.max(HA.map.getZoom(), 18)); else HA.map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: [50, 50], maxZoom: 19 }); }); };
     $('ioE').onclick = function () { noteSheet(ob); };

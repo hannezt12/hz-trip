@@ -234,7 +234,7 @@
     HA.KM && HA.KM.show && HA.KM.show(dt);
     var bl = []; parts.forEach(function (p) { if (p.b && bl.indexOf(p.b) < 0 && p.b.conf) bl.push(p.b); });
     openSheet('<div class="grab"></div><div class="st">Walking tersimpan</div><div class="muted" style="margin:6px 0 12px">' + nt + ' tanda' + (nd ? ' · ' + nd + ' draf (buka lagi lewat tile Walking)' : '') + '</div>' +
-      '<div class="row"><button class="btn" id="wkBg" style="flex:1;height:50px"' + (nt ? '' : ' disabled') + '>Bagikan</button><button class="btn" id="wkHp" style="flex:1;height:50px;color:var(--r)">Hapus</button><button class="btn pri" id="wkX" style="flex:1;height:50px">Tutup</button></div>');
+      '<div class="row"><button class="btn" id="wkBg" style="flex:1;height:50px"' + (nt ? '' : ' disabled') + '>Bagikan</button><button class="btn danger" id="wkHp" style="flex:1;height:50px">Hapus</button><button class="btn pri" id="wkX" style="flex:1;height:50px">Tutup</button></div>');
     $('wkX').onclick = closeSheet;
     $('wkBg').onclick = function () { closeSheet(); if (HA.BT && HA.BT.share && bl.length) HA.BT.share(bl); };
     $('wkHp').onclick = function () {
@@ -295,7 +295,7 @@
     var d = HA.tandaData(), cat = null;
     pvShow([{ ring: x.ring, label: x.label, draf: false }]); fit(x.ring);
     openSheet('<div class="grab"></div><div class="st">Draf ' + esc((x.bn || 'Area') + ' · bagian ' + x.label) + '</div><div class="muted" style="margin:4px 0 8px">' + ha(areaLL(x.ring)) + ' · ' + esc(x.date) + '. Pilih kategori lalu Simpan.</div>' + chips(d.cats, 0) +
-      '<div class="row" style="margin-top:12px"><button class="btn" id="wkNo" style="flex:1;height:50px">Kembali</button><button class="btn" id="wkHp" style="flex:1;height:50px;color:var(--r)">Hapus</button><button class="btn pri" id="wkYes" style="flex:1;height:50px">Simpan</button></div>');
+      '<div class="row" style="margin-top:12px"><button class="btn" id="wkNo" style="flex:1;height:50px">Kembali</button><button class="btn danger" id="wkHp" style="flex:1;height:50px">Hapus</button><button class="btn pri" id="wkYes" style="flex:1;height:50px">Simpan</button></div>');
     HA.onSheetClose = pvClear;
     bindChips($('sheet'), function (row, c) { cat = c; });
     $('wkNo').onclick = function () { HA.onSheetClose = null; pvClear(); drafList(); };

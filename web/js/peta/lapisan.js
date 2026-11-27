@@ -292,7 +292,7 @@
       '<button class="btn" id="lmB" style="width:100%;margin-top:6px">Salin ke tanda per blok…</button>' +
       '<button class="btn" id="lmK" style="width:100%;margin-top:6px">Ekspor KML</button>' +
       '<button class="btn" id="lmG" style="width:100%;margin-top:6px">Ekspor GeoJSON</button>' +
-      '<button class="btn" id="lmD" style="width:100%;margin-top:14px;color:var(--bad,#e57373)">Hapus lapisan ini</button>');
+      '<button class="btn danger" id="lmD" style="width:100%;margin-top:14px">Hapus lapisan ini</button>');
     $('lmX').onclick = panel;
     $('lmE').onclick = function () { HA.closeSheet(); if (HA.ED) HA.ED.open(x.id); };
     $('lmZ').onclick = function () { HA.closeSheet(); if (x.bb && HA.SP.map) HA.SP.map.fitBounds([[x.bb[0], x.bb[1]], [x.bb[2], x.bb[3]]], { padding: [30, 30], maxZoom: 19 }); };

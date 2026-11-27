@@ -403,7 +403,7 @@
     var cur = tplCur(), dirty = tplDirty();
     return '<div class="h">TEMPLATE</div><div class="row" style="gap:6px"><select id="pmTpl" style="flex:1;min-width:0">' +
       [tplBy('std')].concat(tplList()).map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === cur ? ' selected' : '') + '>' + esc(x.name) + (x.id === cur && dirty ? ' (diubah)' : '') + '</option>'; }).join('') +
-      '</select><button class="btn sm" id="pmTpS">Simpan baru</button></div><div class="row" style="gap:6px;margin-top:6px"><button class="btn sm" id="pmTpU" style="flex:1"' + (cur === 'std' || !dirty ? ' disabled' : '') + '>Perbarui</button><button class="btn sm" id="pmTpD" style="flex:1"' + (cur === 'std' ? ' disabled' : '') + '>Hapus</button></div>';
+      '</select><button class="btn sm" id="pmTpS">Simpan baru</button></div><div class="row" style="gap:6px;margin-top:6px"><button class="btn sm" id="pmTpU" style="flex:1"' + (cur === 'std' || !dirty ? ' disabled' : '') + '>Perbarui</button><button class="btn sm danger" id="pmTpD" style="flex:1"' + (cur === 'std' ? ' disabled' : '') + '>Hapus</button></div>';
   }
   function tplNameSheet(back, done) {
     openSheet('<div class="grab"></div><div class="st">SIMPAN TEMPLATE</div><div class="muted" style="margin:6px 0">Menyimpan setelan cetak sekarang: isi PDF, lapisan, keterangan, dan tata letak.</div><input type="text" id="tpNm" maxlength="30" placeholder="Nama template, mis. A3 tiga tabel" style="width:100%"><button class="btn pri" id="tpOk" style="width:100%;margin-top:10px;height:48px">Simpan</button><button class="btn" id="tpNo" style="width:100%;margin-top:8px">Batal</button>');

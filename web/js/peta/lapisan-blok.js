@@ -213,7 +213,7 @@
       '<button class="btn pri" id="ldA" style="width:100%;margin-top:10px">+ Tambah ' + (l.mode === 'sym' ? 'status' : 'jenis') + '</button>' +
       (l.mode === 'sym' ? '<div class="muted" style="margin-top:6px">Urutan dipakai tombol Naik status (PC → RC1 → RC2 ...).</div>' : '') +
       (l.mode === 'sym' ? '<div class="h" style="margin-top:10px">UKURAN SIMBOL DI CETAK (×)</div><input type="number" id="ldSk" min="0.5" max="5" step="0.1" inputmode="decimal" value="' + symK() + '" style="width:100%"><div class="muted">1 = ukuran dasar; 1,5 = bawaan. Berlaku untuk semua simbol status.</div>' : '') +
-      (l.custom ? '<button class="btn" id="ldDel" style="width:100%;margin-top:8px;color:var(--r)">Hapus lapisan ini</button>' : '') +
+      (l.custom ? '<button class="btn danger" id="ldDel" style="width:100%;margin-top:8px">Hapus lapisan ini</button>' : '') +
       '<button class="btn" id="ldBk" style="width:100%;margin-top:8px">Kembali</button>');
     $('ldX').onclick = closeSheet; $('ldBk').onclick = home;
     $('ldA').onclick = function () { itemEdit(l, null); };
@@ -246,7 +246,7 @@
     }
     function draw() {
       openSheet('<div class="grab"></div><div class="bth"><div class="st">' + (nw ? 'TAMBAH' : 'EDIT') + ' · ' + esc(l.name.toUpperCase()) + '</div><button class="btn pri" id="ieS2">Simpan</button></div><div id="ieB">' + body() + '</div>' +
-        (nw ? '' : '<button class="btn" id="ieDel" style="width:100%;margin-top:10px;color:var(--r)">Hapus</button>') + '<button class="btn" id="ieBk" style="width:100%;margin-top:8px">Batal</button>');
+        (nw ? '' : '<button class="btn danger" id="ieDel" style="width:100%;margin-top:10px">Hapus</button>') + '<button class="btn" id="ieBk" style="width:100%;margin-top:8px">Batal</button>');
       wire();
     }
     function refreshPv() { var e = document.querySelector('#ieB .lbPv'); if (e) e.innerHTML = prevSvg(l, d) + ' <b>' + esc(d.name || '(nama)') + '</b>'; }

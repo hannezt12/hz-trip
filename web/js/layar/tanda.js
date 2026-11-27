@@ -686,8 +686,8 @@
     var rb = '<div class="tdRb">' + d.cats.map(function (c) { return '<button type="button" class="tdrb' + (c.id === CL.cat ? ' on' : '') + '" data-cat="' + c.id + '" style="background:' + c.col + ';color:' + inkOn(c.col) + '">' + esc(c.name) + '</button>'; }).join('') + '</div>';
     var lpH = '';
     if (CL.lp === CL.cat) {
-      lpH = '<div class="card tdLp"><div class="tdLr"><i class="cdot" style="background:' + cc.col + '"></i><b>' + esc(cc.name) + '</b><button type="button" class="btn sm" id="lpEd">Edit</button><button type="button" class="btn sm" id="lpDl">Hapus</button></div>' +
-        (cc.subs.length ? cc.subs.map(function (s) { return '<div class="tdLr tdLs2"><i class="cdot" style="background:' + (s.col || cc.col) + '"></i><span>' + esc(s.name || 'Sub') + '</span><button type="button" class="btn sm" data-se="' + s.id + '">Edit</button><button type="button" class="btn sm" data-sd="' + s.id + '">Hapus</button></div>'; }).join('') : '<div class="muted" style="padding:4px 0">Belum ada sub-kategori.</div>') + '</div>';
+      lpH = '<div class="card tdLp"><div class="tdLr"><i class="cdot" style="background:' + cc.col + '"></i><b>' + esc(cc.name) + '</b><button type="button" class="btn sm" id="lpEd">Edit</button><button type="button" class="btn sm danger" id="lpDl">Hapus</button></div>' +
+        (cc.subs.length ? cc.subs.map(function (s) { return '<div class="tdLr tdLs2"><i class="cdot" style="background:' + (s.col || cc.col) + '"></i><span>' + esc(s.name || 'Sub') + '</span><button type="button" class="btn sm" data-se="' + s.id + '">Edit</button><button type="button" class="btn sm danger" data-sd="' + s.id + '">Hapus</button></div>'; }).join('') : '<div class="muted" style="padding:4px 0">Belum ada sub-kategori.</div>') + '</div>';
     }
     openSheet('<div class="grab"></div>' + rb + '<div class="muted tdHint">Tahan lama sebuah kategori untuk Edit atau Hapus</div>' + lpH + circlesHtml(cc, CL.sub) +
       '<div class="h" style="margin-top:10px">BLOK (' + ents.length + ')</div>' +
@@ -818,7 +818,7 @@
       '<div class="h" style="margin-top:10px">TANGGAL</div><div class="bnm"><input type="date" id="tiDt" value="' + dateOf(it) + '"></div>' +
       '<div class="h" style="margin-top:10px">CATATAN</div><div class="bnm"><input type="text" id="tiNt" maxlength="120" value="' + esc(it.note || '') + '"></div>' +
       '<div class="opts" style="margin-top:10px"><button class="opt" id="tiZ">Zoom ke sini</button>' + (it.t !== 'pt' ? '<button class="opt" id="tiE">Edit bentuk</button>' : '<button class="opt" id="tiE">Geser titik</button>') + (it.t === 'ln' && it.pts.length >= 3 ? '<button class="opt" id="tiV">Jadikan area</button>' : '') + (it.t === 'pg' ? '<button class="opt" id="tiV">Jadikan garis</button>' : '') + '</div>' +
-      '<button class="btn" id="tiD" style="width:100%;margin-top:10px">Hapus</button><button class="btn pri" id="tiX" style="width:100%;margin-top:8px">Selesai</button>');
+      '<button class="btn danger" id="tiD" style="width:100%;margin-top:10px">Hapus</button><button class="btn pri" id="tiX" style="width:100%;margin-top:8px">Selesai</button>');
     function keep() { it.name = $('tiN').value.trim(); it.note = $('tiNt').value.trim(); var dv = $('tiDt').value; if (/^\d{4}-\d{2}-\d{2}$/.test(dv)) it.date = dv; touch(it); save(); drawAll(); }
     $('tiX').onclick = function () { keep(); closeSheet(); };
     $('tiCa').onchange = function () { keep(); it.cat = $('tiCa').value; it.sub = null; it.col = null; touch(it); save(); drawAll(); itemSheet(it); };
@@ -861,7 +861,7 @@
       (sm.length ? '<div class="h">RINGKASAN</div>' + sm.map(function (r) { return '<div class="tdli"><i class="tdd" style="background:' + r.col + '"></i><b>' + esc(r.name) + '</b> <span class="muted">· ' + r.n + ' · ' + esc(sumLine(r)) + '</span></div>'; }).join('') +
         '<div class="h" style="margin-top:12px">TANDA</div><div id="tdIt">' + src.slice().reverse().map(function (it) { var st = statOf(it); return '<button class="tdli tdb" data-i="' + it.id + '"><i class="tdd" style="background:' + colOf(it) + '"></i><b>' + esc(it.name || typeName(it.t)) + '</b> <span class="muted">· ' + esc(statText(it, st).replace('\n', ' · ')) + '</span></button>'; }).join('') + '</div>' : '<div class="card muted">Belum ada tanda. Pilih alat lalu ketuk peta.</div>') +
       '<div class="opts" style="margin-top:12px"><button class="opt" id="tlK">Ekspor KML</button><button class="opt" id="tlI">Impor KML</button><button class="opt" id="tlP">Cetak PDF</button></div>' +
-      (src.length ? '<button class="btn" id="tlD" style="width:100%;margin-top:10px">Hapus semua tanda</button>' : '') + '<button class="btn pri" id="tlX" style="width:100%;margin-top:8px">Tutup</button>');
+      (src.length ? '<button class="btn danger" id="tlD" style="width:100%;margin-top:10px">Hapus semua tanda</button>' : '') + '<button class="btn pri" id="tlX" style="width:100%;margin-top:8px">Tutup</button>');
     $('tlX').onclick = closeSheet;
     $('sheet').querySelectorAll('#tdIt [data-i]').forEach(function (e) { e.onclick = function () { var it = data().items.filter(function (x) { return x.id === e.getAttribute('data-i'); })[0]; if (it) { closeSheet(); fitItem(it); itemSheet(it); } }; });
     $('tlK').onclick = function () { if (!src.length) { toast('Belum ada tanda'); return; } closeSheet(); saveFile('Marking_HZTrip_' + stamp() + '.kml', textB64(buildKml(src)), 'application/vnd.google-earth.kml+xml'); };
