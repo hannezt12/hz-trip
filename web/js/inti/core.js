@@ -257,6 +257,7 @@
       return true;
     }
     if ($('drawer').classList.contains('on')) { $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); if (S.dwBack && S.view !== 'spido') { S.dwBack = false; go('spido'); } return true; }
+    if (S.view === 'set' && S.setPage) { HA.backSet(); return true; } // v0.27.24: sub-laman Pengaturan -> daftar Pengaturan dulu
     if (HA.mapBack && HA.mapBack()) return true;
     if (HA.ukurBack && HA.ukurBack()) return true;
     if (HA.tandaBack && HA.tandaBack()) return true;
