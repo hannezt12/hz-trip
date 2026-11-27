@@ -275,8 +275,8 @@
     var tripTxt = '';
     if (o.tripId) { var x = S.hTrips.filter(function (y) { return y.t.id === o.tripId; })[0]; if (x) tripTxt = ' <span class="muted">· ' + T.hm(x.t.start) + ' – ' + T.hm(x.t.end) + '</span>'; }
     var today = T.ymd(Date.now());
-    openSheet('<div class="grab"></div><div class="st">CETAK LAPORAN</div>' +
-      (o.tripId || !HA.openPrintMaster ? '' : '<div class="seg" id="pmMode" style="margin:6px 0 10px"><button data-m="trip" class="on">Trip</button><button data-m="master">Master</button><button data-m="laporan">Laporan</button></div>') + '<div class="plist">' +
+    openSheet('<div class="pmTop"><div class="grab"></div><div class="bth"><div class="st" style="flex:1">CETAK</div><button class="ib" id="pmX" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
+      (o.tripId || !HA.openPrintMaster ? '' : '<div class="seg" id="pmMode" style="margin:6px 0 10px"><button data-m="trip" class="on">Trip</button><button data-m="master">Master</button><button data-m="laporan">Laporan</button></div>') + '</div><div class="plist">' +
       '<div class="h">CAKUPAN</div>' +
       (o.tripId ? '<label><input type="radio" name="pscope" value="trip" checked> Satu trip' + tripTxt + '</label>' : '') +
       '<label><input type="radio" name="pscope" value="hari"' + (o.tripId ? '' : ' checked') + '> Satu hari</label>' +
@@ -285,16 +285,14 @@
       '<div style="margin:2px 0 4px"><div class="muted">Bulan (untuk rekap bulanan)</div><input type="month" id="pMonth" value="' + today.slice(0, 7) + '" max="' + today.slice(0, 7) + '"></div>' +
       '<div class="pgrid" style="margin-top:4px"><div><div class="muted">Dari / tanggal</div><input type="date" id="pFrom" value="' + P.day + '" max="' + today + '"></div>' +
       '<div><div class="muted">Sampai</div><input type="date" id="pTo" value="' + P.day + '" max="' + today + '"></div></div>' +
-      '<div id="pFilters"><div class="h">UNIT</div><div class="pgrid" id="pUnits">' + S.settings.units.map(function (u, i) { return '<label><input type="checkbox" data-u="' + i + '" checked> ' + esc(u) + '</label>'; }).join('') + '</div>' +
-      '<div class="h">LABEL</div><div class="pgrid"><label><input type="checkbox" data-l="Kerja" checked> Kerja</label><label><input type="checkbox" data-l="Pribadi" checked> Pribadi</label></div><div class="muted" style="margin-top:4px">Dua-duanya dicentang: laporan dipisah per label (halaman dan kecepatan maksimal sendiri-sendiri), plus ringkasan akhir.</div></div>' +
+      '<div id="pFilters"><details data-pd="unit"><summary>UNIT \u00B7 <span id="pUnN" style="margin-left:4px"></span></summary><div class="pgrid" id="pUnits">' + S.settings.units.map(function (u, i) { return '<label><input type="checkbox" data-u="' + i + '" checked> ' + esc(u) + '</label>'; }).join('') + '</div></details></div>' +
       '<div class="h">ISI TAMBAHAN</div>' +
       '<label><input type="checkbox" id="pSum" checked> Ringkasan di bawah tabel</label>' +
       '<label><input type="checkbox" id="pCol" checked> Warnai kecepatan maks (kuning dan merah)</label>' +
       '<label><input type="checkbox" id="pKc"' + (S.settings.kmlContour !== false ? ' checked' : '') + '> KML: sertakan kontur (area kecil, butuh data ketinggian)</label></div>' +
-      '<div class="muted" id="pInfo" style="margin-top:10px">Menghitung…</div>' +
-      '<div class="row" style="margin-top:10px"><button class="btn pri" id="pPdf" style="flex:1.3;height:52px">PDF</button><button class="btn" id="pKml" style="flex:1;height:52px">KML</button></div>' +
-      '<button class="btn" id="pClose" style="width:100%;margin-top:8px">Tutup</button>');
-    $('pClose').onclick = closeSheet;
+      '<div class="pmBot"><div class="muted" id="pInfo" style="margin-bottom:8px">Menghitung…</div>' +
+      '<div class="row" style="gap:8px"><button class="btn pri" id="pPdf" style="flex:1.3;height:52px">PDF</button><button class="btn" id="pKml" style="flex:1;height:52px">KML</button></div></div>');
+    $('pmX').onclick = closeSheet;
     if ($('pmMode')) $('pmMode').onclick = function (e) { var bt = e.target.closest && e.target.closest('button[data-m]'); if (bt && bt.getAttribute('data-m') === 'master') { closeSheet(); HA.openPrintMaster(); } else if (bt && bt.getAttribute('data-m') === 'laporan' && HA.openLaporan) { closeSheet(); HA.openLaporan(); } };
     $('pKc').onchange = function () { S.settings.kmlContour = this.checked; saveSettings(); };
     $('sheet').onchange = onPrintChange;
@@ -331,6 +329,7 @@
     $('pSum').disabled = P.scope === 'bulan';
     $('pFilters').style.opacity = P.scope === 'trip' ? '.4' : '1';
     $('pInfo').textContent = 'Menghitung…';
+    if ($('pUnN')) $('pUnN').textContent = P.units.length + '/' + S.settings.units.length + ' dipilih';
     collect(P).then(function (ds) {
       var n = 0, km = 0;
       ds.forEach(function (d) { d.trips.forEach(function (x) { n++; km += x.t.km; }); });

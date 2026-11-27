@@ -1204,3 +1204,13 @@ body.klPick #map .leaflet-interactive{pointer-events:none!important}
 
 /* v0.27.25 ikon: tombol Kirim/Bagikan berikon */
 .btn .shI{vertical-align:-4px;margin-right:6px}
+
+/* v0.27.27 Cetak: bilah atas dan bawah sticky, daftar master bertingkat */
+.pmTop{position:sticky;top:-0.625rem;z-index:5;background:var(--card);margin:-0.625rem -1rem 0;padding:0.625rem 1rem 0.5rem}
+.pmBot{position:sticky;bottom:calc(-1.25rem - env(safe-area-inset-bottom,0px));z-index:5;background:var(--card);border-top:1px solid var(--line);margin:0.5rem -1rem calc(-1.25rem - env(safe-area-inset-bottom,0px));padding:0.5rem 1rem calc(1.25rem + env(safe-area-inset-bottom,0px))}
+.pmMr{display:flex;align-items:center;gap:0.75rem;min-height:2.75rem}
+.pmMg .pmRd{flex:none;min-height:2.75rem;display:flex;align-items:center}
+.pmMt{flex:1;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;background:none;border:0;color:var(--tx);font:inherit;min-height:2.75rem;cursor:pointer;padding:0}
+.pmMt svg{flex:none;transition:transform .15s}
+.pmMt.on svg{transform:rotate(90deg)}
+.pmMt svg{stroke:currentColor}

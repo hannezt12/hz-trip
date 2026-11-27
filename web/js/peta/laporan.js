@@ -141,8 +141,8 @@
     if (!mById(PS.sel)) PS.sel = ms.length ? ms[0].id : null;
     var m = mById(PS.sel), list = m ? scopeList(m) : [], cl = cats();
     if (PS.k1 && PS.k1 === PS.k2) PS.k2 = '';
-    var h = '<div class="grab"></div><div class="st">CETAK</div><div class="seg" id="pmMode" style="margin:6px 0 10px"><button data-m="trip">Trip</button><button data-m="master">Master</button><button data-m="laporan" class="on">Laporan</button></div>';
-    if (!ms.length) { HA.openSheet(h + '<div class="card muted" style="margin-top:6px">Belum ada master. Buat di Data peta > Master: gambar poligon kawasan, lalu kembali ke sini.</div><button class="btn" id="pmX" style="width:100%;margin-top:8px">Tutup</button>'); $('pmX').onclick = HA.closeSheet; wireMode(); return; }
+    var h = '<div class="pmTop"><div class="grab"></div><div class="bth"><div class="st" style="flex:1">CETAK</div><button class="ib" id="pmX" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><div class="seg" id="pmMode" style="margin:6px 0 10px"><button data-m="trip">Trip</button><button data-m="master">Master</button><button data-m="laporan" class="on">Laporan</button></div></div>';
+    if (!ms.length) { HA.openSheet(h + '<div class="card muted" style="margin-top:6px">Belum ada master. Buat di Data peta > Master: gambar poligon kawasan, lalu kembali ke sini.</div>'); $('pmX').onclick = HA.closeSheet; wireMode(); return; }
     var thn = PS.jn === 'tahunan';
     h += '<div class="plist"><div class="h">MASTER</div>' + ms.map(function (x) { return '<label><input type="radio" name="pmSel" value="' + esc(String(x.id)) + '"' + (String(x.id) === String(PS.sel) ? ' checked' : '') + '> ' + esc(x.name) + '</label>'; }).join('') +
       '<div class="h">JENIS LAPORAN</div><div class="seg" id="pmJn"><button data-j="bulanan"' + (!thn ? ' class="on"' : '') + '>Bulanan</button><button data-j="tahunan"' + (thn ? ' class="on"' : '') + '>Tahunan</button></div>' +
@@ -162,7 +162,7 @@
       '<div class="h">DRAFT LAPORAN</div><div class="row" style="gap:6px"><select id="pmDr" style="flex:1">' + (S.settings.lpDrafts || []).map(function (d) { return '<option value="' + d.id + '">' + esc(d.name) + '</option>'; }).join('') + '</select><button class="btn" id="pmDrL">Muat</button><button class="btn" id="pmDrS">Simpan</button><button class="btn danger" id="pmDrD">Hapus</button></div>' +
       '<div class="muted" style="margin-top:4px">Draft hanya menyimpan pengaturan laporan. Data selalu yang terbaru.</div>' +
       '<button class="btn" id="pmPos" style="width:100%;margin-top:10px">Atur posisi teks &amp; legenda</button>' +
-      '<button class="btn" id="pmPrev" style="width:100%;margin-top:8px">Preview</button><button class="btn pri" id="pmGo" style="width:100%;margin-top:8px;height:52px">Cetak PDF</button></div><button class="btn" id="pmX" style="width:100%;margin-top:8px">Tutup</button>';
+      '<button class="btn" id="pmPrev" style="width:100%;margin-top:8px">Preview</button><button class="btn pri" id="pmGo" style="width:100%;margin-top:8px;height:52px">Cetak PDF</button></div>';
     HA.openSheet(h);
     wire(m);
   }

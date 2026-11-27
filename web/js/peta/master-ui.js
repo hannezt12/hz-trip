@@ -298,16 +298,29 @@
     $('sheet').querySelectorAll('[data-kc]').forEach(function (e) { e.onchange = function () { k.cols[e.getAttribute('data-kc')] = e.checked; saveSettings(); }; });
   }
   function pdOpen(k) { return PS.open && PS.open[k] ? ' open' : ''; }
+  // v0.27.27: daftar master tingkat atas; sub master di dalam akordion; hanya SATU boleh dipilih
+  function mRow(x, depth) {
+    var mm = members(x), n = mm.in.length + mm.man.length, kids = kidsOf(x.id), on = String(x.id) === String(PS.sel);
+    var info = ' <span class="muted">\u00B7 ' + n + ' blok \u00B7 ' + fmtHa(haOf(mm.in.concat(mm.man))) + ' ha' + (mm.pend.length ? ' \u00B7 ' + mm.pend.length + ' perlu diatur' : '') + '</span>';
+    var rd = '<input type="radio" name="pmSel" value="' + esc(String(x.id)) + '"' + (on ? ' checked' : '') + '>';
+    var pad = depth ? ' style="padding-left:' + (depth * 20) + 'px"' : '';
+    if (!kids.length) return '<label class="pmMr"' + pad + '>' + rd + ' ' + esc(x.name) + info + '</label>';
+    var open = !!(PS.mo && PS.mo[x.id]);
+    return '<div class="pmMr pmMg"' + pad + '><label class="pmRd">' + rd + '</label><button type="button" class="pmMt' + (open ? ' on' : '') + '" data-mt="' + esc(String(x.id)) + '"><span>' + esc(x.name) + info + '</span>' + HA.CHEV + '</button></div>' +
+      (open ? kids.map(function (k) { return mRow(k, depth + 1); }).join('') : '');
+  }
+  function mTree() {
+    PS.mo = PS.mo || {};
+    if (PS.moInit !== String(PS.sel)) { PS.moInit = String(PS.sel); var a = mById(PS.sel); a = a ? parentOf(a) : null; var g = 0; while (a && g++ < 10) { PS.mo[a.id] = true; a = parentOf(a); } }
+    return kidsOf(null).map(function (x) { return mRow(x, 0); }).join('');
+  }
   function printPanel() {
     var ms = masters(); ms.forEach(function (m, i) { if (m.id == null) m.id = Date.now() + i; });
     if (!mById(PS.sel)) PS.sel = ms.length ? ms[0].id : null;
     var m = mById(PS.sel), mem = m ? members(m) : null;
-    openSheet('<div class="grab"></div><div class="bth"><div class="st" style="flex:1">CETAK</div><button class="ib" id="pmX" aria-label="Tutup">'+'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'+'</button></div>' +
-      '<div class="seg" id="pmMode" style="margin:6px 0 10px"><button data-m="trip">Trip</button><button data-m="master" class="on">Master</button><button data-m="laporan">Laporan</button></div>' +
-      (ms.length ? tplRow() + '<div class="plist"><div class="h">MASTER</div>' + ms.map(function (x) {
-        var mm = members(x), n = mm.in.length + mm.man.length;
-        return '<label><input type="radio" name="pmSel" value="' + esc(String(x.id)) + '"' + (String(x.id) === String(PS.sel) ? ' checked' : '') + '> ' + esc(x.name) + ' <span class="muted">· ' + n + ' blok · ' + fmtHa(haOf(mm.in.concat(mm.man))) + ' ha' + (mm.pend.length ? ' · ' + mm.pend.length + ' perlu diatur' : '') + '</span></label>';
-      }).join('') +
+    openSheet('<div class="pmTop"><div class="grab"></div><div class="bth"><div class="st" style="flex:1">CETAK</div><button class="ib" id="pmX" aria-label="Tutup">'+'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'+'</button></div>' +
+      '<div class="seg" id="pmMode" style="margin:6px 0 10px"><button data-m="trip">Trip</button><button data-m="master" class="on">Master</button><button data-m="laporan">Laporan</button></div></div>' +
+      (ms.length ? tplRow() + '<div class="plist"><div class="h">MASTER</div>' + mTree() +
         '<div class="h">FORMAT (pilih satu)</div><div class="seg" id="pmFmt"><button data-f="pdf"' + (PS.fmt === 'pdf' ? ' class="on"' : '') + '>PDF</button><button data-f="kml"' + (PS.fmt === 'kml' ? ' class="on"' : '') + '>KML</button><button data-f="data"' + (PS.fmt === 'data' ? ' class="on"' : '') + '>Data blok</button></div>' +
         (PS.fmt === 'pdf' ? '<details data-pd="isi"' + pdOpen('isi') + '><summary>ISI PDF</summary><label><input type="checkbox" id="pmMap"' + (PS.map ? ' checked' : '') + '> Peta (satu lembar, ber-geo)</label><label><input type="checkbox" id="pmLuas"' + (PS.luas ? ' checked' : '') + '> Tampilkan luas di peta</label><label><input type="checkbox" id="pmList"' + (PS.list ? ' checked' : '') + '> Daftar blok lengkap</label><label><input type="checkbox" id="pmRj"' + (PS.rj !== false ? ' checked' : '') + '> Jalan bantu</label><label><input type="checkbox" id="pmRd"' + (PS.rd !== false ? ' checked' : '') + '> Drainase</label></details>' +
           (HA.lyb && (HA.lyb.all().some(function (l) { return l.items.length; }) || (HA.obj && HA.obj.objs().length)) ? '<details data-pd="lap"' + pdOpen('lap') + '><summary>LAPISAN BLOK (layer PDF)</summary>' + HA.lyb.all().filter(function (l) { return l.items.length; }).map(function (l) { return '<label><input type="checkbox" data-lyo="' + l.id + '"' + (l.on ? ' checked' : '') + '> ' + esc(l.name) + '</label>'; }).join('') + (HA.obj && HA.obj.objs().length ? '<label><input type="checkbox" data-lyo="__obj"' + (HA.obj.on() ? ' checked' : '') + '> Objek (' + HA.obj.objs().length + ')</label>' : '') + '</details>' : '') +
@@ -323,7 +336,7 @@
         '<div class="muted" id="pmInfo" style="margin-top:8px">' + (mem ? (mem.in.length + mem.man.length) + ' blok akan dicetak' + (mem.pend.length ? ' · ' + mem.pend.length + ' blok perbatasan belum diputuskan' : '') : '') + '</div>' +
         '<button class="btn" id="pmAtur" style="width:100%;margin-top:6px">Atur blok perbatasan</button><button class="btn" id="pmVer" style="width:100%;margin-top:6px">Versi simpanan master</button>' +
         (PS.fmt === 'pdf' && PS.map ? '<button class="btn" id="pmPosB" style="width:100%;margin-top:6px">Atur posisi teks blok</button>' : '') +
-        (PS.fmt === 'pdf' ? '<button class="btn" id="pmPrev" style="width:100%;margin-top:8px">Atur tata letak</button>' : '') + '<button class="btn pri" id="pmGo" style="width:100%;margin-top:8px;height:52px">' + (PS.fmt === 'data' ? 'Kirim data blok' : 'Cetak ' + (PS.fmt === 'pdf' ? 'PDF' : 'KML')) + '</button>'
+        '<div class="pmBot"><div class="row" style="gap:8px">' + (PS.fmt === 'pdf' ? '<button class="btn" id="pmPrev" style="flex:1;height:52px">Atur tata letak</button>' : '') + '<button class="btn pri" id="pmGo" style="flex:1.3;height:52px">' + (PS.fmt === 'data' ? '<svg class="shI" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.6M8.2 13.2l7.6 4.6"/></svg>Kirim data blok' : 'Cetak ' + (PS.fmt === 'pdf' ? 'PDF' : 'KML')) + '</button></div></div>'
         : '<div class="card muted" style="margin-top:6px">Belum ada master. Buat di Data peta > Master: gambar poligon kawasan, lalu kembali ke sini untuk mencetak.</div>') +
       '');
     $('pmX').onclick = closeSheet;
@@ -331,6 +344,7 @@
     ktWire(printPanel); tplWire(m);
     $('pmMode').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-m]'); if (!b) return; var md = b.getAttribute('data-m'); if (md === 'trip') { closeSheet(); HA.openPrint({ day: S.hDay }); } else if (md === 'laporan' && HA.openLaporan) { closeSheet(); HA.openLaporan(); } };
     if (!ms.length) return;
+    $('sheet').querySelectorAll('[data-mt]').forEach(function (b) { b.onclick = function () { var id = b.getAttribute('data-mt'); PS.mo = PS.mo || {}; PS.mo[id] = !PS.mo[id]; var sc = $('sheet').scrollTop; printPanel(); $('sheet').scrollTop = sc; }; });
     $('sheet').querySelectorAll('input[name=pmSel]').forEach(function (r) { r.onchange = function () { PS.sel = r.value; var tid = (S.settings.mTplBy || {})[String(r.value)], tt = tid && tplBy(tid); if (tt) { applySnap(tt.v); S.settings.mTplCur = tt.id; saveSettings(); toast('Template "' + tt.name + '" dipakai'); } printPanel(); }; });
     $('pmFmt').onclick = function (e) { var b = e.target.closest && e.target.closest('button[data-f]'); if (b) { PS.fmt = b.getAttribute('data-f'); printPanel(); } };
     if ($('pmPp')) { $('pmPp').onchange = function () { PS.paper = this.value; }; $('pmOr').onchange = function () { PS.ori = this.value; }; $('pmSk').onchange = function () { PS.oSk = this.checked; }; $('pmIn').onchange = function () { PS.oIn = this.checked; }; $('pmLg').onchange = function () { PS.oLg = this.checked; }; }
