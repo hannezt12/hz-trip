@@ -5,16 +5,37 @@
   if (!HA || !HA.ok || !HA.BT) return;
   function $(i) { return document.getElementById(i); }
   function esc(s) { return HA.esc(s); }
-  var BR = HA.BRiw = {}, filt = {}, hl = null;
+  var BR = HA.BRiw = {}, filt = {}, hl = null, SISI = { U: 'Utara', S: 'Selatan', T: 'Timur', B: 'Barat' }, lastSisi = 'U';
   function subName(it) {
     var c = it.cat ? HA.tandaCatOf(it.cat) : null; if (!c || !it.sub) return '';
     var s = (c.subs || []).filter(function (x) { return x.id === it.sub; })[0]; return s ? (s.name || '') : '';
   }
+  // ---- v0.27.28: progres blok kumulatif per kategori (tanda penuh = 100%, bagian menyambung sampai 100%)
+  function ordAsc(x, y) { var a = BR.ordKey(x), c = BR.ordKey(y); return a < c ? -1 : a > c ? 1 : 0; }
+  function serInfo(b, cat, sub) {
+    var A = HzBlok.areaHa(b.pts), its = HA.BT.itemsOf(b).filter(function (z) { return z.t === 'pg' && z.cat === cat && (z.sub || null) === (sub || null); }), ser = [], tot = 0, map = {};
+    its.sort(ordAsc);
+    its.forEach(function (z, i) {
+      if (z.full || !z.part) { map[z.id] = { cum: 100, prev: 0, rings: [], i: i }; ser = []; tot = 0; return; }
+      var rings = ser.map(function (q) { return q.pts; }), prev = tot;
+      ser.push(z); tot += (z.part.pct != null ? z.part.pct : HzBlok.areaHa(z.pts) / A * 100);
+      var cum = Math.min(100, tot);
+      if (tot >= 98) { cum = 100; ser = []; tot = 0; }
+      map[z.id] = { cum: cum, prev: prev, rings: rings, i: i };
+    });
+    return { its: its, map: map, A: A, endCum: tot, endRings: ser.map(function (q) { return q.pts; }) };
+  }
+  function cumPct(it) {
+    if (it.t !== 'pg' || !it.bid || !(it.full || it.part)) return null;
+    var b = HA.blockById ? HA.blockById(it.bid) : null; if (!b || !b.pts) return it.part ? it.part.pct : (it.full ? 100 : null);
+    var m = serInfo(b, it.cat, it.sub).map[it.id]; return m ? Math.round(m.cum * 10) / 10 : null;
+  }
+  function fmt1(v) { return String(Math.round(v * 10) / 10).replace('.', ','); }
   function statTxt(it) {
     var U = HA.tandaU, st = HA.tandaStat(it), a = [];
     if (it.t === 'pt') return 'titik';
     if (it.t === 'ln') return U.ribu(st.m) + ' m garis';
-    a.push(U.ha(st.ha) + ' ha'); if (it.part) a.push(it.part.pct + '% blok'); if (st.lm) a.push(U.ribu(st.lm) + ' m lajur');
+    a.push(U.ha(st.ha) + ' ha'); var cp = cumPct(it); if (cp != null) a.push('blok ' + String(cp).replace('.', ',') + '%'); if (st.lm) a.push(U.ribu(st.lm) + ' m lajur');
     return a.join(' · ');
   }
   function flash(it) {
@@ -48,22 +69,23 @@
     for (var i = 0; i < same.length; i++) if (same[i].id === it.id) return { n: i + 1, of: same.length };
     return null;
   };
+  BR.confirmChange = function (a, b, c) { confirmChange(a, b, c); };
   BR.fmtTs = fmtTs; BR.ordKey = ordKey; BR.detail = function (it, back) { detail(it, back); };
   function wkTxt(it) { return it.wk ? ' \u00B7 ' + it.wk : ''; }
   function seqTxt(it) { var q = BR.seq(it); return q ? ' ke-' + q.n : ''; }
   // ---- detail satu tanda
   function detail(it, back) {
     var U = HA.tandaU, inf = HA.tandaCatInfo(it), sn = subName(it);
-    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TANDA · ' + esc(inf.name) + (sn ? ' / ' + esc(sn) : '') + '</div><button class="btn pri" id="rdOk">Kembali</button></div>' +
+    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TANDA · ' + esc(inf.name) + (sn ? ' / ' + esc(sn) : '') + '</div><button class="ib" id="rdOk" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
       '<div class="muted" style="margin:4px 0 4px">' + U.d8(U.dateOf(it)) + wkTxt(it) + ' · ' + statTxt(it) + seqTxt(it).replace(' ke-', ' · kegiatan ke-') + '</div>' + (it.note ? '<div style="margin:2px 0 4px">' + esc(it.note) + '</div>' : '') + '<div class="muted" style="font-size:11px;margin-bottom:10px">dibuat ' + fmtTs(it.ts) + (it.mod && it.mod !== it.ts ? ' \u00B7 diubah ' + fmtTs(it.mod) : '') + '</div>' +
-      '<div class="rdG"><button class="btn" id="rdLh">Lihat di peta</button><button class="btn" id="rdKt">Ubah kategori</button>' + (it.t === 'pg' ? '<button class="btn" id="rdGy">Ubah gaya</button>' : '') + '<button class="btn" id="rdTg">Ubah tanggal</button><button class="btn" id="rdWk">Ubah waktu</button><button class="btn" id="rdNt">Catatan</button><button class="btn danger" id="rdDl">Hapus tanda</button></div>');
+      '<div class="rdG"><button class="btn" id="rdLh">Lihat di peta</button><button class="btn" id="rdKt">Ubah kategori</button>' + (it.t === 'pg' ? '<button class="btn" id="rdLu">Ubah luasan</button><button class="btn" id="rdGy">Ubah gaya</button>' : '') + '<button class="btn" id="rdTg">Ubah tanggal dan waktu</button><button class="btn" id="rdNt">Catatan</button><button class="btn danger" id="rdDl">Hapus tanda</button></div>');
     HA.onSheetClose = back;
     $('rdOk').onclick = function () { HA.closeSheet(); };
     $('rdLh').onclick = function () { lihat(it); };
     $('rdKt').onclick = function () { pickCat(it, function () { detail(it, back); }); };
     if ($('rdGy')) $('rdGy').onclick = function () { HA.BRiw.gaya(it, function () { detail(it, back); }); };
-    $('rdTg').onclick = function () { pickDate(it, function () { detail(it, back); }); };
-    $('rdWk').onclick = function () { pickWk(it, function () { detail(it, back); }); };
+    if ($('rdLu')) $('rdLu').onclick = function () { luasan(it, function () { detail(it, back); }); };
+    $('rdTg').onclick = function () { pickDT(it, function () { detail(it, back); }); };
     $('rdNt').onclick = function () { pickNote(it, function () { detail(it, back); }); };
     $('rdDl').onclick = function () {
       HA.onSheetClose = null;
@@ -92,17 +114,8 @@
   // konfirmasi sebelum perubahan pada tanda yang sudah ada
   function confirmChange(txt, yes, no) {
     HA.onSheetClose = null;
-    HA.askConfirm('Simpan perubahan?', txt, 'Simpan', yes);
+    HA.askConfirm('Simpan perubahan?', txt, 'Simpan', yes, true);
     var cn = $('cfNo'); if (cn) cn.onclick = no;
-  }
-  function pickWk(it, back) {
-    HA.openSheet('<div class="grab"></div><div class="st">UBAH WAKTU</div><div class="rbC" id="pwC" style="margin-top:10px">' + ['', 'Pagi', 'Siang', 'Sore', 'Malam'].map(function (w) { return '<button type="button" data-w="' + w + '"' + ((it.wk || '') === w ? ' class="on"' : '') + '>' + (w || 'Tanpa waktu') + '</button>'; }).join('') + '</div><div class="row" style="gap:8px;margin-top:12px"><button class="btn" id="pwX" style="flex:1">Batal</button></div>');
-    HA.onSheetClose = back;
-    $('pwX').onclick = function () { HA.closeSheet(); };
-    $('pwC').onclick = function (e) {
-      var w = e.target.getAttribute && e.target.getAttribute('data-w'); if (w == null) return;
-      confirmChange('Waktu diubah ke ' + (w || 'tanpa waktu') + '.', function () { if (w) it.wk = w; else delete it.wk; it.mod = Date.now(); persist(); back(); }, function () { pickWk(it, back); });
-    };
   }
   function pickNote(it, back) {
     HA.openSheet('<div class="grab"></div><div class="st">CATATAN TANDA</div><input type="text" id="pnT" maxlength="120" placeholder="mis. Urea 200 kg/ha" value="' + esc(it.note || '') + '" style="width:100%;margin-top:10px"><div class="row" style="gap:8px;margin-top:12px"><button class="btn" id="pnX" style="flex:1">Batal</button><button class="btn pri" id="pnY" style="flex:1">Simpan</button></div>');
@@ -110,14 +123,58 @@
     $('pnX').onclick = function () { HA.closeSheet(); };
     $('pnY').onclick = function () { var v = $('pnT').value.trim(); confirmChange(v ? 'Catatan: ' + esc(v) : 'Catatan dihapus.', function () { it.note = v; it.mod = Date.now(); persist(); back(); }, function () { pickNote(it, back); }); };
   }
-  function pickDate(it, back) {
-    var U = HA.tandaU;
-    HA.openSheet('<div class="grab"></div><div class="st">UBAH TANGGAL</div><label class="calL" style="margin-top:8px">Tanggal tanda<input type="date" id="pdD" max="' + HA.S.today + '" value="' + U.dateOf(it) + '"></label><div class="row" style="gap:8px;margin-top:12px"><button class="btn" id="pdX" style="flex:1">Batal</button><button class="btn pri" id="pdY" style="flex:1">Simpan</button></div>');
+  function pickDT(it, back) {
+    var U = HA.tandaU, w = it.wk || '';
+    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">UBAH TANGGAL DAN WAKTU</div><button class="ib" id="pdX" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><label class="calL" style="margin-top:8px">Tanggal tanda<input type="date" id="pdD" max="' + HA.S.today + '" value="' + U.dateOf(it) + '"></label>' +
+      '<div class="muted" style="margin:10px 0 4px">Waktu</div><div class="rbC" id="pwC">' + ['', 'Pagi', 'Siang', 'Sore', 'Malam'].map(function (x) { return '<button type="button" data-w="' + x + '"' + (w === x ? ' class="on"' : '') + '>' + (x || 'Tanpa waktu') + '</button>'; }).join('') + '</div>' +
+      '<div class="row" style="gap:8px;margin-top:12px"><button class="btn" id="pdN" style="flex:1;height:50px">Batal</button><button class="btn pri" id="pdY" style="flex:1;height:50px">Simpan</button></div>');
     HA.onSheetClose = back;
-    $('pdX').onclick = function () { HA.closeSheet(); };
+    $('pdX').onclick = function () { HA.closeSheet(); }; $('pdN').onclick = function () { HA.closeSheet(); };
+    $('pwC').onclick = function (e) { var x = e.target.getAttribute && e.target.getAttribute('data-w'); if (x == null) return; w = x; $('pwC').querySelectorAll('button').forEach(function (z) { z.className = z.getAttribute('data-w') === x ? 'on' : ''; }); };
     $('pdY').onclick = function () {
       var v = $('pdD').value; if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || v > HA.S.today) { HA.toast('Tanggal tidak valid'); return; }
-      confirmChange('Tanggal diubah ke ' + U.d8(v) + '.', function () { it.date = v; it.mod = Date.now(); persist(); back(); }, function () { pickDate(it, back); });
+      confirmChange('Tanggal ' + U.d8(v) + ' \u00B7 waktu ' + (w || 'tanpa waktu') + '.', function () { it.date = v; if (w) it.wk = w; else delete it.wk; it.mod = Date.now(); persist(); back(); }, function () { pickDT(it, back); });
+    };
+  }
+  // ---- Ubah luasan (progres kumulatif) satu tanda
+  function luasan(it, back) {
+    var b = HA.blockById ? HA.blockById(it.bid) : null;
+    if (!b || !b.pts) { HA.toast('Blok tanda ini tidak ditemukan'); return; }
+    var info = serInfo(b, it.cat, it.sub), me = info.map[it.id]; if (!me) { HA.toast('Tanda ini tidak punya luasan blok'); return; }
+    var nx = info.its[me.i + 1]; if (nx && nx.part && !nx.full) { HA.toast('Ada bagian lebih baru di kategori ini. Ubah tanda yang paling akhir dulu.'); return; }
+    var A = info.A, prevCum = me.prev, prevHa = A * prevCum / 100, side = lastSisi, pct = '', ha = '';
+    function fm(v, d) { return String(Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).replace('.', ','); }
+    HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">UBAH LUASAN</div><button class="ib" id="lwX" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
+      '<div class="muted" style="margin:4px 0 6px">Blok ' + esc(String(b.name)) + ' \u00B7 ' + HA.tandaU.ha(A) + ' ha \u00B7 sekarang blok ' + fm(me.cum, 1) + '%' + (prevCum > 0 ? ' \u00B7 sebelumnya ' + fm(prevCum, 1) + '%' : '') + '</div>' +
+      '<div class="rbC" id="lwQ"><button type="button" data-p="25">25%</button><button type="button" data-p="50">50%</button><button type="button" data-p="75">75%</button><button type="button" data-p="100">100%</button></div>' +
+      '<div class="row" style="gap:8px"><label class="calL" style="flex:1">Progres blok (%)<input type="number" id="lwP" inputmode="decimal" min="1" max="100" step="1"></label><label class="calL" style="flex:1">Luas (ha)<input type="number" id="lwH" inputmode="decimal" min="0.01" step="0.01"></label></div>' +
+      '<div class="muted" style="margin:10px 0 4px">Mulai dari sisi</div><div class="seg" id="lwD">' + ['U', 'S', 'T', 'B'].map(function (k) { return '<button type="button" data-v="' + k + '"' + (k === side ? ' class="on"' : '') + '>' + SISI[k] + '</button>'; }).join('') + '</div>' +
+      '<div class="row" style="gap:8px;margin-top:12px"><button class="btn" id="lwN" style="flex:1;height:50px">Batal</button><button class="btn pri" id="lwY" style="flex:1;height:50px">Simpan</button></div>');
+    HA.onSheetClose = back;
+    $('lwX').onclick = function () { HA.closeSheet(); }; $('lwN').onclick = function () { HA.closeSheet(); };
+    function setP(v) { pct = v; ha = A * v / 100; $('lwP').value = fm(v, 1).replace(',', '.'); $('lwH').value = fm(ha, 2).replace(',', '.'); }
+    $('lwQ').onclick = function (e) { var v = e.target.getAttribute && e.target.getAttribute('data-p'); if (v) setP(+v); };
+    $('lwP').oninput = function () { var v = parseFloat(this.value); if (!(v > 0)) { pct = ''; ha = ''; $('lwH').value = ''; return; } if (v > 100) { v = 100; this.value = '100'; } pct = v; ha = A * v / 100; $('lwH').value = fm(ha, 2).replace(',', '.'); };
+    $('lwH').oninput = function () { var v = parseFloat(this.value); if (!(v > 0)) { pct = ''; ha = ''; $('lwP').value = ''; return; } if (v > A) { v = A; this.value = fm(A, 2).replace(',', '.'); } ha = v; pct = v / A * 100; $('lwP').value = fm(pct, 1).replace(',', '.'); };
+    $('lwD').onclick = function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-v'); if (!k) return; side = lastSisi = k; $('lwD').querySelectorAll('button').forEach(function (x) { x.className = x.getAttribute('data-v') === k ? 'on' : ''; }); };
+    $('lwY').onclick = function () {
+      if (!(ha > 0)) { HA.toast('Isi persen atau luas dulu'); return; }
+      if (pct <= prevCum + 0.05) { HA.toast('Isi lebih besar dari progres sebelumnya (' + fm(prevCum, 1) + '%)'); return; }
+      var toFull = prevCum === 0 && pct >= 99.9, r = null, part = null;
+      if (!toFull) {
+        r = HA.KM.strip(b, side, ha - prevHa, me.rings);
+        if (r.err === 'penuh') { HA.toast('Seluruh blok sudah ditandai kategori ini'); return; }
+        if (r.err) { HA.toast('Gagal menggambar bagian blok'); return; }
+        part = { pct: Math.round(r.ha / A * 1000) / 10, ha: Math.round(r.ha * 100) / 100, sisi: side };
+      }
+      confirmChange('Luasan diubah dari blok ' + fm(me.cum, 1) + '% menjadi ' + fm(toFull ? 100 : pct, 1) + '%' + (toFull ? ' (penuh).' : ' (' + fm(ha, 2) + ' ha) dari sisi ' + SISI[side] + '.'), function () {
+        if (toFull) { it.pts = b.pts.map(function (q) { return [q[0], q[1]]; }); it.full = true; it.fsig = 'full'; delete it.part; }
+        else {
+          it.pts = r.rings[0]; it.full = false; it.fsig = r.rings[0][0][0] + ',' + r.rings[0][0][1]; it.part = part;
+          r.rings.slice(1).forEach(function (ring, n) { var c = JSON.parse(JSON.stringify(it)); c.id = HA.tandaNewId(); c.pts = ring; c.fsig = ring[0][0] + ',' + ring[0][1]; c.ts = Date.now() + n + 1; HA.tandaAdd(c); });
+        }
+        it.mod = Date.now(); persist(); back();
+      }, function () { luasan(it, back); });
     };
   }
 
@@ -168,7 +225,6 @@
   }
 
   // ---- Tandai: Penuh atau Sebagian (persen/ha saling mengisi, mulai dari satu sisi blok)
-  var SISI = { U: 'Utara', S: 'Selatan', T: 'Timur', B: 'Barat' }, lastSisi = 'U';
   function prevParts(b, br) {
     var its = HA.BT.itemsOf(b).filter(function (it) { return it.t === 'pg' && it.cat === br.cat && (it.sub || null) === (br.sub || null); });
     its.sort(function (x, y) { var a = BR.ordKey(x), c = BR.ordKey(y); return a < c ? -1 : a > c ? 1 : 0; });
@@ -194,24 +250,25 @@
     $('tdS').onclick = function () { sebagian(b, br, A, back, function () { tandai(b, back); }); };
   }
   function sebagian(b, br, A, back, bk) {
-    var prev = prevParts(b, br), inf = HA.KM.strip(b, 'U', null, prev), remHa = inf.rem == null ? A : inf.rem, side = lastSisi, pct = '', ha = '';
+    var si = serInfo(b, br.cat, br.sub || null), prev = si.endRings, prevCum = si.endCum, prevHa = A * prevCum / 100, side = lastSisi, pct = '', ha = '';
     function fmt(v, d) { return String(Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).replace('.', ','); }
     HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TANDAI SEBAGIAN · ' + esc(br.name).toUpperCase() + '</div><button class="ib" id="tsX" aria-label="Kembali"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
-      '<div class="muted" style="margin:4px 0 6px">Blok ' + esc(String(b.name)) + ' · ' + HA.tandaU.ha(A) + ' ha' + (prev.length ? ' · sisa belum ditandai ' + HA.tandaU.ha(remHa) + ' ha' : '') + '</div>' +
-      '<div class="rbC" id="tsQ"><button type="button" data-p="25">25%</button><button type="button" data-p="50">50%</button><button type="button" data-p="75">75%</button></div>' +
-      '<div class="row" style="gap:8px"><label class="calL" style="flex:1">Persen (%)<input type="number" id="tsP" inputmode="decimal" min="1" max="100" step="1"></label><label class="calL" style="flex:1">Luas (ha)<input type="number" id="tsH" inputmode="decimal" min="0.01" step="0.01"></label></div>' +
+      '<div class="muted" style="margin:4px 0 6px">Blok ' + esc(String(b.name)) + ' \u00B7 ' + HA.tandaU.ha(A) + ' ha' + (prev.length ? ' \u00B7 progres sebelumnya ' + fmt(prevCum, 1) + '% (' + HA.tandaU.ha(prevHa) + ' ha)' : '') + '</div>' +
+      '<div class="rbC" id="tsQ"><button type="button" data-p="25">25%</button><button type="button" data-p="50">50%</button><button type="button" data-p="75">75%</button><button type="button" data-p="100">100%</button></div>' +
+      '<div class="row" style="gap:8px"><label class="calL" style="flex:1">Progres blok sekarang (%)<input type="number" id="tsP" inputmode="decimal" min="1" max="100" step="1"></label><label class="calL" style="flex:1">Luas (ha)<input type="number" id="tsH" inputmode="decimal" min="0.01" step="0.01"></label></div>' +
       '<div class="muted" style="margin:10px 0 4px">Mulai dari sisi</div><div class="seg" id="tsD">' + ['U', 'S', 'T', 'B'].map(function (k) { return '<button type="button" data-v="' + k + '"' + (k === side ? ' class="on"' : '') + '>' + SISI[k] + '</button>'; }).join('') + '</div>' +
       '<div class="row" style="gap:8px;margin-top:12px"><button class="btn" id="tsN" style="flex:1;height:50px">Batal</button><button class="btn pri" id="tsY" style="flex:1;height:50px">Tandai</button></div>');
     HA.onSheetClose = bk;
     $('tsX').onclick = function () { HA.closeSheet(); }; $('tsN').onclick = function () { HA.closeSheet(); };
-    function setP(v) { pct = v; ha = v === '' ? '' : A * v / 100; $('tsP').value = v === '' ? '' : fmt(v, 1).replace(',', '.'); $('tsH').value = ha === '' ? '' : fmt(ha, 2).replace(',', '.'); }
+    function setP(v) { pct = v; ha = A * v / 100; $('tsP').value = fmt(v, 1).replace(',', '.'); $('tsH').value = fmt(ha, 2).replace(',', '.'); }
     $('tsQ').onclick = function (e) { var v = e.target.getAttribute && e.target.getAttribute('data-p'); if (v) setP(+v); };
     $('tsP').oninput = function () { var v = parseFloat(this.value); if (!(v > 0)) { pct = ''; ha = ''; $('tsH').value = ''; return; } if (v > 100) { v = 100; this.value = '100'; } pct = v; ha = A * v / 100; $('tsH').value = fmt(ha, 2).replace(',', '.'); };
     $('tsH').oninput = function () { var v = parseFloat(this.value); if (!(v > 0)) { pct = ''; ha = ''; $('tsP').value = ''; return; } if (v > A) { v = A; this.value = fmt(A, 2).replace(',', '.'); } ha = v; pct = v / A * 100; $('tsP').value = fmt(pct, 1).replace(',', '.'); };
     $('tsD').onclick = function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-v'); if (!k) return; side = lastSisi = k; $('tsD').querySelectorAll('button').forEach(function (x) { x.className = x.getAttribute('data-v') === k ? 'on' : ''; }); };
     $('tsY').onclick = function () {
       if (!(ha > 0)) { HA.toast('Isi persen atau luas dulu'); return; }
-      var r = HA.KM.strip(b, side, ha, prev);
+      if (pct <= prevCum + 0.05) { HA.toast('Isi lebih besar dari progres sebelumnya (' + fmt(prevCum, 1) + '%)'); return; }
+      var r = HA.KM.strip(b, side, ha - prevHa, prev);
       if (r.err === 'penuh') { HA.toast('Seluruh blok sudah ditandai kategori ini'); return; }
       if (r.err) { HA.toast('Gagal menggambar bagian blok'); return; }
       var part = { pct: Math.round(r.ha / A * 1000) / 10, ha: Math.round(r.ha * 100) / 100, sisi: side };

@@ -881,6 +881,7 @@
   // ---------- deteksi blok dari peta PDF ----------
   function detCfg() { return S.settings.dt || (S.settings.dt = { thr: 190, close: 1, minHa: 1 }); }
   function blockById(id) { var l = blocksList(), i; for (i = 0; i < l.length; i++) if (String(l[i].id) === String(id)) return l[i]; return null; }
+  HA.blockById = blockById;
   function renderBlokTab(box) {
     var bl = blocksList(), cfg = detCfg(), ovs = ovList().map(function (o, i) { return { o: o, i: i }; }).filter(function (x) { return x.o.cal; });
     var conf = bl.filter(function (b) { return b.conf; }).length, set = bl.filter(function (b) { return b.dir != null; }).length;

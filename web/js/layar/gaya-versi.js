@@ -130,10 +130,12 @@
         it.mod = Date.now(); HA.tandaSave(); if (KM.sync) KM.sync(); HA.onSheetClose = null; HA.toast('Gaya asli dikembalikan'); back();
       };
       $('gyY').onclick = function () {
-        var o = {}; if (st.m) o.m = st.m; if (st.w) { o.w = st.w; S.settings.gyLastW = st.w; HA.saveSettings(); } if (st.col) o.col = st.col;
-        if (it.gy0 === undefined) it.gy0 = it.gy ? clone(it.gy) : null; // simpan keadaan sebelum diubah pertama kali
-        if (o.m || o.w || o.col) it.gy = o; else delete it.gy;
-        it.mod = Date.now(); HA.tandaSave(); if (KM.sync) KM.sync(); HA.onSheetClose = null; back();
+        BR.confirmChange('Gaya tanda diubah.', function () {
+          var o = {}; if (st.m) o.m = st.m; if (st.w) { o.w = st.w; S.settings.gyLastW = st.w; HA.saveSettings(); } if (st.col) o.col = st.col;
+          if (it.gy0 === undefined) it.gy0 = it.gy ? clone(it.gy) : null; // simpan keadaan sebelum diubah pertama kali
+          if (o.m || o.w || o.col) it.gy = o; else delete it.gy;
+          it.mod = Date.now(); HA.tandaSave(); if (KM.sync) KM.sync(); HA.onSheetClose = null; back();
+        }, function () { draw(); });
       };
     }
     function keep() { /* nilai disimpan di st sampai Terapkan */ }
