@@ -206,6 +206,7 @@
       }
       if (it.t === 'pt') l = L.circleMarker(it.pts[0], { radius: 8, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1 });
       else if (it.t === 'ln') l = L.polyline(it.pts, { color: col, weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' });
+      else if (HA.tandaNoCat(it) && HA.addHatch) { l = L.polygon(it.pts, { color: '#111', weight: 2.5, fillColor: HA.IVORY, fillOpacity: 0.8 }); }
       else l = L.polygon(it.pts, { color: col, weight: 2.5, fillColor: col, fillOpacity: opOf(it) });
       if (it.name) l.bindTooltip(esc(it.name), { permanent: true, direction: 'center', className: 'mktip' });
       l.on('click', function (ev) {
@@ -215,7 +216,7 @@
         if (TD.selIt && TD.selIt.id === it.id && HA.BT && HA.BT.history) { HA.BT.history([ev.latlng.lat, ev.latlng.lng]); return; }
         selectItem(it);
       });
-      l.addTo(TD.lay);
+      l.addTo(TD.lay); if (it.t === 'pg' && HA.tandaNoCat(it) && HA.addHatch) HA.addHatch(TD.lay, it.pts);
     });
     if (HA.BT && TD.blk) HA.BT.refresh();
   }
@@ -1044,7 +1045,8 @@
   function ck(it) { return it.cat ? it.cat : 'x' + colOf(it).toLowerCase(); }
   function ckName(it) { var c = it.cat ? catOf(it.cat) : null; return c ? c.name : 'Tanpa kategori'; }
   HA.tandaCk = ck; HA.tandaCatKey = ck;
-  HA.tandaCatInfo = function (it) { var c = it.cat ? catOf(it.cat) : null; return { name: c ? c.name : 'Tanpa kategori', col: c ? c.col : colOf(it) }; };
+  HA.tandaCatInfo = function (it) { var c = it.cat ? catOf(it.cat) : null; return { name: c ? c.name : 'Tanpa kategori', col: c ? c.col : colOf(it), nocat: !c }; };
+  HA.tandaNoCat = function (it) { return !(it.cat && catOf(it.cat)); };
   function tabKey(it) { return ck(it) + '|' + (it.sub || '') + '|' + dateOf(it); }
   function tabName(it) { var c = it.cat ? catOf(it.cat) : null; if (!c) return 'Tanpa kategori'; var s = subOf(c, it.sub); return c.name + (s ? ' / ' + s.name : ''); }
   function catIdx(it) { var r = 99, sx = 0; data().cats.forEach(function (c, i) { if (c.id === it.cat) { r = i; if (it.sub) c.subs.forEach(function (s, j) { if (s.id === it.sub) sx = j + 1; }); } }); return r * 100 + sx; }

@@ -284,22 +284,21 @@
       var U = HA.tandaU, all = HA.BT.itemsOf(b).slice();
       all.sort(function (x, y) { var a = BR.ordKey(x), c = BR.ordKey(y); return a < c ? 1 : a > c ? -1 : 0; });
       var cats = {}, ord = [];
-      all.forEach(function (it) { var k = HA.tandaCatKey(it); if (!cats[k]) { var inf = HA.tandaCatInfo(it); cats[k] = { k: k, name: inf.name, col: inf.col, n: 0, last: '' }; ord.push(cats[k]); } var c = cats[k]; c.n++; var d = U.dateOf(it); if (d > c.last) c.last = d; });
+      all.forEach(function (it) { var k = HA.tandaCatKey(it); if (!cats[k]) { var inf = HA.tandaCatInfo(it); cats[k] = { k: k, name: inf.name, col: inf.col, nocat: inf.nocat, n: 0, last: '' }; ord.push(cats[k]); } var c = cats[k]; c.n++; var d = U.dateOf(it); if (d > c.last) c.last = d; });
       if (filt[key] && !cats[filt[key]]) filt[key] = null;
       var f = filt[key], list = f ? all.filter(function (it) { return HA.tandaCatKey(it) === f; }) : all;
       var prevL = b.cy ? HA.BT.itemsOf(b, true).filter(function (it) { return U.dateOf(it) < b.cy; }).sort(function (x, y) { var a = BR.ordKey(x), c = BR.ordKey(y); return a < c ? 1 : a > c ? -1 : 0; }) : [], disp = list.concat(prevL);
-      var sum = ord.map(function (c) { return '<div class="rbS"><i style="background:' + c.col + '"></i><span>' + esc(c.name) + ' ' + c.n + '× · terakhir ' + U.d8(c.last) + '</span></div>'; }).join('');
+      var sum = ord.map(function (c) { return '<div class="rbS">' + (c.nocat ? '<i class="nocat"></i>' : '<i style="background:' + c.col + '"></i>') + '<span>' + esc(c.name) + ' ' + c.n + '× · terakhir ' + U.d8(c.last) + '</span></div>'; }).join('');
       var chips = ord.length > 1 ? '<div class="rbC"><button type="button" data-k=""' + (!f ? ' class="on"' : '') + '>Semua</button>' + ord.map(function (c) { return '<button type="button" data-k="' + esc(c.k) + '"' + (f === c.k ? ' class="on"' : '') + '>' + esc(c.name) + '</button>'; }).join('') + '</div>' : '';
       var rowsA = disp.map(function (it, i) {
         var inf = HA.tandaCatInfo(it), sn = subName(it);
-        return '<div class="rbR" data-i="' + i + '"><i style="background:' + inf.col + '"></i><div class="rbT"><b>' + esc(inf.name) + (sn ? ' / ' + esc(sn) : '') + seqTxt(it) + '</b><small>' + U.d8(U.dateOf(it)) + wkTxt(it) + ' · ' + statTxt(it) + (it.note ? ' · ' + esc(String(it.note).slice(0, 30)) : '') + '</small></div><span class="rbG" aria-hidden="true">›</span></div>';
+        return '<div class="rbR" data-i="' + i + '">' + (inf.nocat ? '<i class="nocat"></i>' : '<i style="background:' + inf.col + '"></i>') + '<div class="rbT"><b>' + esc(inf.name) + (sn ? ' / ' + esc(sn) : '') + seqTxt(it) + '</b><small>' + U.d8(U.dateOf(it)) + wkTxt(it) + ' · ' + statTxt(it) + (it.note ? ' · ' + esc(String(it.note).slice(0, 30)) : '') + '</small></div><span class="rbG" aria-hidden="true">›</span></div>';
       });
       var rows = rowsA.slice(0, list.length).join(''), prevRows = rowsA.slice(list.length).join(''), ti = HA.lyb ? HA.lyb.tbInfo(b) : null;
-      HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">RIWAYAT · ' + esc(b.name) + '</div><button class="ib" id="rbOk" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
+      HA.openSheet('<div class="pmTop"><div class="grab"></div><div class="bth"><div class="st">RIWAYAT · ' + esc(b.name) + '</div><button class="ib" id="rbOk" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>' +
         (ti && (ti.mulai || ti.cy) ? '<div class="muted" style="margin:2px 0 4px">' + esc(ti.text) + '</div>' : '') +
-        (ord.length ? sum + chips + '<div class="rbL">' + rows + '</div>' : '<div class="muted" style="padding:12px 2px">' + (b.cy ? 'Belum ada riwayat di siklus ini.' : 'Belum ada riwayat. Tanda yang disimpan di blok ini akan muncul di sini.') + '</div>') +
-        (prevL.length ? '<details class="rbPv"><summary>Siklus sebelumnya (' + prevL.length + ')</summary><div class="rbL">' + prevRows + '</div></details>' : '') +
-        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="rbTb" style="flex:1">Tebang</button><button class="btn" id="rbFull" style="flex:1">Tandai</button></div>');
+        (ord.length ? sum + chips + '<div class="rbL">' + rows + (prevL.length ? '<details class="rbPv"><summary>Siklus sebelumnya (' + prevL.length + ')</summary>' + prevRows + '</details>' : '') + '</div>' : '<div class="muted" style="padding:12px 2px">' + (b.cy ? 'Belum ada riwayat di siklus ini.' : 'Belum ada riwayat. Tanda yang disimpan di blok ini akan muncul di sini.') + '</div>' + (prevL.length ? '<details class="rbPv"><summary>Siklus sebelumnya (' + prevL.length + ')</summary><div class="rbL">' + prevRows + '</div></details>' : '')) +
+        '<div class="pmBot"><div class="row" style="gap:8px"><button class="btn" id="rbTb" style="flex:1;height:50px">Tebang</button><button class="btn" id="rbFull" style="flex:1;height:50px">Tandai</button></div></div>');
       HA.onSheetClose = onClose || null;
       $('rbOk').onclick = function () { HA.closeSheet(); };
       $('rbFull').onclick = function () { tandai(b, function () { render(); HA.onSheetClose = onClose || null; }); };

@@ -34,6 +34,7 @@
       var gy = HA.gyOf(it), col = gy.col, gar = gy.gar, w = gy.w;
       if (it.t === 'pt') L.circleMarker(it.pts[0], { radius: 8, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1, interactive: false }).addTo(g);
       else if (it.t === 'ln') L.polyline(it.pts, { color: col, weight: w || 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(g);
+      else if (HA.tandaNoCat && HA.tandaNoCat(it) && !gar && HA.addHatch) { L.polygon(it.pts, { color: '#111', weight: 2.5, fillColor: HA.IVORY, fillOpacity: 0.8, interactive: false }).addTo(g); HA.addHatch(g, it.pts); }
       else L.polygon(it.pts, { color: col, weight: gar ? (w || 3) : 2.5, fill: !gar, fillColor: col, fillOpacity: gar ? 0 : opOf(it), interactive: false }).addTo(g);
     });
     var n = list.length, oc = KM.only ? HA.tandaCatOf(KM.only) : null;

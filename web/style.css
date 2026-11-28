@@ -1214,3 +1214,10 @@ body.klPick #map .leaflet-interactive{pointer-events:none!important}
 .pmMt svg{flex:none;transition:transform .15s}
 .pmMt.on svg{transform:rotate(90deg)}
 .pmMt svg{stroke:currentColor}
+
+/* v0.27.29 panel Info blok dan Riwayat, arsir tanpa kategori */
+.blkpop .bf{display:flex;justify-content:flex-end;margin-top:0.375rem}
+.blkpop.fold .bf{display:none}
+.blkpop .ib2.bpBig{width:3.25rem;height:3.25rem;border-radius:0.75rem}
+.rbS i.nocat,.rbR>i.nocat{background:repeating-linear-gradient(45deg,transparent 0 3px,#111 3px 4.5px),repeating-linear-gradient(-45deg,transparent 0 3px,#F2C200 3px 4.5px),#FFFFF0;border:1px solid #111}
+#sheet .rbL{max-height:52vh;overflow-y:auto}
