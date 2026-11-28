@@ -177,7 +177,6 @@
       }).join('') +
       (HA.obj ? '<div class="lbCard"><button type="button" class="lbOpen" id="lbObj"><b>Objek</b><span class="muted">' + HA.obj.jenis().length + ' jenis \u00B7 ' + HA.obj.objs().length + ' objek \u00B7 titik, garis, area</span></button><label class="lbOn"><input type="checkbox" id="lbObjOn"' + (HA.obj.on() ? ' checked' : '') + '> Ikut cetak</label></div>' : '') +
       '<div class="lbCard"><button type="button" class="lbOpen" id="lbBt"><b>Bulan tanam</b><span class="muted">12 warna bulan \u00B7 garis tepi \u00B7 ' + btW() + ' pt</span></button><label class="lbOn"><input type="checkbox" id="lbBtOn"' + (btOn() ? ' checked' : '') + '> Ikut cetak</label></div>' +
-      '<div class="lbCard"><div class="lbOpen" style="cursor:default"><b>2.5D</b><span class="muted">Peta pastel: blok berwarna menurut umur, bendera kategori, papan tanda titik. Di mode Peta, butuh master induk.</span></div><label class="lbOn"><input type="checkbox" id="lbDio"' + (S.settings.relief ? ' checked' : '') + '> Tampilkan</label></div>' +
       '<div class="lbCard"><button type="button" class="lbOpen" id="lbUm"><b>Umur tanam</b><span class="muted">' + umLim().join(' / ') + ' bulan \u00B7 5 kelompok warna</span></button></div>' +
       '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="lbCx" style="flex:1">Ekspor CSV</button><button class="btn" id="lbCi" style="flex:1">Impor CSV</button></div>' +
       '<button class="btn" id="lbNew" style="width:100%;margin-top:8px">+ Lapisan baru</button>');
@@ -187,10 +186,6 @@
     if ($('lbObj')) { $('lbObj').onclick = function () { HA.obj.open(); }; $('lbObjOn').onchange = function () { S.settings.objOn = this.checked; save(); }; }
     $('lbBt').onclick = btOpen; $('lbBtOn').onchange = function () { S.settings.btOn = this.checked; save(); };
     $('lbUm').onclick = umOpen;
-    $('lbDio').onchange = function () {
-      S.settings.relief = this.checked; if (this.checked && S.settings.mapMode === 'sat') S.settings.mapMode = 'osm';
-      save(); if (HA.setTiles) HA.setTiles(); HA.toast(this.checked ? 'Tema 2.5D menyala (lihat di Lintasan)' : 'Tema 2.5D dimatikan');
-    };
     $('lbCx').onclick = csvOut; $('lbCi').onclick = csvIn;
     $('lbNew').onclick = newLap;
   }

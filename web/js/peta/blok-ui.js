@@ -206,6 +206,7 @@
   };
   function drawBlocks() {
     if (!HA.map) return;
+    if (HA.dioOn && HA.dioOn() && HA.dioGroundRefresh) HA.dioGroundRefresh();
     if (HA.DM.blkLayer) { HA.map.removeLayer(HA.DM.blkLayer); HA.DM.blkLayer = null; }
     var all = blocksList();
     if (S.settings.blkOn === false || !all.length) return;
@@ -227,7 +228,7 @@
     var bd = HA.map.getBounds(), vis = all.filter(function (b) { return bbHit(b, bd); }), g = L.layerGroup(), cc = HA.map.getCenter();
     if (vis.length > 120) { vis.sort(function (p, q) { var a1 = bbOf(p), b1 = bbOf(q); return Math.hypot((a1[0] + a1[2]) / 2 - cc.lat, (a1[1] + a1[3]) / 2 - cc.lng) - Math.hypot((b1[0] + b1[2]) / 2 - cc.lat, (b1[1] + b1[3]) / 2 - cc.lng); }); vis = vis.slice(0, 120); }
     if (light && vis.length > 60) vis = vis.slice(0, 60);
-    var lab = z >= 16 ? vis.slice(0, light ? 12 : 40) : [];
+    var lab = z >= 16 ? vis.slice(0, HA.dioOn && HA.dioOn() ? 150 : (light ? 12 : 40)) : [];
     vis.forEach(function (b) {
       if (HA.dioOn && HA.dioOn() && HA.dioBlock) { HA.dioBlock(g, b, lab.indexOf(b) >= 0); return; }
       var st = blkStatus(b), l = L.polygon(b.pts, { color: HA.BLK_COL[st], weight: 1.3, dashArray: st === 'none' ? '4 4' : null, fillOpacity: 0.05, interactive: false });

@@ -56,7 +56,7 @@
       if (ln.type === 'drain' ? !showDrain : !showRoad) return;
       var ee = ends(ln), tp = Math.abs(ee[0] - ee[1]) > 0.05;
       if (tp) { L.polygon(taperRing(ln), { stroke: false, fillColor: colorOf(ln), fillOpacity: kontur() && ln.type === 'drain' ? .8 : .7, interactive: false }).addTo(g); L.polyline(ln.pts, { color: colorOf(ln), weight: 1.5, opacity: .9, interactive: false }).addTo(g); }
-      else L.polyline(ln.pts, { color: colorOf(ln), weight: wpx(+ln.w || 2), opacity: kontur() && ln.type === 'drain' ? .8 : .7, lineCap: 'butt', lineJoin: 'round', interactive: false }).addTo(g);
+      else L.polyline(ln.pts, { color: colorOf(ln), weight: wpx(+ln.w || 2) * (ln.type === 'drain' && HA.reliefOn && HA.reliefOn() ? 1.6 : 1), opacity: HA.reliefOn && HA.reliefOn() && ln.type === 'drain' ? 1 : (kontur() && ln.type === 'drain' ? .8 : .7), lineCap: 'butt', lineJoin: 'round', interactive: false }).addTo(g);
       // area ketuk lebar (sekitar satu jari), garis dipilih lebih dulu daripada blok di bawahnya
       var hit = L.polyline(ln.pts, { color: '#000', weight: Math.max(wpx(+ln.w || 2), 30), opacity: 0, lineCap: 'round', bubblingMouseEvents: false, interactive: true }).addTo(g);
       hit.on('click', function (e) {

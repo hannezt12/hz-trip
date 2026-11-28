@@ -54,6 +54,7 @@
     if (!m || !window.HzOverlay) return;
     (m._ovl || []).forEach(function (l) { try { m.removeLayer(l); } catch (e) {} });
     m._ovl = [];
+    if (m === HA.map && HA.dioOn && HA.dioOn()) return; // 2.5D menyala: lapisan PDF disembunyikan
     var isSp = !!(HA.SP && HA.SP.map === m);
     if (isSp ? !m._forceOvl : (S.settings.mapMode !== 'osm' && !m._forceOvl)) return; // SpidoMap: lapisan PDF hanya saat marking memilih mode Peta; peta lain hanya di mode Peta
     ovList().forEach(function (o) {
@@ -257,14 +258,20 @@
   function openOvSheet() {
     var l = ovList();
     var op = Math.round((S.settings.ovlOp == null ? 0.8 : S.settings.ovlOp) * 100);
-    openSheet('<div class="grab"></div><div class="st">PETA SAYA</div>' + (S.settings.mapMode !== 'osm' ? '<div class="warn" style="margin-bottom:8px">Peta saya hanya tampil di mode <b>Peta</b>, bukan Satelit. Ganti mode di atas peta.</div>' : '') +
+    var d25 = !!S.settings.relief;
+    openSheet('<div class="grab"></div><div class="bth"><div class="st">PETA SAYA</div><label class="lbOn" style="margin-left:auto"><b>2.5D</b> <input type="checkbox" id="ov25"' + (d25 ? ' checked' : '') + '></label></div>' + (d25 ? '<div class="warn" style="margin-bottom:8px">2.5D menyala: lapisan PDF disembunyikan. Matikan 2.5D untuk memakainya.</div>' : '') + (!d25 && S.settings.mapMode !== 'osm' ? '<div class="warn" style="margin-bottom:8px">Peta saya hanya tampil di mode <b>Peta</b>, bukan Satelit. Ganti mode di atas peta.</div>' : '') +
       (l.length ? l.map(function (o, i) {
         return '<div class="ovrow"><div class="nm">' + esc(o.name) + (o.cal ? '' : '<small>belum dikalibrasi (Pengaturan)</small>') + '</div>' +
-          (o.cal ? '<button class="btn sm" data-tn="' + i + '">Setel</button><input type="checkbox" data-on="' + i + '"' + (o.on ? ' checked' : '') + '>' : '') + '</div>';
+          (o.cal ? '<button class="btn sm" data-tn="' + i + '"' + (d25 ? ' disabled' : '') + '>Setel</button><input type="checkbox" data-on="' + i + '"' + (o.on ? ' checked' : '') + (d25 ? ' disabled' : '') + '>' : '') + '</div>';
       }).join('') + '<div style="margin-top:10px;font-size:max(11px,calc(14px * var(--fs,1)));color:var(--tx3)">Transparansi: <span id="ovOpV">' + op + '</span>%</div><input type="range" id="ovOp" min="20" max="100" value="' + op + '" style="width:100%">'
         : '<div class="muted">Belum ada peta. Tambahkan PDF di Pengaturan, bagian PETA SAYA (PDF).</div>'));
     var sh = $('sheet');
-    sh.onchange = function (e) { var k = e.target.getAttribute && e.target.getAttribute('data-on'); if (k !== null && k !== undefined) { ovList()[+k].on = e.target.checked; saveSettings(); syncAllOverlays(); } };
+    sh.onchange = function (e) {
+      if (e.target.id === 'ov25') {
+        S.settings.relief = e.target.checked; if (e.target.checked && S.settings.mapMode === 'sat') S.settings.mapMode = 'osm';
+        saveSettings(); if (HA.setTiles) HA.setTiles(); syncAllOverlays(); toast(e.target.checked ? 'Tema 2.5D menyala' : 'Tema 2.5D dimatikan'); openOvSheet(); return;
+      }
+      var k = e.target.getAttribute && e.target.getAttribute('data-on'); if (k !== null && k !== undefined) { ovList()[+k].on = e.target.checked; saveSettings(); syncAllOverlays(); } };
     sh.onclick = function (e) { var t = e.target.getAttribute && e.target.getAttribute('data-tn'); if (t !== null && t !== undefined) tuneOv(+t); };
     var r = $('ovOp'); if (r) r.oninput = function () { $('ovOpV').textContent = this.value; setOvOpacity(this.value / 100); };
     if (r) r.onchange = function () { saveSettings(); };
