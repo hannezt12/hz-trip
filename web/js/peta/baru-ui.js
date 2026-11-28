@@ -19,7 +19,7 @@
   HA.lakeName = lakeName;
   HA.drawFlow = drawFlow;
   var DEF = { road: 3, drain: 1.5 };
-  var NAMES = { master: 'Master', blok: 'Blok', danau: 'Danau', drain: 'Drainase', road: 'Jalan bantu' };
+  var NAMES = { master: 'Master', blok: 'Blok', danau: 'Danau', sungai: 'Sungai', drain: 'Drainase', road: 'Jalan bantu' };
 
   // ---------- hanya satu panel terbuka ----------
   function closeAll(keep) {
@@ -52,13 +52,13 @@
     if (S.view !== 'lintasan') { HA.mapKeep = true; go('lintasan'); setTimeout(drawStart, 800); return; }
     HA.pbStopForEdit(); closeAll(); HA.map._slopeOn = false;
     if (HA.map._lakeDraw) { toast('Selesaikan dulu yang sedang digambar'); return; }
-    var bar = mkBar('<button type="button" data-t="blok" class="pri">Blok</button><button type="button" data-t="danau" class="pri">Danau</button><button type="button" data-t="drain" class="pri">Drainase</button><button type="button" data-t="road" class="pri">Jalan bantu</button><button type="button" id="nbX">Batal</button>');
+    var bar = mkBar('<button type="button" data-t="blok" class="pri">Blok</button><button type="button" data-t="danau" class="pri">Danau</button><button type="button" data-t="sungai" class="pri">Sungai</button><button type="button" data-t="drain" class="pri">Drainase</button><button type="button" data-t="road" class="pri">Jalan bantu</button><button type="button" id="nbX">Batal</button>');
     $('nbT').textContent = 'Buat apa?';
     $('nbX').onclick = function () { bar.remove(); };
     bar.querySelectorAll('[data-t]').forEach(function (b) { b.onclick = function () { bar.remove(); drawFlow(b.getAttribute('data-t')); }; });
   }
   function drawFlow(type) {
-    var poly = type === 'blok' || type === 'danau' || type === 'master', pts = [], redo = [], g = L.layerGroup().addTo(HA.map), pl = null, pl0 = null, mk = [], busy = false;
+    var poly = type === 'blok' || type === 'danau' || type === 'sungai' || type === 'master', pts = [], redo = [], g = L.layerGroup().addTo(HA.map), pl = null, pl0 = null, mk = [], busy = false;
     function normalBar() { return '<button type="button" id="nbU">Urungkan</button><button type="button" id="nbR">Ulangi</button><button type="button" id="nbC">Batal</button>' + '<button type="button" class="pri" id="nbOk">Simpan</button>'; }
     var bar = mkBar(normalBar());
     var gg = null;
@@ -115,6 +115,9 @@
         HA.blocksList().push(b); S.settings.blkOn = true; saveSettings(); end(); HA.drawBlocks(); HA.openBlockPop(b); HA.openBlockEdit(b);
       } else if (type === 'master') {
         end(); HA.masterCreated(P);
+      } else if (type === 'sungai') {
+        var rv = { id: Date.now(), name: 'Sungai ' + (HA.lakesList().filter(function (z) { return z.kind === 'river'; }).length + 1), pts: P, kind: 'river' };
+        HA.lakesList().push(rv); S.settings.lakesOn = true; saveSettings(); end(); HA.applyLakes(); lakeName(rv);
       } else if (type === 'danau') {
         busy = true; toast('Menghitung…');
         HzDem.lakeLevel(P).then(function (lv) {
@@ -135,11 +138,43 @@
   }
   // panel nama setelah simpan (danau); blok memakai panel Edit Blok
   function lakeName(lk) {
-    openSheet('<div class="grab"></div><div class="bth"><div class="st">DANAU</div><button class="btn pri" id="lnX">Selesai</button></div>' +
-      '<div class="bnm"><input type="text" id="lnN" maxlength="30" value="' + esc(lk.name) + '"></div>');
+    var rv = lk.kind === 'river';
+    openSheet('<div class="grab"></div><div class="bth"><div class="st">' + (rv ? 'SUNGAI' : 'DANAU') + '</div><button class="btn pri" id="lnX">Selesai</button></div>' +
+      '<div class="bnm"><input type="text" id="lnN" maxlength="30" value="' + esc(lk.name) + '"></div>' +
+      '<div class="h" style="margin-top:10px">JENIS</div><div class="tseg" id="lnK"><button type="button" data-k="lake"' + (rv ? '' : ' class="on"') + '>Danau</button><button type="button" data-k="river"' + (rv ? ' class="on"' : '') + '>Sungai</button></div>' +
+      '<div class="muted" style="margin:4px 0 8px">' + (rv ? 'Sungai hanya gambar: tidak memengaruhi kontur, kemiringan, atau hitungan lain.' : 'Danau memengaruhi kontur, kemiringan, dan arsiran (permukaan dianggap datar).') + '</div>' +
+      '<button class="btn pri" id="lnE" style="width:100%;height:50px">Edit bentuk</button>');
     $('sheet').classList.add('cmp'); $('scrim').classList.remove('on');
-    $('lnN').onchange = function () { lk.name = $('lnN').value.trim() || lk.name; saveSettings(); HA.applyLakes(); };
-    $('lnX').onclick = function () { lk.name = $('lnN').value.trim() || lk.name; saveSettings(); HA.applyLakes(); closeSheet(); if (S.view === 'data') HA.renderData(); };
+    function keep() { lk.name = $('lnN').value.trim() || lk.name; saveSettings(); HA.applyLakes(); }
+    $('lnN').onchange = keep;
+    $('lnK').onclick = function (e) {
+      var k = e.target.getAttribute && e.target.getAttribute('data-k'); if (!k) return;
+      keep();
+      if (k === 'river') { lk.kind = 'river'; delete lk.level; saveSettings(); HA.applyLakes(); if (HA.demRedraw) HA.demRedraw(); lakeName(lk); return; }
+      if (!rv) return;
+      toast('Menghitung…');
+      HzDem.lakeLevel(lk.pts).then(function (lv) {
+        if (lv === null) { toast('Data ketinggian belum tersedia di area ini'); return; }
+        delete lk.kind; lk.level = lv; saveSettings(); HA.applyLakes(); if (HA.demRedraw) HA.demRedraw(); lakeName(lk);
+      }).catch(function () { toast('Gagal menghitung'); });
+    };
+    $('lnE').onclick = function () {
+      keep(); closeSheet();
+      var nav = S.view === 'lintasan' && HA.map;
+      function run() {
+        if (HA.DM.lakeLayer && HA.map) { HA.map.removeLayer(HA.DM.lakeLayer); HA.DM.lakeLayer = null; }
+        HA.editPoly(lk.pts, true, function (res) {
+          if (res) {
+            lk.pts = res; delete lk.m; saveSettings();
+            var fin = function () { HA.applyLakes(); if (HA.demRedraw) HA.demRedraw(); HzDem.measure(lk.pts, true).then(function (m) { lk.m = m; saveSettings(); }).catch(function () {}); lakeName(lk); };
+            if (lk.kind === 'river') fin();
+            else HzDem.lakeLevel(res).then(function (lv) { if (lv !== null) lk.level = lv; saveSettings(); fin(); }).catch(function () { fin(); });
+          } else { if (HA.drawLakes) HA.drawLakes(); lakeName(lk); }
+        });
+      }
+      if (nav) run(); else { HA.mapKeep = true; HA.go('lintasan'); setTimeout(function () { if (HA.map) HA.map.fitBounds(L.latLngBounds(lk.pts), { padding: [50, 50], maxZoom: 19 }); run(); }, 900); }
+    };
+    $('lnX').onclick = function () { keep(); closeSheet(); if (S.view === 'data') HA.renderData(); };
   }
 
   // ---------- Ukur: bidik + titik, hasil P/L/K di kanan atas, tutup poligon lalu Simpan ----------
