@@ -1224,3 +1224,6 @@ body.klPick #map .leaflet-interactive{pointer-events:none!important}
 /* v0.27.30 belum lengkap dan putaran */
 .rbInc{font-style:normal;font-weight:600;font-size:0.72rem;color:#F2C200;border:1px solid #F2C200;border-radius:0.5rem;padding:0 0.35rem;margin-left:0.3rem;white-space:nowrap}
 .rbSp{font-size:0.75rem;font-weight:700;letter-spacing:.04em;color:var(--mut,#8a94a3);text-transform:uppercase;padding:0.6rem 0.1rem 0.1rem;border-top:1px dashed var(--line)}
+/* v0.27.31 tema Relief 2.5D */
+.hz-relief{background:#EEE8D6}
+.hz-relief .leaflet-overlay-pane canvas{filter:drop-shadow(2px 3px 2px rgba(60,45,20,.5))}

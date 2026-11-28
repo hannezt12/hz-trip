@@ -606,6 +606,35 @@
         ctx.imageSmoothingEnabled = true;
         ctx.drawImage(sm, -S4 / 2, -S4 / 2, cols * S4, rows * S4);
       },
+      // v0.27.31: bayangan relief (hillshade) dilebih-lebihkan, cahaya dari barat laut; hasil buram di atas warna kertas
+      _renderRelief: function (zd) {
+        var c = this._canvas, m = this._map, min = this._min, ctx = c.getContext('2d'), w = c.width, h = c.height, S4 = 4, EX = this.o.exag || 14;
+        var cols = Math.ceil(w / S4) + 1, rows = Math.ceil(h / S4) + 1, g = new Float32Array(cols * rows), i, j;
+        for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) { var ll = m.layerPointToLatLng(L.point(min.x + i * S4, min.y + j * S4)); g[j * cols + i] = elev(ll.lat, ll.lng, zd); }
+        var g2 = new Float32Array(g.length), s, n, dj, di, ii, jj, vv;
+        for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+          s = 0; n = 0;
+          for (dj = -1; dj <= 1; dj++) for (di = -1; di <= 1; di++) { ii = i + di; jj = j + dj; if (ii < 0 || jj < 0 || ii >= cols || jj >= rows) continue; vv = g[jj * cols + ii]; if (vv === vv) { s += vv; n++; } }
+          g2[j * cols + i] = n ? s / n : NaN;
+        }
+        var cen = m.getCenter(), mpp = 156543.03 * Math.cos(cen.lat * Math.PI / 180) / Math.pow(2, m.getZoom()), cell = S4 * mpp, K = Math.max(1, Math.ceil(25 / cell));
+        var sm = document.createElement('canvas'); sm.width = cols; sm.height = rows;
+        var sc = sm.getContext('2d'), im = sc.createImageData(cols, rows), D = im.data, R0 = 238, G0 = 232, B0 = 214, lx = -0.6, ly = -0.6, lz = 0.52, ln = Math.sqrt(lx * lx + ly * ly + lz * lz);
+        lx /= ln; ly /= ln; lz /= ln;
+        for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
+          var a = g2[j * cols + Math.max(0, i - K)], b = g2[j * cols + Math.min(cols - 1, i + K)], up = g2[Math.max(0, j - K) * cols + i], dn = g2[Math.min(rows - 1, j + K) * cols + i];
+          var di2 = Math.min(cols - 1, i + K) - Math.max(0, i - K), dj2 = Math.min(rows - 1, j + K) - Math.max(0, j - K), f = 1, o = (j * cols + i) * 4;
+          if (a === a && b === b && up === up && dn === dn && di2 && dj2) {
+            var zx = EX * (b - a) / (di2 * cell), zy = EX * (dn - up) / (dj2 * cell), nn = Math.sqrt(zx * zx + zy * zy + 1);
+            var sh = (-zx * lx - zy * ly + lz) / nn / lz;
+            f = Math.max(0.5, Math.min(1.08, 0.9 + 0.4 * (sh - 1)));
+          }
+          D[o] = Math.min(255, R0 * f); D[o + 1] = Math.min(255, G0 * f); D[o + 2] = Math.min(255, B0 * f * 0.97); D[o + 3] = 255;
+        }
+        sc.putImageData(im, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(sm, -S4 / 2, -S4 / 2, cols * S4, rows * S4);
+      },
       _renderHach: function (zd) {
         var c = this._canvas, m = this._map, min = this._min, ctx = c.getContext('2d'), w = c.width, h = c.height, G = 30;
         ctx.clearRect(0, 0, w, h);
@@ -670,6 +699,7 @@
       _render: function (zd) {
         if (this.o.mode === 'mesh') return this._renderMesh(zd);
         if (this.o.mode === 'slope') return this._renderSlope(zd);
+        if (this.o.mode === 'relief') return this._renderRelief(zd);
         if (this.o.mode === 'hach') return this._renderHach(zd);
         var c = this._canvas, m = this._map, min = this._min, ctx = c.getContext('2d'), w = c.width, h = c.height;
         ctx.clearRect(0, 0, w, h);
@@ -774,8 +804,9 @@
   function contours(o) { return new (layerClass())(o); }
   function hachLayer(o) { o = o || {}; o.mode = 'hach'; o.pane = 'hachPane'; o.z = 265; return new (layerClass())(o); }
   function meshLayer(o) { o = o || {}; o.mode = 'mesh'; o.pane = 'meshPane'; o.z = 262; return new (layerClass())(o); }
+  function reliefLayer(o) { o = o || {}; o.mode = 'relief'; o.pane = 'reliefPane'; o.z = 210; return new (layerClass())(o); }
   function slopeLayer(o) { o = o || {}; o.mode = 'slope'; o.pane = 'slopePane'; o.z = 255; return new (layerClass())(o); }
 
   function sheetsAt(lat, lng) { return loadCov().then(function (sh) { return sh.filter(function (q) { var b = q.bbox; return lng >= b[0] && lng <= b[2] && lat >= b[1] && lat <= b[3]; }); }); }
-  root.HzDem = { measure: measure, sheetsAt: sheetsAt, meshLayer: meshLayer, sampleGrid: sampleGrid, inLake: inLake, gradRGB: gradRGB, GRAD_CSS: GRAD_CSS, elev: elev, setSources: setSources, source: source, setLakes: setLakes, lakeLevel: lakeLevel, hasAnyLocal: function () { return cov.length > 0; }, hachLayer: hachLayer, slopeLayer: slopeLayer, SLOPE_CLASSES: SLOPE_CLASSES, rampColor: rampColor, contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
+  root.HzDem = { reliefLayer: reliefLayer, measure: measure, sheetsAt: sheetsAt, meshLayer: meshLayer, sampleGrid: sampleGrid, inLake: inLake, gradRGB: gradRGB, GRAD_CSS: GRAD_CSS, elev: elev, setSources: setSources, source: source, setLakes: setLakes, lakeLevel: lakeLevel, hasAnyLocal: function () { return cov.length > 0; }, hachLayer: hachLayer, slopeLayer: slopeLayer, SLOPE_CLASSES: SLOPE_CLASSES, rampColor: rampColor, contourLines: contourLines, importTiff: importTiff, localInfo: localInfo, clearLocal: clearLocal, hasLocal: hasLocal, loadCov: loadCov, resetMem: resetMem, setStore: setStore, ensure: ensure, elev: elev, info: info, profile: profile, resample: resample, contours: contours, hav: hav };
 })(window);

@@ -196,10 +196,13 @@
     if (KM.mode !== 'kategori') setMode('kategori', true); else { syncUi(); draw(); }
   };
   KM.toggleBase = function () {
-    S.settings.mapMode = S.settings.mapMode === 'sat' ? 'osm' : 'sat';
+    // putaran: Satelit > Peta > Relief 2.5D > Satelit
+    if (S.settings.mapMode === 'sat') { S.settings.mapMode = 'osm'; S.settings.relief = false; }
+    else if (!S.settings.relief) S.settings.relief = true;
+    else { S.settings.relief = false; S.settings.mapMode = 'sat'; }
     HA.saveSettings && HA.saveSettings();
     HA.setTiles(); if (HA.mini) { HA.setBase(HA.mini); HA.syncOverlays(HA.mini); }
-    toast(S.settings.mapMode === 'sat' ? 'Mode Satelit' : 'Mode Peta');
+    toast(S.settings.mapMode === 'sat' ? 'Mode Satelit' : (HA.reliefOn && HA.reliefOn() ? 'Mode Relief 2.5D' : 'Mode Peta'));
   };
   function wire() {
     if (!$('mapMode')) return;

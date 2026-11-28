@@ -17,7 +17,7 @@
   var NAME = { road: 'Jalan bantu', drain: 'Drainase' };
   function lenM(pts) { var t = 0, i; for (i = 0; i + 1 < pts.length; i++) t += HA.segM(pts[i], pts[i + 1]); return t; }
   function kontur() { return S.settings.rowMode === 'kontur'; }
-  function colorOf(ln) { return ln.type === 'drain' ? (kontur() ? '#5EE0FF' : '#6F8296') : '#C2AD83'; }
+  function colorOf(ln) { return ln.type === 'drain' ? (HA.reliefOn && HA.reliefOn() ? '#8CCBF0' : kontur() ? '#5EE0FF' : '#6F8296') : '#C2AD83'; }
   function mpp() { var z = HA.map.getZoom(), la = HA.map.getCenter().lat; return 156543.03 * Math.cos(la * Math.PI / 180) / Math.pow(2, z); }
   function wpx(w) { return Math.max(2, w / mpp()); }
   function fmt(v) { return String(Math.round(v * 100) / 100).replace('.', ','); }

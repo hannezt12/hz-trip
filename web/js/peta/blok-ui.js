@@ -357,6 +357,11 @@
   }
   function drawRowsInto(g, b, mode, res, dep) {
     var ls = null;
+    if (HA.reliefOn && HA.reliefOn() && mode === 'datar') {
+      // Relief: hanya sebagian lajur (1 per 10 dekat, 1 per 25 jauh) supaya ringan dan tetap rapi
+      if (res && res.lines.length) { var st = HA.map.getZoom() >= 18 ? 10 : 25; L.polyline(res.lines.filter(function (l, i) { return i % st === 0; }), { color: '#4F6B34', weight: 1.1, opacity: 0.8, interactive: false, smoothFactor: 0.5 }).addTo(g); }
+      return;
+    }
     if (res && res.lines.length) {
       ls = shownLines(b, res, mode);
       var nums19 = mode === 'datar' && HA.map.getZoom() >= 19 ? laneNums(res) : null;
@@ -453,10 +458,11 @@
     drawWL();
     if (HA.DM.rowLayer) { HA.map.removeLayer(HA.DM.rowLayer); HA.DM.rowLayer = null; }
     HA.DM.rowSeq = (HA.DM.rowSeq || 0) + 1;
-    if (!S.settings.rowOn || S.settings.blkOn === false || !blocksList().length || HA.DM.edit) return;
-    var zmin = 17;
+    var rel = !!(HA.reliefOn && HA.reliefOn());
+    if (!(S.settings.rowOn || rel) || S.settings.blkOn === false || !blocksList().length || HA.DM.edit) return;
+    var zmin = rel ? 16 : 17;
     if (HA.map.getZoom() < zmin) { if (hint) toast('Perbesar peta ke zoom ' + zmin + ' untuk melihat ' + ((S.settings.rowMode || 'datar') === 'kontur' ? 'kontur' : 'row')); return; }
-    var mode = S.settings.rowMode || 'datar', id = HA.DM.rowSeq, bd = HA.map.getBounds(), cc = HA.map.getCenter(), g = L.layerGroup().addTo(HA.map), vis, i = 0, miss = 0, need = [];
+    var mode = rel ? 'datar' : (S.settings.rowMode || 'datar'), id = HA.DM.rowSeq, bd = HA.map.getBounds(), cc = HA.map.getCenter(), g = L.layerGroup().addTo(HA.map), vis, i = 0, miss = 0, need = [];
     HA.DM.rowLayer = g;
     vis = blocksList().filter(function (b) { return bbHit(b, bd) && (mode === 'kontur' || b.dir != null); });
     vis.sort(function (p, q) { var a1 = bbOf(p), b1 = bbOf(q); return Math.hypot((a1[0] + a1[2]) / 2 - cc.lat, (a1[1] + a1[3]) / 2 - cc.lng) - Math.hypot((b1[0] + b1[2]) / 2 - cc.lat, (b1[1] + b1[3]) / 2 - cc.lng); });

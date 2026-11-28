@@ -69,15 +69,18 @@
     if (!m) return;
     if (m._base) { m.removeLayer(m._base); m._base = null; }
     var md = force || (S.settings.mapMode === 'sat' ? 'sat' : 'osm');
+    if (m === HA.map && !force && HA.reliefOn && HA.reliefOn()) return;
     if (HA.TILES[md]) m._base = new (cachedLayerClass())(HA.TILES[md][0], tileOpts(md)).addTo(m);
   }
   function setTiles() {
     if (!HA.map) return;
     setBase(HA.map);
+    if (HA.reliefApply) HA.reliefApply(HA.map);
     syncOverlays(HA.map);
     if (HA.DM.syncMode) HA.DM.syncMode();
     batRedraw();
-    if ($('mapBase')) $('mapBase').textContent = S.settings.mapMode === 'sat' ? 'Satelit' : 'Peta';
+    if (HA.reliefOn && HA.reliefOn()) { if (HA.drawBlocks) HA.drawBlocks(); if (HA.drawRows) HA.drawRows(); if (HA.drawLakes) HA.drawLakes(); if (HA.drawLines) HA.drawLines(); }
+    if ($('mapBase')) $('mapBase').textContent = S.settings.mapMode === 'sat' ? 'Satelit' : (HA.reliefOn && HA.reliefOn() ? 'Relief' : 'Peta');
   }
   function gapText(g) { return 'Berhenti ' + T.hm(g.from) + '–' + T.hm(g.to) + ' (' + T.durText((g.to - g.from) / 1000) + ')'; }
   // Ketuk pin: label tampil dengan garis tipis ke pin. Beberapa pin yang berdekatan tampil bersamaan, berurutan menurut jam.
