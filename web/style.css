@@ -1221,3 +1221,6 @@ body.klPick #map .leaflet-interactive{pointer-events:none!important}
 .blkpop .ib2.bpBig{width:3.25rem;height:3.25rem;border-radius:0.75rem}
 .rbS i.nocat,.rbR>i.nocat{background:repeating-linear-gradient(45deg,transparent 0 3px,#111 3px 4.5px),repeating-linear-gradient(-45deg,transparent 0 3px,#F2C200 3px 4.5px),#FFFFF0;border:1px solid #111}
 #sheet .rbL{max-height:52vh;overflow-y:auto}
+/* v0.27.30 belum lengkap dan putaran */
+.rbInc{font-style:normal;font-weight:600;font-size:0.72rem;color:#F2C200;border:1px solid #F2C200;border-radius:0.5rem;padding:0 0.35rem;margin-left:0.3rem;white-space:nowrap}
+.rbSp{font-size:0.75rem;font-weight:700;letter-spacing:.04em;color:var(--mut,#8a94a3);text-transform:uppercase;padding:0.6rem 0.1rem 0.1rem;border-top:1px dashed var(--line)}

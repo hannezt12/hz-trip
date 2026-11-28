@@ -216,6 +216,7 @@
         if (TD.selIt && TD.selIt.id === it.id && HA.BT && HA.BT.history) { HA.BT.history([ev.latlng.lat, ev.latlng.lng]); return; }
         selectItem(it);
       });
+      if (it.inc && it.t === 'pg' && l.setStyle) l.setStyle({ dashArray: '7 6' });
       l.addTo(TD.lay); if (it.t === 'pg' && HA.tandaNoCat(it) && HA.addHatch) HA.addHatch(TD.lay, it.pts);
     });
     if (HA.BT && TD.blk) HA.BT.refresh();
@@ -646,9 +647,9 @@
     if (!hit) { toast('Tidak ada blok di titik itu'); return; }
     var dup = data().items.filter(function (i) { return i.full && String(i.bid) === String(hit.id); })[0];
     if (dup) { toast('Blok ' + hit.name + ' sudah ditandai'); itemSheet(dup); return; }
-    var b = brush(), it = { id: newId(), t: 'pg', pts: hit.pts.map(function (p) { return [p[0], p[1]]; }), cat: b.cat, col: b.col, name: String(hit.name || ''), note: '', bid: hit.id, full: true, ts: Date.now() };
+    var b = brush(), it = { id: newId(), t: 'pg', pts: hit.pts.map(function (p) { return [p[0], p[1]]; }), cat: b.cat, col: b.col, name: String(hit.name || ''), note: '', bid: hit.id, full: true, inc: true, ts: Date.now() };
     addItem(it); save(); drawAll();
-    var st = statOf(it); toast('Blok ' + it.name + ' · ' + statText(it, st).replace('\n', ' · '));
+    var st = statOf(it); toast('Blok ' + it.name + ' · ' + statText(it, st).replace('\n', ' · ') + ' · belum lengkap');
   }
 
   // ---------- kategori dan warna ----------
@@ -815,12 +816,14 @@
     openSheet('<div class="grab"></div><div class="st">' + typeName(it.t) + (it.full ? ' · BLOK UTUH' : '') + '</div>' +
       '<div class="bnm"><input type="text" id="tiN" maxlength="40" placeholder="Nama (boleh kosong)" value="' + esc(it.name || '') + '"></div>' +
       '<div class="card" style="white-space:pre-line">' + esc(lines) + '</div>' +
+      (it.inc ? '<div class="card" style="display:flex;align-items:center;gap:8px"><span style="flex:1">Belum lengkap. Isi kategori dan tanggal, lalu tekan Sudah benar.</span><button class="btn pri" id="tiInc" style="height:44px">Sudah benar</button></div>' : '') +
       '<div class="h" style="margin-top:10px">KATEGORI</div><div class="tdsel"><i class="cdot" style="background:' + colOf(it) + '"></i>' + catSelHtml(it) + '</div>' +
       '<div class="h" style="margin-top:10px">TANGGAL</div><div class="bnm"><input type="date" id="tiDt" value="' + dateOf(it) + '"></div>' +
       '<div class="h" style="margin-top:10px">CATATAN</div><div class="bnm"><input type="text" id="tiNt" maxlength="120" value="' + esc(it.note || '') + '"></div>' +
       '<div class="opts" style="margin-top:10px"><button class="opt" id="tiZ">Zoom ke sini</button>' + (it.t !== 'pt' ? '<button class="opt" id="tiE">Edit bentuk</button>' : '<button class="opt" id="tiE">Geser titik</button>') + (it.t === 'ln' && it.pts.length >= 3 ? '<button class="opt" id="tiV">Jadikan area</button>' : '') + (it.t === 'pg' ? '<button class="opt" id="tiV">Jadikan garis</button>' : '') + '</div>' +
       '<button class="btn danger" id="tiD" style="width:100%;margin-top:10px">Hapus</button><button class="btn pri" id="tiX" style="width:100%;margin-top:8px">Selesai</button>');
     function keep() { it.name = $('tiN').value.trim(); it.note = $('tiNt').value.trim(); var dv = $('tiDt').value; if (/^\d{4}-\d{2}-\d{2}$/.test(dv)) it.date = dv; touch(it); save(); drawAll(); }
+    if ($('tiInc')) $('tiInc').onclick = function () { keep(); it.inc = false; touch(it); save(); drawAll(); closeSheet(); toast('Tanda ditandai sudah benar'); };
     $('tiX').onclick = function () { keep(); closeSheet(); };
     $('tiCa').onchange = function () { keep(); it.cat = $('tiCa').value; it.sub = null; it.col = null; touch(it); save(); drawAll(); itemSheet(it); };
     $('tiSb').onchange = function () { keep(); it.sub = $('tiSb').value || null; touch(it); save(); drawAll(); itemSheet(it); };

@@ -12,18 +12,24 @@
   }
   // ---- v0.27.28: progres blok kumulatif per kategori (tanda penuh = 100%, bagian menyambung sampai 100%)
   function ordAsc(x, y) { var a = BR.ordKey(x), c = BR.ordKey(y); return a < c ? -1 : a > c ? 1 : 0; }
+  var GAP = 14; // hari: jeda lebih dari ini = putaran baru (sementara)
+  function dayDiff(a, c) { return Math.round((Date.parse(c) - Date.parse(a)) / 864e5); }
+  function todayS() { var d = new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
   function serInfo(b, cat, sub) {
-    var A = HzBlok.areaHa(b.pts), its = HA.BT.itemsOf(b).filter(function (z) { return z.t === 'pg' && z.cat === cat && (z.sub || null) === (sub || null); }), ser = [], tot = 0, map = {};
+    var U = HA.tandaU, A = HzBlok.areaHa(b.pts), its = HA.BT.itemsOf(b).filter(function (z) { return z.t === 'pg' && z.cat === cat && (z.sub || null) === (sub || null); }), ser = [], tot = 0, map = {}, rd = 1, last = null;
     its.sort(ordAsc);
     its.forEach(function (z, i) {
-      if (z.full || !z.part) { map[z.id] = { cum: 100, prev: 0, rings: [], i: i }; ser = []; tot = 0; return; }
+      var d = U.dateOf(z), rn = z.part && z.part.rn;
+      if (last && (rn === 'new' || (rn !== 'cont' && dayDiff(last, d) > GAP))) { rd++; ser = []; tot = 0; }
+      last = d;
+      if (z.full || !z.part) { map[z.id] = { cum: 100, prev: 0, rings: [], i: i, rd: rd }; ser = []; tot = 0; return; }
       var rings = ser.map(function (q) { return q.pts; }), prev = tot;
       ser.push(z); tot += (z.part.pct != null ? z.part.pct : HzBlok.areaHa(z.pts) / A * 100);
       var cum = Math.min(100, tot);
       if (tot >= 98) { cum = 100; ser = []; tot = 0; }
-      map[z.id] = { cum: cum, prev: prev, rings: rings, i: i };
+      map[z.id] = { cum: cum, prev: prev, rings: rings, i: i, rd: rd };
     });
-    return { its: its, map: map, A: A, endCum: tot, endRings: ser.map(function (q) { return q.pts; }) };
+    return { its: its, map: map, A: A, endCum: tot, endRings: ser.map(function (q) { return q.pts; }), rounds: rd, last: last, stale: !!(last && tot > 0 && dayDiff(last, todayS()) > GAP) };
   }
   function cumPct(it) {
     if (it.t !== 'pg' || !it.bid || !(it.full || it.part)) return null;
@@ -73,15 +79,21 @@
   BR.fmtTs = fmtTs; BR.ordKey = ordKey; BR.detail = function (it, back) { detail(it, back); };
   function wkTxt(it) { return it.wk ? ' \u00B7 ' + it.wk : ''; }
   function seqTxt(it) { var q = BR.seq(it); return q ? ' ke-' + q.n : ''; }
+  function incTxt(it) { return it.inc ? ' <em class="rbInc">belum lengkap</em>' : ''; }
+  function rdOf(it) { if (it.t !== 'pg' || it.bid == null) return null; var b = HA.blockById ? HA.blockById(it.bid) : null; if (!b || !b.pts) return null; var s = serInfo(b, it.cat, it.sub), m = s.map[it.id]; return m && s.rounds > 1 ? m.rd : null; }
+  function rdTxt(it) { var r = rdOf(it); return r ? ' \u00B7 putaran ' + r : ''; }
   // ---- detail satu tanda
   function detail(it, back) {
     var U = HA.tandaU, inf = HA.tandaCatInfo(it), sn = subName(it);
     HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TANDA · ' + esc(inf.name) + (sn ? ' / ' + esc(sn) : '') + '</div><button class="ib" id="rdOk" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
       '<div class="muted" style="margin:4px 0 4px">' + U.d8(U.dateOf(it)) + wkTxt(it) + ' · ' + statTxt(it) + seqTxt(it).replace(' ke-', ' · kegiatan ke-') + '</div>' + (it.note ? '<div style="margin:2px 0 4px">' + esc(it.note) + '</div>' : '') + '<div class="muted" style="font-size:11px;margin-bottom:10px">dibuat ' + fmtTs(it.ts) + (it.mod && it.mod !== it.ts ? ' \u00B7 diubah ' + fmtTs(it.mod) : '') + '</div>' +
+      (it.inc ? '<div class="rdG" style="margin-bottom:8px"><button class="btn pri" id="rdLg">Lengkapi</button><button class="btn" id="rdSb">Sudah benar</button></div>' : '') +
       '<div class="rdG"><button class="btn" id="rdLh">Lihat di peta</button><button class="btn" id="rdKt">Ubah kategori</button>' + (it.t === 'pg' ? '<button class="btn" id="rdLu">Ubah luasan</button><button class="btn" id="rdGy">Ubah gaya</button>' : '') + '<button class="btn" id="rdTg">Ubah tanggal dan waktu</button><button class="btn" id="rdNt">Catatan</button><button class="btn danger" id="rdDl">Hapus tanda</button></div>');
     HA.onSheetClose = back;
     $('rdOk').onclick = function () { HA.closeSheet(); };
     $('rdLh').onclick = function () { lihat(it); };
+    if ($('rdLg')) $('rdLg').onclick = function () { pickCat(it, function () { detail(it, back); }); };
+    if ($('rdSb')) $('rdSb').onclick = function () { it.inc = false; persist(); HA.toast('Tanda ditandai sudah benar'); detail(it, back); };
     $('rdKt').onclick = function () { pickCat(it, function () { detail(it, back); }); };
     if ($('rdGy')) $('rdGy').onclick = function () { HA.BRiw.gaya(it, function () { detail(it, back); }); };
     if ($('rdLu')) $('rdLu').onclick = function () { luasan(it, function () { detail(it, back); }); };
@@ -249,8 +261,19 @@
     $('tdP').onclick = function () { HA.onSheetClose = null; if (HA.KM.fillBlock(b, null)) back2(); else tandai(b, back); };
     $('tdS').onclick = function () { sebagian(b, br, A, back, function () { tandai(b, back); }); };
   }
-  function sebagian(b, br, A, back, bk) {
-    var si = serInfo(b, br.cat, br.sub || null), prev = si.endRings, prevCum = si.endCum, prevHa = A * prevCum / 100, side = lastSisi, pct = '', ha = '';
+  function sebagian(b, br, A, back, bk, rn) {
+    var si = serInfo(b, br.cat, br.sub || null);
+    if (si.stale && !rn) {
+      var dd = dayDiff(si.last, todayS());
+      HA.openSheet('<div class="grab"></div><div class="st">PUTARAN BARU?</div><div class="muted" style="margin:6px 0 14px">Tanda ' + esc(br.name) + ' di blok ' + esc(String(b.name)) + ' terakhir ' + dd + ' hari lalu (progres ' + String(Math.round(si.endCum * 10) / 10).replace('.', ',') + '%). Lanjutkan putaran sebelumnya atau mulai putaran baru?</div>' +
+        '<div class="row" style="gap:8px"><button class="btn pri" id="prC" style="flex:1;height:50px">Lanjutkan</button><button class="btn pri" id="prN" style="flex:1;height:50px">Putaran baru</button></div><button class="btn" id="prX" style="width:100%;height:46px;margin-top:8px">Batal</button>');
+      HA.onSheetClose = bk;
+      $('prX').onclick = function () { HA.closeSheet(); };
+      $('prC').onclick = function () { HA.onSheetClose = null; sebagian(b, br, A, back, bk, 'cont'); };
+      $('prN').onclick = function () { HA.onSheetClose = null; sebagian(b, br, A, back, bk, 'new'); };
+      return;
+    }
+    var fresh = rn === 'new', prev = fresh ? [] : si.endRings, prevCum = fresh ? 0 : si.endCum, prevHa = A * prevCum / 100, side = lastSisi, pct = '', ha = '';
     function fmt(v, d) { return String(Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).replace('.', ','); }
     HA.openSheet('<div class="grab"></div><div class="bth"><div class="st">TANDAI SEBAGIAN · ' + esc(br.name).toUpperCase() + '</div><button class="ib" id="tsX" aria-label="Kembali"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>' +
       '<div class="muted" style="margin:4px 0 6px">Blok ' + esc(String(b.name)) + ' \u00B7 ' + HA.tandaU.ha(A) + ' ha' + (prev.length ? ' \u00B7 progres sebelumnya ' + fmt(prevCum, 1) + '% (' + HA.tandaU.ha(prevHa) + ' ha)' : '') + '</div>' +
@@ -271,10 +294,10 @@
       var r = HA.KM.strip(b, side, ha - prevHa, prev);
       if (r.err === 'penuh') { HA.toast('Seluruh blok sudah ditandai kategori ini'); return; }
       if (r.err) { HA.toast('Gagal menggambar bagian blok'); return; }
-      var part = { pct: Math.round(r.ha / A * 1000) / 10, ha: Math.round(r.ha * 100) / 100, sisi: side };
+      var part = { pct: Math.round(r.ha / A * 1000) / 10, ha: Math.round(r.ha * 100) / 100, sisi: side }; if (rn) part.rn = rn;
       HA.onSheetClose = null; var n = 0;
-      r.rings.forEach(function (ring) { if (HA.KM.fillBlock(b, ring, { part: part })) n++; });
-      if (n) back(); else sebagian(b, br, A, back, bk);
+      r.rings.forEach(function (ring, ri) { var pp = part; if (ri && part.rn === 'new') { pp = {}; for (var k in part) pp[k] = part[k]; delete pp.rn; } if (HA.KM.fillBlock(b, ring, { part: pp })) n++; });
+      if (n) back(); else sebagian(b, br, A, back, bk, rn);
     };
   }
   // ---- daftar riwayat blok
@@ -290,9 +313,11 @@
       var prevL = b.cy ? HA.BT.itemsOf(b, true).filter(function (it) { return U.dateOf(it) < b.cy; }).sort(function (x, y) { var a = BR.ordKey(x), c = BR.ordKey(y); return a < c ? 1 : a > c ? -1 : 0; }) : [], disp = list.concat(prevL);
       var sum = ord.map(function (c) { return '<div class="rbS">' + (c.nocat ? '<i class="nocat"></i>' : '<i style="background:' + c.col + '"></i>') + '<span>' + esc(c.name) + ' ' + c.n + '× · terakhir ' + U.d8(c.last) + '</span></div>'; }).join('');
       var chips = ord.length > 1 ? '<div class="rbC"><button type="button" data-k=""' + (!f ? ' class="on"' : '') + '>Semua</button>' + ord.map(function (c) { return '<button type="button" data-k="' + esc(c.k) + '"' + (f === c.k ? ' class="on"' : '') + '>' + esc(c.name) + '</button>'; }).join('') + '</div>' : '';
+ var lastRd = null;
       var rowsA = disp.map(function (it, i) {
-        var inf = HA.tandaCatInfo(it), sn = subName(it);
-        return '<div class="rbR" data-i="' + i + '">' + (inf.nocat ? '<i class="nocat"></i>' : '<i style="background:' + inf.col + '"></i>') + '<div class="rbT"><b>' + esc(inf.name) + (sn ? ' / ' + esc(sn) : '') + seqTxt(it) + '</b><small>' + U.d8(U.dateOf(it)) + wkTxt(it) + ' · ' + statTxt(it) + (it.note ? ' · ' + esc(String(it.note).slice(0, 30)) : '') + '</small></div><span class="rbG" aria-hidden="true">›</span></div>';
+        var inf = HA.tandaCatInfo(it), sn = subName(it), sp = '';
+        if (f && i < list.length) { var r = rdOf(it); if (r && r !== lastRd) sp = '<div class="rbSp">Putaran ' + r + '</div>'; if (r) lastRd = r; }
+        return sp + '<div class="rbR" data-i="' + i + '">' + (inf.nocat ? '<i class="nocat"></i>' : '<i style="background:' + inf.col + '"></i>') + '<div class="rbT"><b>' + esc(inf.name) + (sn ? ' / ' + esc(sn) : '') + seqTxt(it) + incTxt(it) + '</b><small>' + U.d8(U.dateOf(it)) + wkTxt(it) + ' · ' + statTxt(it) + (f ? '' : rdTxt(it)) + (it.note ? ' · ' + esc(String(it.note).slice(0, 30)) : '') + '</small></div><span class="rbG" aria-hidden="true">›</span></div>';
       });
       var rows = rowsA.slice(0, list.length).join(''), prevRows = rowsA.slice(list.length).join(''), ti = HA.lyb ? HA.lyb.tbInfo(b) : null;
       HA.openSheet('<div class="pmTop"><div class="grab"></div><div class="bth"><div class="st">RIWAYAT · ' + esc(b.name) + '</div><button class="ib" id="rbOk" aria-label="Tutup"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div></div>' +
