@@ -80,7 +80,7 @@
     if (HA.DM.syncMode) HA.DM.syncMode();
     batRedraw();
     if (HA.reliefOn && HA.reliefOn()) { if (HA.drawBlocks) HA.drawBlocks(); if (HA.drawRows) HA.drawRows(); if (HA.drawLakes) HA.drawLakes(); if (HA.drawLines) HA.drawLines(); }
-    if ($('mapBase')) $('mapBase').textContent = S.settings.mapMode === 'sat' ? 'Satelit' : (HA.reliefOn && HA.reliefOn() ? 'Relief' : 'Peta');
+    if ($('mapBase')) $('mapBase').textContent = S.settings.mapMode === 'sat' ? 'Satelit' : (HA.reliefOn && HA.reliefOn() ? '2.5D' : 'Peta');
   }
   function gapText(g) { return 'Berhenti ' + T.hm(g.from) + '–' + T.hm(g.to) + ' (' + T.durText((g.to - g.from) / 1000) + ')'; }
   // Ketuk pin: label tampil dengan garis tipis ke pin. Beberapa pin yang berdekatan tampil bersamaan, berurutan menurut jam.

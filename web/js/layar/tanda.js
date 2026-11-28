@@ -204,11 +204,13 @@
         else if (it.t === 'ln') L.polyline(it.pts, { color: hc, weight: 11, opacity: 0.9, interactive: false }).addTo(TD.lay);
         else L.polygon(it.pts, { color: hc, weight: 7, fill: false, interactive: false }).addTo(TD.lay);
       }
-      if (it.t === 'pt') l = L.circleMarker(it.pts[0], { radius: 8, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1 });
+      var sgn = it.t === 'pt' && it.name && HA.dioOn && HA.dioOn() && HA.dioSign;
+      if (sgn) l = HA.dioSign(it, col, true);
+      else if (it.t === 'pt') l = L.circleMarker(it.pts[0], { radius: 8, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1 });
       else if (it.t === 'ln') l = L.polyline(it.pts, { color: col, weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' });
       else if (HA.tandaNoCat(it) && HA.addHatch) { l = L.polygon(it.pts, { color: '#111', weight: 2.5, fillColor: HA.IVORY, fillOpacity: 0.8 }); }
       else l = L.polygon(it.pts, { color: col, weight: 2.5, fillColor: col, fillOpacity: opOf(it) });
-      if (it.name) l.bindTooltip(esc(it.name), { permanent: true, direction: 'center', className: 'mktip' });
+      if (it.name && !sgn) l.bindTooltip(esc(it.name), { permanent: true, direction: 'center', className: 'mktip' });
       l.on('click', function (ev) {
         if (TD.tool || TD.ed || TD.wk) { return; }
         if (!TD.blk) return;

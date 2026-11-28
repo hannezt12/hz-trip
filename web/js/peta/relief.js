@@ -24,6 +24,6 @@
     m.setMaxBounds(bd.pad(0.02));
     m.setMinZoom(Math.max(10, m.getBoundsZoom(bd)));
     if (!bd.contains(m.getCenter())) m.fitBounds(bd);
-    if (window.HzDem && HzDem.reliefLayer) m._relief = HzDem.reliefLayer({ exag: 14 }).addTo(m);
+    if (window.HzDem && HzDem.reliefLayer) m._relief = HzDem.reliefLayer({ exag: 20 }).addTo(m);
   };
 })();

@@ -229,6 +229,7 @@
     if (light && vis.length > 60) vis = vis.slice(0, 60);
     var lab = z >= 16 ? vis.slice(0, light ? 12 : 40) : [];
     vis.forEach(function (b) {
+      if (HA.dioOn && HA.dioOn() && HA.dioBlock) { HA.dioBlock(g, b, lab.indexOf(b) >= 0); return; }
       var st = blkStatus(b), l = L.polygon(b.pts, { color: HA.BLK_COL[st], weight: 1.3, dashArray: st === 'none' ? '4 4' : null, fillOpacity: 0.05, interactive: false });
       if (lab.indexOf(b) >= 0) l.bindTooltip(esc(blkLabel(b)), { permanent: true, direction: 'center', className: 'lktip' });
       l.addTo(g);
@@ -359,7 +360,7 @@
     var ls = null;
     if (HA.reliefOn && HA.reliefOn() && mode === 'datar') {
       // Relief: hanya sebagian lajur (1 per 10 dekat, 1 per 25 jauh) supaya ringan dan tetap rapi
-      if (res && res.lines.length) { var st = HA.map.getZoom() >= 18 ? 10 : 25; L.polyline(res.lines.filter(function (l, i) { return i % st === 0; }), { color: '#4F6B34', weight: 1.1, opacity: 0.8, interactive: false, smoothFactor: 0.5 }).addTo(g); }
+      if (res && res.lines.length && (!HA.dioRowOk || HA.dioRowOk(b))) { var st = HA.map.getZoom() >= 18 ? 10 : 25; L.polyline(res.lines.filter(function (l, i) { return i % st === 0; }), { color: '#1E3C14', weight: 1.1, opacity: 0.4, interactive: false, smoothFactor: 0.5 }).addTo(g); }
       return;
     }
     if (res && res.lines.length) {

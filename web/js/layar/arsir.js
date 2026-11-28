@@ -19,6 +19,15 @@
     }
     return out;
   }
+  // garis sejajar arah bearing (derajat dari utara) dipotong poligon; dipakai untuk larikan blok muda di tema 2.5D
+  HA.addStripes = function (g, pts, bearing, spacingM, color, weight, opacity) {
+    if (!pts || pts.length < 3) return;
+    var ref = pts[0], kx = 111320 * Math.cos(ref[0] * Math.PI / 180), ky = 110540, a = bearing * Math.PI / 180;
+    var xy = pts.map(function (p) { return [(p[1] - ref[1]) * kx, (p[0] - ref[0]) * ky]; });
+    segs(xy, Math.sin(a), Math.cos(a), spacingM).forEach(function (sg) {
+      L.polyline([[ref[0] + sg[0][1] / ky, ref[1] + sg[0][0] / kx], [ref[0] + sg[1][1] / ky, ref[1] + sg[1][0] / kx]], { color: color, weight: weight, opacity: opacity == null ? 1 : opacity, interactive: false, lineCap: 'round' }).addTo(g);
+    });
+  };
   // tambahkan arsir ke grup g untuk poligon pts ([lat,lng])
   HA.addHatch = function (g, pts) {
     if (!pts || pts.length < 3) return;

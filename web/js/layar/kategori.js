@@ -32,7 +32,8 @@
     var list = visible(), g = KM.lay = L.layerGroup().addTo(m);
     list.sort(function (a, b) { return (a.ts || 0) - (b.ts || 0); }).forEach(function (it) {
       var gy = HA.gyOf(it), col = gy.col, gar = gy.gar, w = gy.w;
-      if (it.t === 'pt') L.circleMarker(it.pts[0], { radius: 8, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1, interactive: false }).addTo(g);
+      if (it.t === 'pt' && it.name && HA.dioOn && HA.dioOn() && HA.dioSign) HA.dioSign(it, col, false).addTo(g);
+      else if (it.t === 'pt') L.circleMarker(it.pts[0], { radius: 8, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1, interactive: false }).addTo(g);
       else if (it.t === 'ln') L.polyline(it.pts, { color: col, weight: w || 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(g);
       else if (HA.tandaNoCat && HA.tandaNoCat(it) && !gar && HA.addHatch) { L.polygon(it.pts, { color: '#111', weight: 2.5, fillColor: HA.IVORY, fillOpacity: 0.8, interactive: false }).addTo(g); HA.addHatch(g, it.pts); }
       else L.polygon(it.pts, { color: col, weight: gar ? (w || 3) : 2.5, fill: !gar, fillColor: col, fillOpacity: gar ? 0 : opOf(it), interactive: false }).addTo(g);
@@ -196,13 +197,10 @@
     if (KM.mode !== 'kategori') setMode('kategori', true); else { syncUi(); draw(); }
   };
   KM.toggleBase = function () {
-    // putaran: Satelit > Peta > Relief 2.5D > Satelit
-    if (S.settings.mapMode === 'sat') { S.settings.mapMode = 'osm'; S.settings.relief = false; }
-    else if (!S.settings.relief) S.settings.relief = true;
-    else { S.settings.relief = false; S.settings.mapMode = 'sat'; }
+    S.settings.mapMode = S.settings.mapMode === 'sat' ? 'osm' : 'sat';
     HA.saveSettings && HA.saveSettings();
     HA.setTiles(); if (HA.mini) { HA.setBase(HA.mini); HA.syncOverlays(HA.mini); }
-    toast(S.settings.mapMode === 'sat' ? 'Mode Satelit' : (HA.reliefOn && HA.reliefOn() ? 'Mode Relief 2.5D' : 'Mode Peta'));
+    toast(S.settings.mapMode === 'sat' ? 'Mode Satelit' : (HA.reliefOn && HA.reliefOn() ? 'Mode Peta 2.5D' : 'Mode Peta'));
   };
   function wire() {
     if (!$('mapMode')) return;

@@ -104,7 +104,7 @@
     if (S.settings.lakesOn === false || !lakesList().length) return;
     var g = L.layerGroup();
     lakesList().forEach(function (l) {
-      L.polygon(l.pts, HA.reliefOn && HA.reliefOn() ? { color: '#6FB8E3', weight: 1, fill: true, fillColor: '#8CCBF0', fillOpacity: 1, interactive: false } : S.settings.rowMode === 'kontur' ? { color: '#5EE0FF', weight: 1.6, fill: true, fillColor: '#5EE0FF', fillOpacity: .38, interactive: false } : { color: '#7FD8FF', weight: 1.2, dashArray: '5 4', fill: false, interactive: false }).bindTooltip(esc(l.name), { permanent: true, direction: 'center', className: 'lktip' }).addTo(g);
+      L.polygon(l.pts, HA.reliefOn && HA.reliefOn() ? { color: '#CDEBF8', weight: 4, lineJoin: 'round', fill: true, fillColor: '#A9D9F1', fillOpacity: 1, interactive: false } : S.settings.rowMode === 'kontur' ? { color: '#5EE0FF', weight: 1.6, fill: true, fillColor: '#5EE0FF', fillOpacity: .38, interactive: false } : { color: '#7FD8FF', weight: 1.2, dashArray: '5 4', fill: false, interactive: false }).bindTooltip(esc(l.name), { permanent: true, direction: 'center', className: 'lktip' }).addTo(g);
     });
     g.addTo(HA.map); HA.DM.lakeLayer = g;
   }

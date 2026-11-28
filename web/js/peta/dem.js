@@ -608,7 +608,7 @@
       },
       // v0.27.31: bayangan relief (hillshade) dilebih-lebihkan, cahaya dari barat laut; hasil buram di atas warna kertas
       _renderRelief: function (zd) {
-        var c = this._canvas, m = this._map, min = this._min, ctx = c.getContext('2d'), w = c.width, h = c.height, S4 = 4, EX = this.o.exag || 14;
+        var c = this._canvas, m = this._map, min = this._min, ctx = c.getContext('2d'), w = c.width, h = c.height, S4 = 4, EX = this.o.exag || 20;
         var cols = Math.ceil(w / S4) + 1, rows = Math.ceil(h / S4) + 1, g = new Float32Array(cols * rows), i, j;
         for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) { var ll = m.layerPointToLatLng(L.point(min.x + i * S4, min.y + j * S4)); g[j * cols + i] = elev(ll.lat, ll.lng, zd); }
         var g2 = new Float32Array(g.length), s, n, dj, di, ii, jj, vv;
@@ -619,7 +619,7 @@
         }
         var cen = m.getCenter(), mpp = 156543.03 * Math.cos(cen.lat * Math.PI / 180) / Math.pow(2, m.getZoom()), cell = S4 * mpp, K = Math.max(1, Math.ceil(25 / cell));
         var sm = document.createElement('canvas'); sm.width = cols; sm.height = rows;
-        var sc = sm.getContext('2d'), im = sc.createImageData(cols, rows), D = im.data, R0 = 238, G0 = 232, B0 = 214, lx = -0.6, ly = -0.6, lz = 0.52, ln = Math.sqrt(lx * lx + ly * ly + lz * lz);
+        var sc = sm.getContext('2d'), im = sc.createImageData(cols, rows), D = im.data, R0 = 246, G0 = 239, B0 = 226, lx = -0.6, ly = -0.6, lz = 0.52, ln = Math.sqrt(lx * lx + ly * ly + lz * lz);
         lx /= ln; ly /= ln; lz /= ln;
         for (j = 0; j < rows; j++) for (i = 0; i < cols; i++) {
           var a = g2[j * cols + Math.max(0, i - K)], b = g2[j * cols + Math.min(cols - 1, i + K)], up = g2[Math.max(0, j - K) * cols + i], dn = g2[Math.min(rows - 1, j + K) * cols + i];
